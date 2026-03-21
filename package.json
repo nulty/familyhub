@@ -1,0 +1,24 @@
+{
+  "name": "familyhub",
+  "version": "0.1.0",
+  "description": "Browser-based family tree with SQLite/OPFS storage",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "family-chart": "^0.9.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.2.0",
+    "better-sqlite3": "^12.8.0",
+    "happy-dom": "^20.8.4",
+    "vite": "^8.0.1",
+    "vite-plugin-cross-origin-isolation": "^0.1.6",
+    "vitest": "^4.1.0"
+  }
+}

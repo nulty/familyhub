@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FamilyHub</title>
+  <link rel="stylesheet" href="/src/styles.css">
+  <script src="/coi-serviceworker.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header id="header">
+      <span class="logo">FamilyHub</span>
+
+      <div id="search-wrapper">
+        <input id="search-input" type="text" placeholder="Search people..." autocomplete="off">
+        <div id="search-results"></div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btn-settings" class="btn">Settings</button>
+        <button id="btn-add-person" class="btn btn-primary">+ Person</button>
+        <button id="btn-import" class="btn">Import</button>
+        <button id="btn-export" class="btn">Export</button>
+        <button id="btn-download-db" class="btn">Download DB</button>
+      </div>
+    </header>
+
+    <div id="main">
+      <div id="chart-container" class="hidden">
+        <div id="FamilyChart" class="f3"></div>
+        <div id="tree-config"></div>
+      </div>
+
+      <div id="empty-state" class="hidden">
+        <h2>No people yet</h2>
+        <p>Create your first person or import a GEDCOM file to get started.</p>
+        <div class="empty-actions">
+          <button id="empty-add-person" class="btn btn-primary">+ Add First Person</button>
+          <button id="empty-import" class="btn">Import GEDCOM</button>
+        </div>
+      </div>
+
+      <aside id="panel">
+        <div id="panel-content"></div>
+      </aside>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
