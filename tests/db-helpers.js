@@ -6,6 +6,7 @@
 import Database from 'better-sqlite3';
 import { readFileSync } from 'fs';
 import { createHandlers } from '../src/db/handlers.js';
+import { applyMigrations, migrations } from '../src/db/migrations.js';
 
 /**
  * Creates a test DB with the current (v3) schema — loads schema.sql and applies all migrations.
@@ -17,16 +18,11 @@ export function setupTestDB() {
   const schema = readFileSync('public/schema.sql', 'utf-8');
   db.exec(schema);
 
-  // Apply migrations (same as worker does on boot)
-  // v2: add place_id to events
-  const cols = db.prepare("PRAGMA table_info(events)").all();
-  if (!cols.some(c => c.name === 'place_id')) {
-    db.exec('ALTER TABLE events ADD COLUMN place_id TEXT REFERENCES places(id) ON DELETE SET NULL');
-  }
-
-  // v3: repositories + new sources + citations (schema.sql already has new tables for fresh DBs)
-
   const helpers = createBetterSqliteHelpers(db);
+
+  // Apply migrations (same as worker does on boot)
+  applyMigrations(helpers);
+
   const handlers = createHandlers(helpers);
 
   return { db, handlers, helpers };
@@ -86,127 +82,12 @@ export function setupV2TestDB() {
 }
 
 /**
- * Run migration v3 against a DB using the same logic as worker.js.
- * Extracted here so it can be tested with better-sqlite3.
+ * Run migration v3 against a DB — delegates to shared migrations module.
  */
 export function applyMigrationV3(helpers) {
-  const { run, all, get } = helpers;
-  const now = Date.now();
-
-  const ULID_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  function generateId() {
-    let t = Date.now(), s = '';
-    for (let i = 9; i >= 0; i--) { s = ULID_CHARS[t % 32] + s; t = Math.floor(t / 32); }
-    const bytes = new Uint8Array(16);
-    // Simple random for tests (no crypto.getRandomValues in Node test env)
-    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
-    for (let i = 0; i < 16; i++) s += ULID_CHARS[bytes[i] % 32];
-    return s;
-  }
-
-  // Check current state of sources table to determine what work is needed
-  const sourceCols = all("PRAGMA table_info(sources)");
-  const hasOldSchema = sourceCols.some(c => c.name === 'event_id');
-  const hasNewSchema = sourceCols.some(c => c.name === 'repository_id');
-
-  // Also check if sources_old exists (partial previous run)
-  const tables = all("SELECT name FROM sqlite_master WHERE type='table'");
-  const tableNames = tables.map(t => t.name);
-  const hasSourcesOld = tableNames.includes('sources_old');
-
-  // Read old data from wherever it lives
-  let oldSources = [];
-  if (hasOldSchema) {
-    oldSources = all('SELECT * FROM sources');
-  } else if (hasSourcesOld) {
-    oldSources = all('SELECT * FROM sources_old');
-  }
-
-  // Step 1: Rename old sources if it still has the old schema
-  if (hasOldSchema && !hasSourcesOld) {
-    run('ALTER TABLE sources RENAME TO sources_old');
-    run('DROP INDEX IF EXISTS idx_sources_event');
-  } else if (hasOldSchema && hasSourcesOld) {
-    run('DROP TABLE IF EXISTS sources');
-    run('DROP INDEX IF EXISTS idx_sources_event');
-  }
-
-  // Step 2: Create repositories table
-  run(`CREATE TABLE IF NOT EXISTS repositories (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
-    type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','archive','library','website','database','church','government','personal','other')),
-    url TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
-  run('CREATE INDEX IF NOT EXISTS idx_repositories_name ON repositories(name)');
-
-  // Step 3: Create new sources table (depends on repositories)
-  if (!hasNewSchema) {
-    run(`CREATE TABLE IF NOT EXISTS sources (
-      id TEXT PRIMARY KEY,
-      repository_id TEXT REFERENCES repositories(id) ON DELETE SET NULL,
-      title TEXT NOT NULL DEFAULT '',
-      type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','document','register','census','webpage','book','newspaper','certificate','photograph','other')),
-      url TEXT NOT NULL DEFAULT '', author TEXT NOT NULL DEFAULT '',
-      publisher TEXT NOT NULL DEFAULT '', year TEXT NOT NULL DEFAULT '',
-      notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
-    run('CREATE INDEX IF NOT EXISTS idx_sources_repo ON sources(repository_id)');
-    run('CREATE INDEX IF NOT EXISTS idx_sources_title ON sources(title)');
-  }
-
-  // Step 4: Create citations table (depends on new sources + events)
-  run(`CREATE TABLE IF NOT EXISTS citations (
-    id TEXT PRIMARY KEY,
-    source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    detail TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
-    accessed TEXT NOT NULL DEFAULT '',
-    confidence TEXT NOT NULL DEFAULT '' CHECK(confidence IN ('','primary','secondary','questionable')),
-    notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
-  run('CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id)');
-  run('CREATE INDEX IF NOT EXISTS idx_citations_event ON citations(event_id)');
-
-  // Step 5: Migrate old data (only if there is old data to migrate)
-  if (oldSources.length > 0) {
-    const repoMap = {};
-    const sourceMap = {};
-
-    for (const old of oldSources) {
-      let repoId = null;
-
-      if (old.url) {
-        try {
-          const u = new URL(old.url);
-          const domain = u.hostname.replace(/^www\./, '');
-          if (!repoMap[domain]) {
-            repoMap[domain] = generateId();
-            run('INSERT INTO repositories (id, name, type, url, address, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-              [repoMap[domain], domain, 'website', u.origin, '', '', now, now]);
-          }
-          repoId = repoMap[domain];
-        } catch (e) { /* invalid URL, skip repo */ }
-      }
-
-      const sourceKey = `${repoId || ''}|${old.title || ''}`;
-      if (!sourceMap[sourceKey] && (old.title || old.url)) {
-        sourceMap[sourceKey] = generateId();
-        const sourceType = old.url ? 'webpage' : '';
-        run('INSERT INTO sources (id, repository_id, title, type, url, author, publisher, year, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [sourceMap[sourceKey], repoId, old.title || '', sourceType, old.url || '', '', '', '', old.notes || '', now, now]);
-      }
-
-      const newSourceId = sourceMap[sourceKey];
-      if (newSourceId) {
-        const citationId = generateId();
-        run('INSERT INTO citations (id, source_id, event_id, detail, url, accessed, confidence, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [citationId, newSourceId, old.event_id, '', old.url || '', old.accessed || '', '', '', now, now]);
-      }
-    }
-  }
-
-  // Step 6: Clean up
-  run('DROP TABLE IF EXISTS sources_old');
-
-  run("UPDATE meta SET value = '3' WHERE key = 'schema_version'");
+  const v3 = migrations.find(m => m.version === 3);
+  v3.up(helpers);
+  helpers.run("UPDATE meta SET value = '3' WHERE key = 'schema_version'");
 }
 
 function createBetterSqliteHelpers(db) {

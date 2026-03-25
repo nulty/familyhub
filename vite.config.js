@@ -17,6 +17,9 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['@sqlite.org/sqlite-wasm'],  // must not be bundled — loads its own WASM
+    exclude: ['@sqlite.org/sqlite-wasm'],  // must not be pre-bundled — loads its own WASM at runtime
+  },
+  worker: {
+    format: 'es',
   },
 });

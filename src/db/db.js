@@ -14,13 +14,10 @@ let msgId = 0;
 let readyPromise = null;
 
 export async function initDB() {
-  // worker.js and schema.sql live in public/ and are served at the base path.
-  // Pass sqlite3.dir so the SQLite WASM loader fetches .wasm from the CDN.
+  // Module worker — Vite bundles imports automatically.
+  // schema.sql remains in public/ and is fetched at runtime by the worker.
   const base = import.meta.env.BASE_URL || '/';
-  const workerURL = new URL(base + 'worker.js', window.location.origin);
-  workerURL.searchParams.set('sqlite3.dir',
-    'https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@3.46.1-build2/sqlite-wasm/jswasm');
-  worker = new Worker(workerURL, { type: 'classic' });
+  worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 
   worker.onmessage = (e) => {
     const { id, result, error } = e.data;
@@ -35,7 +32,9 @@ export async function initDB() {
     console.error('[db] Worker error', e);
   };
 
-  readyPromise = call('init');
+  // Pass the base URL so the worker can fetch schema.sql from public/
+  const schemaBaseUrl = new URL(base, window.location.origin).href;
+  readyPromise = call('init', schemaBaseUrl);
   return readyPromise;
 }
 
