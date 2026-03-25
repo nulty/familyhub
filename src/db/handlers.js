@@ -353,7 +353,7 @@ export function createHandlers(h, opts = {}) {
       if (!query || query.trim() === '') return [];
       const q = `%${query}%`;
       const results = all(
-        `SELECT * FROM places WHERE name LIKE ? ORDER BY name LIMIT 20`,
+        `SELECT * FROM places WHERE name LIKE ? AND type != '' ORDER BY name LIMIT 20`,
         [q]
       );
       for (const r of results) {

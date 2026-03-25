@@ -370,6 +370,24 @@ a:hover { text-decoration: underline; }
 
 .panel-vitals span { color: var(--text); font-weight: 500; }
 
+/* Places list */
+
+.place-entry {
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+
+.place-entry:last-child { border-bottom: none; }
+
+.place-entry-name { font-weight: 500; }
+
+.place-entry-detail {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 /* Events list */
 
 .event-item {
@@ -788,6 +806,29 @@ a:hover { text-decoration: underline; }
 }
 
 .source-entry-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.participant-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.participant-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.participant-role {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
 
 .source-add-fields {
   display: flex;

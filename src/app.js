@@ -34,8 +34,8 @@ async function boot() {
 
   if (hasData) {
     showFullUI();
-    const lastId = getConfig('lastFocusedPerson');
-    await initTree(lastId);
+    const rootId = getConfig('rootPerson') || getConfig('lastFocusedPerson');
+    await initTree(rootId);
     const treeCfg = getTreeConfig();
     applyTreeColors(treeCfg);
     applyCardDisplay(treeCfg);

@@ -201,7 +201,7 @@ function createHandlersFromHelpers(h) {
     deletePlace(id) { run('DELETE FROM places WHERE id = ?', [id]); return { ok: true }; },
     listPlaces() { return all('SELECT * FROM places ORDER BY name'); },
     getPlaceTree() { return all('SELECT * FROM places ORDER BY name'); },
-    searchPlaces(query) { if (!query || query.trim() === '') return []; const q = `%${query}%`; const results = all('SELECT * FROM places WHERE name LIKE ? ORDER BY name LIMIT 20', [q]); for (const r of results) { const chain = handlers.getPlaceHierarchy(r.id); r.full_name = chain.map(p => p.name).reverse().join(', '); } return results; },
+    searchPlaces(query) { if (!query || query.trim() === '') return []; const q = `%${query}%`; const results = all(`SELECT * FROM places WHERE name LIKE ? AND type != '' ORDER BY name LIMIT 20`, [q]); for (const r of results) { const chain = handlers.getPlaceHierarchy(r.id); r.full_name = chain.map(p => p.name).reverse().join(', '); } return results; },
     getPlaceHierarchy(id) { const chain = []; let cur = id; const visited = new Set(); while (cur && !visited.has(cur)) { visited.add(cur); const p = get('SELECT * FROM places WHERE id = ?', [cur]); if (!p) break; chain.unshift(p); cur = p.parent_id; } return chain; },
     getPeopleByPlace(placeIdOrName) { return all(`SELECT DISTINCT p.id, p.given_name, p.surname FROM people p JOIN events e ON e.person_id = p.id WHERE e.place_id = ? OR e.place LIKE ? ORDER BY p.surname, p.given_name LIMIT 10`, [placeIdOrName, `%${placeIdOrName}%`]); },
     getPlaceChildren(parentId) { if (!parentId) return all('SELECT * FROM places WHERE parent_id IS NULL ORDER BY name'); return all('SELECT * FROM places WHERE parent_id = ? ORDER BY name', [parentId]); },

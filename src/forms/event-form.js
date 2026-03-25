@@ -6,11 +6,17 @@ import { events, sources, places } from '../db/db.js';
 import { emit, DATA_CHANGED } from '../state.js';
 import { openModal } from '../ui/modal.js';
 import { showToast } from '../ui/toast.js';
+import { createPersonPicker } from './person-picker.js';
 
 const EVENT_TYPES = [
   'birth', 'death', 'marriage', 'burial', 'residence',
   'census', 'immigration', 'emigration', 'naturalisation',
   'occupation', 'divorce', 'other',
+];
+
+const PARTICIPANT_ROLES = [
+  'father', 'mother', 'witness', 'godfather', 'godmother',
+  'informant', 'spouse', 'other',
 ];
 
 /**
@@ -22,11 +28,14 @@ export async function openEventForm(personId, eventId) {
   let existing = null;
   let existingSources = [];
 
+  let existingParticipants = [];
+
   if (isEdit) {
     const eventList = await events.list(personId);
     existing = eventList.find(e => e.id === eventId);
     if (!existing) return;
     existingSources = await sources.list(eventId);
+    existingParticipants = await events.getParticipants(eventId);
   }
 
   const form = document.createElement('form');
@@ -53,6 +62,12 @@ export async function openEventForm(personId, eventId) {
     </div>
 
     <div class="form-group">
+      <label>Participants</label>
+      <div id="ef-participants"></div>
+      <div id="ef-add-participant"></div>
+    </div>
+
+    <div class="form-group">
       <label>Sources</label>
       <div id="ef-sources"></div>
       <button type="button" class="btn btn-sm btn-link" id="ef-add-source">+ Add Source</button>
@@ -75,6 +90,64 @@ export async function openEventForm(personId, eventId) {
     sourceEntries.push({ id: s.id, title: s.title, url: s.url });
   }
   renderSources();
+
+  // Participants
+  const participantsContainer = form.querySelector('#ef-participants');
+  const participantEntries = []; // { person_id, given_name, surname, role, isNew, removed }
+
+  for (const p of existingParticipants) {
+    participantEntries.push({
+      person_id: p.person_id,
+      given_name: p.given_name,
+      surname: p.surname,
+      role: p.role,
+      isNew: false,
+      removed: false,
+    });
+  }
+  renderParticipants();
+
+  const pickerContainer = form.querySelector('#ef-add-participant');
+  const picker = createPersonPicker({
+    excludeIds: [personId],
+    onSelect: (person) => {
+      if (participantEntries.some(e => e.person_id === person.id && !e.removed)) return;
+      participantEntries.push({
+        person_id: person.id,
+        given_name: person.given_name,
+        surname: person.surname,
+        role: 'witness',
+        isNew: true,
+        removed: false,
+      });
+      renderParticipants();
+    },
+  });
+  pickerContainer.appendChild(picker);
+
+  function renderParticipants() {
+    participantsContainer.innerHTML = '';
+    const active = participantEntries.filter(e => !e.removed);
+    if (active.length === 0) {
+      participantsContainer.innerHTML = '<div class="section-empty" style="margin:4px 0">No participants</div>';
+      return;
+    }
+    for (const entry of active) {
+      const name = [entry.given_name, entry.surname].filter(Boolean).join(' ') || 'Unnamed';
+      const row = document.createElement('div');
+      row.className = 'participant-row';
+      row.innerHTML = `
+        <span class="participant-name">${esc(name)}</span>
+        <select class="participant-role">
+          ${PARTICIPANT_ROLES.map(r => `<option value="${r}" ${r === entry.role ? 'selected' : ''}>${capitalize(r)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn-link btn-sm" style="color:var(--danger)">Remove</button>
+      `;
+      row.querySelector('select').onchange = (e) => { entry.role = e.target.value; };
+      row.querySelector('button').onclick = () => { entry.removed = true; renderParticipants(); };
+      participantsContainer.appendChild(row);
+    }
+  }
 
   // Place autocomplete
   const placeInput = form.querySelector('#ef-place');
@@ -166,6 +239,16 @@ export async function openEventForm(personId, eventId) {
             await sources.create(eventId, { title: s.title, url: s.url });
           }
         }
+        // Handle participants: remove deleted, update roles, add new
+        for (const p of participantEntries) {
+          if (p.removed && !p.isNew) {
+            await events.removeParticipant(eventId, p.person_id);
+          } else if (p.isNew && !p.removed) {
+            await events.addParticipant(eventId, p.person_id, p.role);
+          } else if (!p.isNew && !p.removed) {
+            await events.updateParticipantRole(eventId, p.person_id, p.role);
+          }
+        }
         close();
         emit(DATA_CHANGED);
         showToast('Event updated');
@@ -175,6 +258,12 @@ export async function openEventForm(personId, eventId) {
         for (const s of sourceEntries) {
           if (!s.deleted && (s.title || s.url)) {
             await sources.create(created.id, { title: s.title, url: s.url });
+          }
+        }
+        // Create participants
+        for (const p of participantEntries) {
+          if (!p.removed) {
+            await events.addParticipant(created.id, p.person_id, p.role);
           }
         }
         close();

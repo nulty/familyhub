@@ -9,6 +9,7 @@ import { openEventForm } from '../forms/event-form.js';
 import { openRelationshipForm } from '../forms/relationship-form.js';
 import { focusPerson } from './tree.js';
 import { showToast } from './toast.js';
+import { getConfig, setConfig } from '../config.js';
 
 const panelContent = () => document.getElementById('panel-content');
 
@@ -29,6 +30,23 @@ export async function renderPanel(personId) {
   const birth = events.find(e => e.type === 'birth');
   const death = events.find(e => e.type === 'death');
 
+  // Build places timeline from own events + participated events
+  const placeEntries = [];
+  for (const ev of events) {
+    if (ev.place) placeEntries.push({ place: ev.place, date: ev.date, sort_date: ev.sort_date, type: ev.type, via: null });
+  }
+  for (const ev of participatingEvents) {
+    if (ev.place) placeEntries.push({ place: ev.place, date: ev.date, sort_date: ev.sort_date, type: ev.type, via: ev.owner_name });
+  }
+  // Dedupe by place+type, keep earliest date
+  const placeMap = {};
+  for (const e of placeEntries) {
+    const key = `${e.place}::${e.type}`;
+    if (!placeMap[key]) { placeMap[key] = e; }
+  }
+  const uniquePlaces = Object.values(placeMap)
+    .sort((a, b) => (a.sort_date ?? Infinity) - (b.sort_date ?? Infinity));
+
   el.innerHTML = `
     <div class="panel-header">
       <h2>${esc(fullName)}</h2>
@@ -38,6 +56,7 @@ export async function renderPanel(personId) {
 
     <div class="panel-actions">
       <button class="btn btn-sm" data-action="edit-person">Edit</button>
+      <button class="btn btn-sm" data-action="set-root">${person.id === getConfig('rootPerson') ? 'Root person' : 'Set as root'}</button>
       <button class="btn btn-sm btn-danger" data-action="delete-person">Delete</button>
     </div>
 
@@ -48,6 +67,19 @@ export async function renderPanel(personId) {
     </div>` : ''}
 
     ${person.notes ? `<div class="panel-vitals"><div style="white-space:pre-wrap">${linkify(person.notes)}</div></div>` : ''}
+
+    ${uniquePlaces.length > 0 ? `
+    <details class="panel-section" open>
+      <summary>Places (${uniquePlaces.length})</summary>
+      <div class="panel-places">
+        ${uniquePlaces.map(p => `
+          <div class="place-entry">
+            <span class="place-entry-name">${esc(p.place)}</span>
+            <span class="place-entry-detail">${esc(p.type)}${p.date ? ' — ' + esc(p.date) : ''}${p.via ? ' (via ' + esc(p.via) + ')' : ''}</span>
+          </div>
+        `).join('')}
+      </div>
+    </details>` : ''}
 
     <details class="panel-section" open>
       <summary>Events (${events.length})</summary>
@@ -98,6 +130,11 @@ export async function renderPanel(personId) {
 
     if (action === 'close') emit(PERSON_DESELECTED);
     else if (action === 'edit-person') openPersonForm(person.id);
+    else if (action === 'set-root') {
+      setConfig('rootPerson', person.id);
+      showToast(`${fullName} set as root person`);
+      btn.textContent = 'Root person';
+    }
     else if (action === 'delete-person') deletePerson(person);
     else if (action === 'add-event') openEventForm(person.id);
     else if (action === 'edit-event') openEventForm(person.id, btn.dataset.eventId);
