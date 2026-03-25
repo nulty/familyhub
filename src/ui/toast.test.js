@@ -1,41 +1,35 @@
-// @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { showToast } from './toast.js';
+import { toasts } from '../lib/shared/toast-store.js';
+import { get } from 'svelte/store';
 
 describe('showToast', () => {
   beforeEach(() => {
-    document.body.innerHTML = '<div id="toast-root"></div>';
+    toasts.set([]);
   });
 
-  it('creates a toast element in #toast-root', () => {
+  it('adds a toast to the store', () => {
     showToast('Hello');
-    const root = document.getElementById('toast-root');
-    expect(root.querySelector('.toast')).toBeTruthy();
+    const items = get(toasts);
+    expect(items).toHaveLength(1);
+    expect(items[0].message).toBe('Hello');
   });
 
   it('sets the message text', () => {
     showToast('Test message');
-    const toast = document.querySelector('.toast');
-    expect(toast.textContent).toBe('Test message');
+    const items = get(toasts);
+    expect(items[0].message).toBe('Test message');
   });
 
   it('removes toast after duration', () => {
     vi.useFakeTimers();
     showToast('Bye', 1000);
 
-    // Flush the rAF that adds toast-visible
-    vi.advanceTimersByTime(0);
+    expect(get(toasts)).toHaveLength(1);
 
-    // Advance past duration
     vi.advanceTimersByTime(1100);
 
-    // Trigger transitionend to remove element
-    const toast = document.querySelector('.toast');
-    if (toast) {
-      toast.dispatchEvent(new Event('transitionend'));
-    }
-
-    expect(document.querySelector('.toast')).toBeNull();
+    expect(get(toasts)).toHaveLength(0);
     vi.useRealTimers();
   });
 });

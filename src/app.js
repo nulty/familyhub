@@ -14,6 +14,13 @@ import { getConfig, setConfig } from './config.js';
 import { openTreeConfig, applyTreeColors, applyCardDisplay, getTreeConfig } from './ui/tree-config.js';
 import { openPlacesPage } from './ui/places-page.js';
 import { openSourcesPage } from './ui/sources-page.js';
+import { mount } from 'svelte';
+import Toast from './lib/shared/Toast.svelte';
+
+// Mount Svelte toast component (replaces vanilla #toast-root)
+const toastRoot = document.getElementById('toast-root');
+toastRoot.innerHTML = '';
+mount(Toast, { target: toastRoot });
 
 const mainEl = document.getElementById('main');
 const emptyEl = document.getElementById('empty-state');
