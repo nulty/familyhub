@@ -524,24 +524,24 @@ describe('Places', () => {
   });
 
   it('searchPlaces finds by name', () => {
-    h.createPlace({ id: 'PL1', name: 'Dublin' });
-    h.createPlace({ id: 'PL2', name: 'Cork' });
+    h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    h.createPlace({ id: 'PL2', name: 'Cork', type: 'city' });
     const results = h.searchPlaces('Dub');
     expect(results).toHaveLength(1);
     expect(results[0].name).toBe('Dublin');
   });
 
   it('searchPlaces returns full_name computed from hierarchy', () => {
-    h.createPlace({ id: 'PL1', name: 'Ireland' });
-    h.createPlace({ id: 'PL2', name: 'Leinster', parent_id: 'PL1' });
-    h.createPlace({ id: 'PL3', name: 'Dublin', parent_id: 'PL2' });
+    h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
+    h.createPlace({ id: 'PL2', name: 'Leinster', type: 'province', parent_id: 'PL1' });
+    h.createPlace({ id: 'PL3', name: 'Dublin', type: 'city', parent_id: 'PL2' });
     const results = h.searchPlaces('Dublin');
     expect(results).toHaveLength(1);
     expect(results[0].full_name).toBe('Dublin, Leinster, Ireland');
   });
 
   it('searchPlaces full_name for root place is just the name', () => {
-    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
     const results = h.searchPlaces('Ireland');
     expect(results[0].full_name).toBe('Ireland');
   });
