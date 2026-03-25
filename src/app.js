@@ -13,6 +13,7 @@ import { showToast } from './ui/toast.js';
 import { getConfig, setConfig } from './config.js';
 import { openTreeConfig, applyTreeColors, applyCardDisplay, getTreeConfig } from './ui/tree-config.js';
 import { openPlacesPage } from './ui/places-page.js';
+import { openSourcesPage } from './ui/sources-page.js';
 
 const mainEl = document.getElementById('main');
 const emptyEl = document.getElementById('empty-state');
@@ -55,6 +56,7 @@ function showFullUI() {
 }
 
 function wireButtons() {
+  document.getElementById('btn-sources').onclick = () => openSourcesPage();
   document.getElementById('btn-places').onclick = () => openPlacesPage();
   document.getElementById('btn-settings').onclick = () => openTreeConfig();
   document.getElementById('btn-add-person').onclick = () => openPersonForm();

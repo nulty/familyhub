@@ -1,6 +1,6 @@
 /**
  * gedcom/import.js
- * Parses a GEDCOM file and returns { people, relationships, events, sources }
+ * Parses a GEDCOM file and returns { people, relationships, events, repositories, sources, citations }
  * ready for db.bulk.import()
  */
 
@@ -159,6 +159,12 @@ export function parseGEDCOM(text) {
           currentEventBuf.sources[currentEventBuf.sources.length - 1].url = val;
         }
       }
+      if (tag === 'PAGE') {
+        // PAGE inside a SOUR citation — use as detail
+        if (currentEventBuf && currentEventBuf.sources.length > 0) {
+          currentEventBuf.sources[currentEventBuf.sources.length - 1].detail = val;
+        }
+      }
       if (tag === 'RELA') {
         // Role for the most recent ASSO record
         if (currentEventBuf && currentEventBuf.associations && currentEventBuf.associations.length > 0) {
@@ -173,7 +179,9 @@ export function parseGEDCOM(text) {
   const outPeople = [];
   const outRelationships = [];
   const outEvents = [];
+  const outRepositories = [];
   const outSources = [];
+  const outCitations = [];
   const outParticipants = [];
 
   // Map GEDCOM xref IDs to our ULIDs
@@ -182,6 +190,69 @@ export function parseGEDCOM(text) {
     if (!idMap[xref]) idMap[xref] = ulid();
     return idMap[xref];
   };
+
+  // De-duplicate repositories by domain and sources by (repo + title)
+  const repoByDomain = {}; // domain -> repository object
+  const sourceByKey = {};  // "repoId|title" -> source object
+
+  // Known domains → proper repository names and types
+  const KNOWN_REPOS = {
+    'nationalarchives.ie':            { name: 'National Archives of Ireland', type: 'archive', url: 'https://nationalarchives.ie' },
+    'census.nationalarchives.ie':     { name: 'National Archives of Ireland', type: 'archive', url: 'https://nationalarchives.ie' },
+    'civilrecords.irishgenealogy.ie': { name: 'General Register Office', type: 'government', url: 'https://civilrecords.irishgenealogy.ie' },
+    'churchrecords.irishgenealogy.ie': { name: 'IrishGenealogy.ie Church Records', type: 'church', url: 'https://churchrecords.irishgenealogy.ie' },
+    'registers.nli.ie':              { name: 'National Library of Ireland', type: 'library', url: 'https://registers.nli.ie' },
+    'familysearch.org':              { name: 'FamilySearch', type: 'church', url: 'https://familysearch.org' },
+    'ancestry.com':                  { name: 'Ancestry', type: 'database', url: 'https://ancestry.com' },
+    'ancestry.co.uk':                { name: 'Ancestry', type: 'database', url: 'https://ancestry.com' },
+    'findmypast.ie':                 { name: 'Findmypast', type: 'database', url: 'https://findmypast.ie' },
+    'findmypast.co.uk':              { name: 'Findmypast', type: 'database', url: 'https://findmypast.co.uk' },
+    'rootsireland.ie':               { name: 'RootsIreland', type: 'database', url: 'https://rootsireland.ie' },
+  };
+
+  function getOrCreateRepo(url) {
+    if (!url) return null;
+    try {
+      const u = new URL(url);
+      const domain = u.hostname.replace(/^www\./, '');
+      const known = KNOWN_REPOS[domain];
+      // Use the known name as de-dup key so e.g. census.nationalarchives.ie and nationalarchives.ie merge
+      const repoKey = known?.name || domain;
+      if (!repoByDomain[repoKey]) {
+        repoByDomain[repoKey] = {
+          id: ulid(),
+          name: repoKey,
+          type: known?.type || 'website',
+          url: known?.url || u.origin,
+          address: '',
+          notes: '',
+        };
+        outRepositories.push(repoByDomain[repoKey]);
+      }
+      return repoByDomain[repoKey];
+    } catch {
+      return null;
+    }
+  }
+
+  function getOrCreateSource(repoId, title, url) {
+    const key = `${repoId || ''}|${title || ''}`;
+    if (!sourceByKey[key]) {
+      sourceByKey[key] = {
+        id: ulid(),
+        repository_id: repoId || null,
+        title: title || '',
+        type: url ? 'webpage' : '',
+        url: url || '',
+        author: '',
+        publisher: '',
+        year: '',
+        notes: '',
+      };
+      outSources.push(sourceByKey[key]);
+    }
+    return sourceByKey[key];
+  }
 
   // Process individuals
   for (const rec of Object.values(records)) {
@@ -209,12 +280,17 @@ export function parseGEDCOM(text) {
       });
       for (const src of ev.sources) {
         if (src.url || src.title) {
-          outSources.push({
+          const repo = getOrCreateRepo(src.url);
+          const title = src.title || inferTitle(src.url, ev);
+          const source = getOrCreateSource(repo?.id, title, src.url);
+          outCitations.push({
             id: ulid(),
+            source_id: source.id,
             event_id: eid,
-            title: src.title || inferTitle(src.url, ev),
-            url: src.url,
+            detail: src.detail || '',
+            url: src.url || '',
             accessed: '',
+            confidence: '',
             notes: '',
           });
         }
@@ -291,13 +367,24 @@ export function parseGEDCOM(text) {
 
   const warnings = [];
   return {
-    data: { people: outPeople, relationships: outRelationships, events: outEvents, sources: outSources, participants: outParticipants, places: outPlaces },
+    data: {
+      people: outPeople,
+      relationships: outRelationships,
+      events: outEvents,
+      repositories: outRepositories,
+      sources: outSources,
+      citations: outCitations,
+      participants: outParticipants,
+      places: outPlaces,
+    },
     warnings,
     stats: {
       people: outPeople.length,
       relationships: outRelationships.length,
       events: outEvents.length,
+      repositories: outRepositories.length,
       sources: outSources.length,
+      citations: outCitations.length,
       participants: outParticipants.length,
       places: outPlaces.length,
     }
@@ -306,15 +393,21 @@ export function parseGEDCOM(text) {
 
 function inferTitle(url, ev) {
   if (!url) return '';
-  if (url.includes('census.nationalarchives')) {
+  if (url.includes('census.nationalarchives') || url.includes('nationalarchives.ie/collections/search-the-census')) {
     const m = url.match(/\/(\d{4})\//);
-    return m ? `Ireland Census ${m[1]}` : 'Ireland Census';
+    return m ? `Census of Ireland ${m[1]}` : 'Census of Ireland';
   }
   if (url.includes('civilrecords.irishgenealogy')) {
-    if (url.includes('birth')) return 'Irish Civil Birth Record';
-    if (url.includes('marriage')) return 'Irish Civil Marriage Record';
-    if (url.includes('death')) return 'Irish Civil Death Record';
-    return 'Irish Civil Record';
+    if (url.includes('birth')) return 'Civil Birth Records';
+    if (url.includes('marriage')) return 'Civil Marriage Records';
+    if (url.includes('death')) return 'Civil Death Records';
+    return 'Civil Records';
+  }
+  if (url.includes('churchrecords.irishgenealogy')) {
+    return 'Church Records';
+  }
+  if (url.includes('registers.nli.ie')) {
+    return 'Catholic Parish Registers';
   }
   try {
     return new URL(url).hostname.replace('www.', '');

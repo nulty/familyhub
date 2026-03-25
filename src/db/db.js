@@ -126,11 +126,37 @@ export const events = {
   },
 };
 
+// ─── Repositories ─────────────────────────────────────────────────────────────
+
+export const repositories = {
+  create(data) {
+    return call('createRepository', { id: ulid(), ...data });
+  },
+  get(id) {
+    return call('getRepository', id);
+  },
+  update(id, fields) {
+    return call('updateRepository', id, fields);
+  },
+  delete(id) {
+    return call('deleteRepository', id);
+  },
+  list() {
+    return call('listRepositories');
+  },
+  search(query) {
+    return call('searchRepositories', query);
+  },
+};
+
 // ─── Sources ──────────────────────────────────────────────────────────────────
 
 export const sources = {
-  create(eventId, data) {
-    return call('createSource', { id: ulid(), event_id: eventId, ...data });
+  create(data) {
+    return call('createSource', { id: ulid(), ...data });
+  },
+  get(id) {
+    return call('getSource', id);
   },
   update(id, fields) {
     return call('updateSource', id, fields);
@@ -138,8 +164,37 @@ export const sources = {
   delete(id) {
     return call('deleteSource', id);
   },
-  list(eventId) {
-    return call('listSources', eventId);
+  list() {
+    return call('listSources');
+  },
+  search(query) {
+    return call('searchSources', query);
+  },
+  listForEvent(eventId) {
+    return call('listSourcesForEvent', eventId);
+  },
+};
+
+// ─── Citations ────────────────────────────────────────────────────────────────
+
+export const citations = {
+  create(data) {
+    return call('createCitation', { id: ulid(), ...data });
+  },
+  get(id) {
+    return call('getCitation', id);
+  },
+  update(id, fields) {
+    return call('updateCitation', id, fields);
+  },
+  delete(id) {
+    return call('deleteCitation', id);
+  },
+  listForEvent(eventId) {
+    return call('listCitationsForEvent', eventId);
+  },
+  listForSource(sourceId) {
+    return call('listCitationsForSource', sourceId);
   },
 };
 
@@ -167,6 +222,9 @@ export const places = {
   search(query) {
     return call('searchPlaces', query);
   },
+  findByNameTypeParent(name, type, parentId) {
+    return call('findPlaceByNameTypeParent', name, type, parentId);
+  },
   hierarchy(id) {
     return call('getPlaceHierarchy', id);
   },
@@ -175,6 +233,9 @@ export const places = {
   },
   people(placeId) {
     return call('getPeopleByPlace', placeId);
+  },
+  events(placeId) {
+    return call('getEventsByPlace', placeId);
   },
 };
 

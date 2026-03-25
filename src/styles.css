@@ -498,6 +498,10 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 
+.modal.modal-wide {
+  max-width: 720px;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -650,6 +654,11 @@ a:hover { text-decoration: underline; }
 
 .place-suggestion:hover { background: #f0f4ff; }
 
+.place-suggestion-create {
+  color: var(--primary);
+  border-top: 1px solid var(--border);
+}
+
 /* ── Place Tree ────────────────────────────────────────────────────────────── */
 
 .places-page { min-height: 200px; }
@@ -705,6 +714,43 @@ a:hover { text-decoration: underline; }
 }
 
 .place-tree-row:hover .place-tree-actions { opacity: 1; }
+
+.place-events-toggle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.place-events-list {
+  padding: 4px 0 4px 24px;
+  font-size: 13px;
+}
+
+.place-event-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.place-event-type {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  min-width: 60px;
+}
+
+.place-event-date {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.place-event-person {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+.place-event-person:hover { text-decoration: underline; }
 
 /* ── Organize Wizard ───────────────────────────────────────────────────────── */
 
@@ -830,22 +876,193 @@ a:hover { text-decoration: underline; }
   font-size: 12px;
 }
 
-.source-add-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* ── Citation form rows ────────────────────────────────────────────────────── */
+
+.citation-row {
   margin-top: 8px;
   padding: 8px;
   background: #f9f9f9;
   border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.source-add-fields input {
+.citation-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.citation-source-label {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.citation-details-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.citation-details-row input,
+.citation-details-row select {
   padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 13px;
   outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.citation-details-row select { width: auto; }
+
+.citation-details-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.citation-repo {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* ── Sources management page ──────────────────────────────────────────────── */
+
+.sources-page {
+  min-height: 200px;
+}
+
+.sources-stats {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.sources-repo-section {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.sources-repo-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.sources-repo-name {
+  font-weight: 600;
+}
+
+.sources-repo-type {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: var(--radius);
+}
+
+.sources-repo-url {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: auto;
+}
+
+.sources-repo-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sources-repo-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.sources-add-btn {
+  font-weight: 600;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sources-list {
+  padding: 4px 12px 8px;
+}
+
+.sources-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.sources-source-title {
+  flex: 1;
+}
+
+.sources-source-type {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.sources-source-url {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.sources-source-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.source-citations-list {
+  padding: 4px 0 8px 24px;
+  font-size: 13px;
+}
+
+.source-citation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.source-citation-event {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  min-width: 60px;
+}
+
+.source-citation-date {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.source-citation-person {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+.source-citation-person:hover { text-decoration: underline; }
+
+.source-citation-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.source-citation-url {
+  font-size: 11px;
+  color: var(--accent);
 }
 
 /* ── GEDCOM confirm ────────────────────────────────────────────────────────── */

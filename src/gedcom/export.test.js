@@ -4,7 +4,7 @@ import { parseGEDCOM } from './import.js';
 
 describe('exportGEDCOM', () => {
   it('produces HEAD and TRLR', () => {
-    const text = exportGEDCOM({ people: [], relationships: [], events: [], sources: [], participants: [] });
+    const text = exportGEDCOM({ people: [], relationships: [], events: [], sources: [], citations: [], participants: [] });
     expect(text).toMatch(/^0 HEAD/);
     expect(text).toMatch(/0 TRLR$/);
   });
@@ -12,7 +12,7 @@ describe('exportGEDCOM', () => {
   it('exports a person as INDI with NAME', () => {
     const text = exportGEDCOM({
       people: [{ id: 'P1', given_name: 'John', surname: 'Smith', gender: 'M', notes: '' }],
-      relationships: [], events: [], sources: [], participants: [],
+      relationships: [], events: [], sources: [], citations: [], participants: [],
     });
     expect(text).toContain('0 @P1@ INDI');
     expect(text).toContain('1 NAME John /Smith/');
@@ -22,7 +22,7 @@ describe('exportGEDCOM', () => {
   it('omits SEX line for gender U', () => {
     const text = exportGEDCOM({
       people: [{ id: 'P1', given_name: 'Pat', surname: 'Lee', gender: 'U', notes: '' }],
-      relationships: [], events: [], sources: [], participants: [],
+      relationships: [], events: [], sources: [], citations: [], participants: [],
     });
     expect(text).not.toContain('SEX');
   });
@@ -70,15 +70,17 @@ describe('exportGEDCOM', () => {
     expect(text).toContain('1 FAMC @');
   });
 
-  it('exports sources as SOUR lines', () => {
+  it('exports citations as SOUR lines', () => {
     const text = exportGEDCOM({
       people: [{ id: 'P1', given_name: 'John', surname: 'Smith', gender: 'M', notes: '' }],
       relationships: [],
       events: [{ id: 'E1', person_id: 'P1', type: 'birth', date: '1900', place: '', notes: '' }],
-      sources: [{ id: 'S1', event_id: 'E1', title: 'Census', url: 'https://example.com', accessed: '', notes: '' }],
+      sources: [{ id: 'S1', title: 'Census', url: 'https://example.com' }],
+      citations: [{ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 42', url: '', accessed: '' }],
       participants: [],
     });
     expect(text).toContain('2 SOUR https://example.com');
+    expect(text).toContain('3 PAGE p. 42');
   });
 
   it('round-trips key fields through export then import', () => {
@@ -94,6 +96,7 @@ describe('exportGEDCOM', () => {
         { id: 'E1', person_id: 'P1', type: 'birth', date: '3 SEP 1913', place: 'Dublin', notes: '' },
       ],
       sources: [],
+      citations: [],
       participants: [],
     };
 

@@ -128,10 +128,10 @@ function createHandlersFromHelpers(h) {
     getPersonWithEvents(id) {
       const person = get('SELECT * FROM people WHERE id = ?', [id]);
       if (!person) return null;
-      const events = all(`SELECT e.*, (SELECT json_group_array(json_object('id', s.id, 'title', s.title, 'url', s.url, 'accessed', s.accessed, 'notes', s.notes)) FROM sources s WHERE s.event_id = e.id) as sources_json, (SELECT json_group_array(json_object('person_id', ep.person_id, 'role', ep.role, 'name', p.given_name || ' ' || p.surname)) FROM event_participants ep JOIN people p ON p.id = ep.person_id WHERE ep.event_id = e.id) as participants_json FROM events e WHERE e.person_id = ? ORDER BY COALESCE(e.sort_date, 9999999999999)`, [id]);
-      for (const ev of events) { ev.sources = JSON.parse(ev.sources_json || '[]'); ev.participants = JSON.parse(ev.participants_json || '[]'); delete ev.sources_json; delete ev.participants_json; }
-      const participatingEvents = all(`SELECT e.*, ep.role AS participant_role, owner.given_name || ' ' || owner.surname AS owner_name, owner.id AS owner_id, (SELECT json_group_array(json_object('id', s.id, 'title', s.title, 'url', s.url, 'accessed', s.accessed, 'notes', s.notes)) FROM sources s WHERE s.event_id = e.id) as sources_json FROM event_participants ep JOIN events e ON e.id = ep.event_id JOIN people owner ON owner.id = e.person_id WHERE ep.person_id = ? AND e.person_id != ? ORDER BY COALESCE(e.sort_date, 9999999999999)`, [id, id]);
-      for (const ev of participatingEvents) { ev.sources = JSON.parse(ev.sources_json || '[]'); delete ev.sources_json; }
+      const events = all(`SELECT e.*, (SELECT json_group_array(json_object('id', c.id, 'source_id', c.source_id, 'detail', c.detail, 'url', c.url, 'accessed', c.accessed, 'confidence', c.confidence, 'source_title', s.title, 'source_url', s.url, 'repository_name', COALESCE(r.name, ''))) FROM citations c JOIN sources s ON s.id = c.source_id LEFT JOIN repositories r ON r.id = s.repository_id WHERE c.event_id = e.id) as citations_json, (SELECT json_group_array(json_object('person_id', ep.person_id, 'role', ep.role, 'name', p.given_name || ' ' || p.surname)) FROM event_participants ep JOIN people p ON p.id = ep.person_id WHERE ep.event_id = e.id) as participants_json FROM events e WHERE e.person_id = ? ORDER BY COALESCE(e.sort_date, 9999999999999)`, [id]);
+      for (const ev of events) { ev.citations = JSON.parse(ev.citations_json || '[]'); ev.participants = JSON.parse(ev.participants_json || '[]'); delete ev.citations_json; delete ev.participants_json; }
+      const participatingEvents = all(`SELECT e.*, ep.role AS participant_role, owner.given_name || ' ' || owner.surname AS owner_name, owner.id AS owner_id, (SELECT json_group_array(json_object('id', c.id, 'source_id', c.source_id, 'detail', c.detail, 'url', c.url, 'accessed', c.accessed, 'confidence', c.confidence, 'source_title', s.title, 'source_url', s.url, 'repository_name', COALESCE(r.name, ''))) FROM citations c JOIN sources s ON s.id = c.source_id LEFT JOIN repositories r ON r.id = s.repository_id WHERE c.event_id = e.id) as citations_json FROM event_participants ep JOIN events e ON e.id = ep.event_id JOIN people owner ON owner.id = e.person_id WHERE ep.person_id = ? AND e.person_id != ? ORDER BY COALESCE(e.sort_date, 9999999999999)`, [id, id]);
+      for (const ev of participatingEvents) { ev.citations = JSON.parse(ev.citations_json || '[]'); delete ev.citations_json; }
       const family = handlers.getFamily(id);
       return { person, events, participatingEvents, ...family };
     },
@@ -178,13 +178,41 @@ function createHandlersFromHelpers(h) {
     getEventsForParticipant(personId) { return all(`SELECT e.*, ep.role, p.given_name || ' ' || p.surname AS owner_name, p.id AS owner_id FROM event_participants ep JOIN events e ON e.id = ep.event_id JOIN people p ON p.id = e.person_id WHERE ep.person_id = ? ORDER BY COALESCE(e.sort_date, 9999999999999)`, [personId]); },
     getParticipantsForEvent(eventId) { return all(`SELECT ep.id, ep.role, ep.person_id, ep.created_at, p.given_name, p.surname, p.gender FROM event_participants ep JOIN people p ON p.id = ep.person_id WHERE ep.event_id = ? ORDER BY ep.created_at`, [eventId]); },
     updateParticipantRole(eventId, personId, role) { run('UPDATE event_participants SET role = ? WHERE event_id = ? AND person_id = ?', [role, eventId, personId]); return get('SELECT * FROM event_participants WHERE event_id = ? AND person_id = ?', [eventId, personId]); },
-    createSource({ id, event_id, title = '', url = '', accessed = '', notes = '' }) {
+    // Repositories
+    createRepository({ id, name = '', type = '', url = '', address = '', notes = '' }) {
       const now = Date.now();
-      run(`INSERT INTO sources (id, event_id, title, url, accessed, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [id, event_id, title, url, accessed, notes, now, now]);
+      run(`INSERT INTO repositories (id, name, type, url, address, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [id, name, type, url, address, notes, now, now]);
+      return get('SELECT * FROM repositories WHERE id = ?', [id]);
+    },
+    getRepository(id) { return get('SELECT * FROM repositories WHERE id = ?', [id]); },
+    updateRepository(id, fields) {
+      const allowed = ['name', 'type', 'url', 'address', 'notes'];
+      const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
+      if (updates.length === 0) return get('SELECT * FROM repositories WHERE id = ?', [id]);
+      const now = Date.now();
+      const setClauses = [...updates.map(([k]) => `${k} = ?`), 'updated_at = ?'].join(', ');
+      const values = [...updates.map(([, v]) => v), now, id];
+      run(`UPDATE repositories SET ${setClauses} WHERE id = ?`, values);
+      return get('SELECT * FROM repositories WHERE id = ?', [id]);
+    },
+    deleteRepository(id) { run('DELETE FROM repositories WHERE id = ?', [id]); return { ok: true }; },
+    listRepositories() { return all('SELECT * FROM repositories ORDER BY name'); },
+    searchRepositories(query) {
+      if (!query || query.trim() === '') return [];
+      const q = `%${query}%`;
+      return all(`SELECT * FROM repositories WHERE name LIKE ? OR url LIKE ? ORDER BY name LIMIT 20`, [q, q]);
+    },
+    // Sources
+    createSource({ id, repository_id = null, title = '', type = '', url = '', author = '', publisher = '', year = '', notes = '' }) {
+      const now = Date.now();
+      run(`INSERT INTO sources (id, repository_id, title, type, url, author, publisher, year, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [id, repository_id, title, type, url, author, publisher, year, notes, now, now]);
       return get('SELECT * FROM sources WHERE id = ?', [id]);
     },
+    getSource(id) {
+      return get(`SELECT s.*, r.name AS repository_name FROM sources s LEFT JOIN repositories r ON r.id = s.repository_id WHERE s.id = ?`, [id]);
+    },
     updateSource(id, fields) {
-      const allowed = ['title', 'url', 'accessed', 'notes'];
+      const allowed = ['repository_id', 'title', 'type', 'url', 'author', 'publisher', 'year', 'notes'];
       const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
       if (updates.length === 0) return get('SELECT * FROM sources WHERE id = ?', [id]);
       const now = Date.now();
@@ -194,16 +222,50 @@ function createHandlersFromHelpers(h) {
       return get('SELECT * FROM sources WHERE id = ?', [id]);
     },
     deleteSource(id) { run('DELETE FROM sources WHERE id = ?', [id]); return { ok: true }; },
-    listSources(eventId) { return all('SELECT * FROM sources WHERE event_id = ? ORDER BY created_at', [eventId]); },
+    listSources() { return all(`SELECT s.*, r.name AS repository_name FROM sources s LEFT JOIN repositories r ON r.id = s.repository_id ORDER BY s.title`); },
+    searchSources(query) {
+      if (!query || query.trim() === '') return [];
+      const q = `%${query}%`;
+      return all(`SELECT s.*, r.name AS repository_name FROM sources s LEFT JOIN repositories r ON r.id = s.repository_id WHERE s.title LIKE ? OR s.url LIKE ? ORDER BY s.title LIMIT 20`, [q, q]);
+    },
+    listSourcesForEvent(eventId) {
+      return all(`SELECT DISTINCT s.*, r.name AS repository_name FROM citations c JOIN sources s ON s.id = c.source_id LEFT JOIN repositories r ON r.id = s.repository_id WHERE c.event_id = ? ORDER BY s.title`, [eventId]);
+    },
+    // Citations
+    createCitation({ id, source_id, event_id, detail = '', url = '', accessed = '', confidence = '', notes = '' }) {
+      const now = Date.now();
+      run(`INSERT INTO citations (id, source_id, event_id, detail, url, accessed, confidence, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [id, source_id, event_id, detail, url, accessed, confidence, notes, now, now]);
+      return get('SELECT * FROM citations WHERE id = ?', [id]);
+    },
+    getCitation(id) { return get('SELECT * FROM citations WHERE id = ?', [id]); },
+    updateCitation(id, fields) {
+      const allowed = ['source_id', 'detail', 'url', 'accessed', 'confidence', 'notes'];
+      const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
+      if (updates.length === 0) return get('SELECT * FROM citations WHERE id = ?', [id]);
+      const now = Date.now();
+      const setClauses = [...updates.map(([k]) => `${k} = ?`), 'updated_at = ?'].join(', ');
+      const values = [...updates.map(([, v]) => v), now, id];
+      run(`UPDATE citations SET ${setClauses} WHERE id = ?`, values);
+      return get('SELECT * FROM citations WHERE id = ?', [id]);
+    },
+    deleteCitation(id) { run('DELETE FROM citations WHERE id = ?', [id]); return { ok: true }; },
+    listCitationsForEvent(eventId) {
+      return all(`SELECT c.*, s.title AS source_title, s.url AS source_url, s.type AS source_type, r.name AS repository_name, r.id AS repository_id FROM citations c JOIN sources s ON s.id = c.source_id LEFT JOIN repositories r ON r.id = s.repository_id WHERE c.event_id = ? ORDER BY c.created_at`, [eventId]);
+    },
+    listCitationsForSource(sourceId) {
+      return all(`SELECT c.*, e.type AS event_type, e.date AS event_date, e.place AS event_place, e.person_id, p.given_name, p.surname FROM citations c JOIN events e ON e.id = c.event_id JOIN people p ON p.id = e.person_id WHERE c.source_id = ? ORDER BY c.created_at`, [sourceId]);
+    },
     createPlace({ id, name, type = '', parent_id = null, notes = '' }) { const now = Date.now(); run(`INSERT INTO places (id, name, type, parent_id, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [id, name, type, parent_id, notes, now, now]); return get('SELECT * FROM places WHERE id = ?', [id]); },
     getPlace(id) { return get('SELECT * FROM places WHERE id = ?', [id]); },
     updatePlace(id, fields) { const allowed = ['name', 'type', 'parent_id', 'notes']; const updates = Object.entries(fields).filter(([k]) => allowed.includes(k)); if (updates.length === 0) return get('SELECT * FROM places WHERE id = ?', [id]); const now = Date.now(); const setClauses = [...updates.map(([k]) => `${k} = ?`), 'updated_at = ?'].join(', '); const values = [...updates.map(([, v]) => v), now, id]; run(`UPDATE places SET ${setClauses} WHERE id = ?`, values); return get('SELECT * FROM places WHERE id = ?', [id]); },
     deletePlace(id) { run('DELETE FROM places WHERE id = ?', [id]); return { ok: true }; },
     listPlaces() { return all('SELECT * FROM places ORDER BY name'); },
     getPlaceTree() { return all('SELECT * FROM places ORDER BY name'); },
+    findPlaceByNameTypeParent(name, type, parentId) { if (parentId) { return get('SELECT * FROM places WHERE name = ? AND type = ? AND parent_id = ?', [name, type, parentId]); } return get('SELECT * FROM places WHERE name = ? AND type = ? AND parent_id IS NULL', [name, type]); },
     searchPlaces(query) { if (!query || query.trim() === '') return []; const q = `%${query}%`; const results = all(`SELECT * FROM places WHERE name LIKE ? AND type != '' ORDER BY name LIMIT 20`, [q]); for (const r of results) { const chain = handlers.getPlaceHierarchy(r.id); r.full_name = chain.map(p => p.name).reverse().join(', '); } return results; },
     getPlaceHierarchy(id) { const chain = []; let cur = id; const visited = new Set(); while (cur && !visited.has(cur)) { visited.add(cur); const p = get('SELECT * FROM places WHERE id = ?', [cur]); if (!p) break; chain.unshift(p); cur = p.parent_id; } return chain; },
     getPeopleByPlace(placeIdOrName) { return all(`SELECT DISTINCT p.id, p.given_name, p.surname FROM people p JOIN events e ON e.person_id = p.id WHERE e.place_id = ? OR e.place LIKE ? ORDER BY p.surname, p.given_name LIMIT 10`, [placeIdOrName, `%${placeIdOrName}%`]); },
+    getEventsByPlace(placeId) { return all(`SELECT e.*, p.given_name, p.surname, p.id AS person_id FROM events e JOIN people p ON p.id = e.person_id WHERE e.place_id = ? ORDER BY COALESCE(e.sort_date, 9999999999999)`, [placeId]); },
     getPlaceChildren(parentId) { if (!parentId) return all('SELECT * FROM places WHERE parent_id IS NULL ORDER BY name'); return all('SELECT * FROM places WHERE parent_id = ? ORDER BY name', [parentId]); },
     findEventsNearDate(targetMs, windowMs, options = {}) {
       const { excludePersonId, personIds, eventTypes, limit = 100 } = options;
@@ -233,26 +295,30 @@ function createHandlersFromHelpers(h) {
       }
       return Object.values(nodeMap);
     },
-    bulkImport({ people, relationships, events, sources, participants, places }) {
+    bulkImport({ people, relationships, events, sources, repositories, citations, participants, places }) {
       return transaction(() => {
-        let counts = { people: 0, relationships: 0, events: 0, sources: 0, participants: 0, places: 0 }; const now = Date.now();
+        let counts = { people: 0, relationships: 0, events: 0, repositories: 0, sources: 0, citations: 0, participants: 0, places: 0 }; const now = Date.now();
         for (const p of (people || [])) { run(`INSERT OR REPLACE INTO people (id, given_name, surname, gender, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [p.id, p.given_name||'', p.surname||'', p.gender||'U', p.notes||'', now, now]); counts.people++; }
         for (const r of (relationships || [])) { run(`INSERT OR IGNORE INTO relationships (id, person_a_id, person_b_id, type, created_at) VALUES (?, ?, ?, ?, ?)`, [r.id, r.person_a_id, r.person_b_id, r.type, now]); counts.relationships++; }
         for (const pl of (places || [])) { run(`INSERT OR IGNORE INTO places (id, name, type, parent_id, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [pl.id, pl.name||'', pl.type||'', pl.parent_id||null, pl.notes||'', now, now]); counts.places++; }
         for (const e of (events || [])) { run(`INSERT OR REPLACE INTO events (id, person_id, type, date, place, place_id, notes, sort_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [e.id, e.person_id, e.type||'other', e.date||'', e.place||'', e.place_id||null, e.notes||'', e.sort_date||null, now, now]); counts.events++; }
-        for (const s of (sources || [])) { run(`INSERT OR REPLACE INTO sources (id, event_id, title, url, accessed, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [s.id, s.event_id, s.title||'', s.url||'', s.accessed||'', s.notes||'', now, now]); counts.sources++; }
+        for (const repo of (repositories || [])) { run(`INSERT OR REPLACE INTO repositories (id, name, type, url, address, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [repo.id, repo.name||'', repo.type||'', repo.url||'', repo.address||'', repo.notes||'', now, now]); counts.repositories++; }
+        for (const s of (sources || [])) { run(`INSERT OR REPLACE INTO sources (id, repository_id, title, type, url, author, publisher, year, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [s.id, s.repository_id||null, s.title||'', s.type||'', s.url||'', s.author||'', s.publisher||'', s.year||'', s.notes||'', now, now]); counts.sources++; }
+        for (const c of (citations || [])) { run(`INSERT OR REPLACE INTO citations (id, source_id, event_id, detail, url, accessed, confidence, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [c.id, c.source_id, c.event_id, c.detail||'', c.url||'', c.accessed||'', c.confidence||'', c.notes||'', now, now]); counts.citations++; }
         for (const ep of (participants || [])) { run(`INSERT OR IGNORE INTO event_participants (id, event_id, person_id, role, created_at) VALUES (?, ?, ?, ?, ?)`, [ep.id, ep.event_id, ep.person_id, ep.role||'witness', now]); counts.participants++; }
         return counts;
       });
     },
     exportAll() {
-      return { people: all('SELECT * FROM people ORDER BY created_at'), relationships: all('SELECT * FROM relationships ORDER BY created_at'), events: all('SELECT * FROM events ORDER BY person_id, sort_date'), sources: all('SELECT * FROM sources ORDER BY event_id, created_at'), participants: all('SELECT * FROM event_participants ORDER BY event_id'), places: all('SELECT * FROM places ORDER BY name') };
+      return { people: all('SELECT * FROM people ORDER BY created_at'), relationships: all('SELECT * FROM relationships ORDER BY created_at'), events: all('SELECT * FROM events ORDER BY person_id, sort_date'), repositories: all('SELECT * FROM repositories ORDER BY name'), sources: all('SELECT * FROM sources ORDER BY title'), citations: all('SELECT * FROM citations ORDER BY event_id, created_at'), participants: all('SELECT * FROM event_participants ORDER BY event_id'), places: all('SELECT * FROM places ORDER BY name') };
     },
-    resetDatabase() { run('DROP TABLE IF EXISTS sources'); run('DROP TABLE IF EXISTS event_participants'); run('DROP TABLE IF EXISTS events'); run('DROP TABLE IF EXISTS relationships'); run('DROP TABLE IF EXISTS people'); run('DROP TABLE IF EXISTS places'); run("UPDATE meta SET value = '1' WHERE key = 'schema_version'"); return { ok: true }; },
+    resetDatabase() { run('DROP TABLE IF EXISTS citations'); run('DROP TABLE IF EXISTS sources'); run('DROP TABLE IF EXISTS repositories'); run('DROP TABLE IF EXISTS event_participants'); run('DROP TABLE IF EXISTS events'); run('DROP TABLE IF EXISTS relationships'); run('DROP TABLE IF EXISTS people'); run('DROP TABLE IF EXISTS places'); run("UPDATE meta SET value = '1' WHERE key = 'schema_version'"); return { ok: true }; },
     nukeDatabase() {
       // Drop all application tables and reset schema version
       // The worker stays alive; tables are recreated by re-running schema + migrations
+      run('DROP TABLE IF EXISTS citations');
       run('DROP TABLE IF EXISTS sources');
+      run('DROP TABLE IF EXISTS repositories');
       run('DROP TABLE IF EXISTS event_participants');
       run('DROP TABLE IF EXISTS events');
       run('DROP TABLE IF EXISTS relationships');
@@ -280,10 +346,32 @@ function createHandlersFromHelpers(h) {
         id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
         person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
         role TEXT NOT NULL DEFAULT 'witness', created_at INTEGER NOT NULL, UNIQUE(event_id, person_id))`);
-      run(`CREATE TABLE IF NOT EXISTS sources (
-        id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-        title TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '', accessed TEXT NOT NULL DEFAULT '',
+      run(`CREATE TABLE IF NOT EXISTS repositories (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
+        type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','archive','library','website','database','church','government','personal','other')),
+        url TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '',
         notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run('CREATE INDEX IF NOT EXISTS idx_repositories_name ON repositories(name)');
+      run(`CREATE TABLE IF NOT EXISTS sources (
+        id TEXT PRIMARY KEY,
+        repository_id TEXT REFERENCES repositories(id) ON DELETE SET NULL,
+        title TEXT NOT NULL DEFAULT '',
+        type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','document','register','census','webpage','book','newspaper','certificate','photograph','other')),
+        url TEXT NOT NULL DEFAULT '', author TEXT NOT NULL DEFAULT '',
+        publisher TEXT NOT NULL DEFAULT '', year TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run('CREATE INDEX IF NOT EXISTS idx_sources_repo ON sources(repository_id)');
+      run('CREATE INDEX IF NOT EXISTS idx_sources_title ON sources(title)');
+      run(`CREATE TABLE IF NOT EXISTS citations (
+        id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        detail TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
+        accessed TEXT NOT NULL DEFAULT '',
+        confidence TEXT NOT NULL DEFAULT '' CHECK(confidence IN ('','primary','secondary','questionable')),
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run('CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id)');
+      run('CREATE INDEX IF NOT EXISTS idx_citations_event ON citations(event_id)');
       run(`CREATE TABLE IF NOT EXISTS places (
         id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
         type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','country','province','county','barony','civil_parish','church_parish','parish','townland','city','town','suburb','village','street','address','cemetery')),
@@ -291,12 +379,12 @@ function createHandlersFromHelpers(h) {
         notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
       // Add place_id to events (migration v2 equivalent)
       run('ALTER TABLE events ADD COLUMN place_id TEXT REFERENCES places(id) ON DELETE SET NULL');
-      run("UPDATE meta SET value = '2' WHERE key = 'schema_version'");
+      run("UPDATE meta SET value = '3' WHERE key = 'schema_version'");
 
       return { ok: true };
     },
     getStats() {
-      return { people: get('SELECT COUNT(*) as n FROM people').n, events: get('SELECT COUNT(*) as n FROM events').n, sources: get('SELECT COUNT(*) as n FROM sources').n, relationships: get('SELECT COUNT(*) as n FROM relationships').n, places: get('SELECT COUNT(*) as n FROM places').n };
+      return { people: get('SELECT COUNT(*) as n FROM people').n, events: get('SELECT COUNT(*) as n FROM events').n, repositories: get('SELECT COUNT(*) as n FROM repositories').n, sources: get('SELECT COUNT(*) as n FROM sources').n, citations: get('SELECT COUNT(*) as n FROM citations').n, relationships: get('SELECT COUNT(*) as n FROM relationships').n, places: get('SELECT COUNT(*) as n FROM places').n };
     },
     exportDatabase() {
       const tmp = new sqlite3Api.oo1.DB(':memory:');
@@ -357,6 +445,120 @@ const migrations = [
       }
     },
   },
+  {
+    version: 3,
+    description: 'Add repositories, citations; restructure sources',
+    up() {
+      const { run, all, get } = helpers;
+      const now = Date.now();
+
+      // Check current state of sources table to determine what work is needed
+      const sourceCols = all("PRAGMA table_info(sources)");
+      const hasOldSchema = sourceCols.some(c => c.name === 'event_id');
+      const hasNewSchema = sourceCols.some(c => c.name === 'repository_id');
+
+      // Also check if sources_old exists (partial previous run)
+      const tables = all("SELECT name FROM sqlite_master WHERE type='table'");
+      const tableNames = tables.map(t => t.name);
+      const hasSourcesOld = tableNames.includes('sources_old');
+
+      // Read old data from wherever it lives
+      let oldSources = [];
+      if (hasOldSchema) {
+        oldSources = all('SELECT * FROM sources');
+      } else if (hasSourcesOld) {
+        oldSources = all('SELECT * FROM sources_old');
+      }
+
+      // Step 1: Rename old sources if it still has the old schema
+      if (hasOldSchema && !hasSourcesOld) {
+        run('ALTER TABLE sources RENAME TO sources_old');
+        run('DROP INDEX IF EXISTS idx_sources_event');
+      } else if (hasOldSchema && hasSourcesOld) {
+        // Both exist somehow — drop the old-schema one (it's the one named 'sources')
+        run('DROP TABLE IF EXISTS sources');
+        run('DROP INDEX IF EXISTS idx_sources_event');
+      }
+
+      // Step 2: Create repositories table
+      run(`CREATE TABLE IF NOT EXISTS repositories (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
+        type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','archive','library','website','database','church','government','personal','other')),
+        url TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run('CREATE INDEX IF NOT EXISTS idx_repositories_name ON repositories(name)');
+
+      // Step 3: Create new sources table (depends on repositories)
+      if (!hasNewSchema) {
+        run(`CREATE TABLE IF NOT EXISTS sources (
+          id TEXT PRIMARY KEY,
+          repository_id TEXT REFERENCES repositories(id) ON DELETE SET NULL,
+          title TEXT NOT NULL DEFAULT '',
+          type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','document','register','census','webpage','book','newspaper','certificate','photograph','other')),
+          url TEXT NOT NULL DEFAULT '', author TEXT NOT NULL DEFAULT '',
+          publisher TEXT NOT NULL DEFAULT '', year TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+        run('CREATE INDEX IF NOT EXISTS idx_sources_repo ON sources(repository_id)');
+        run('CREATE INDEX IF NOT EXISTS idx_sources_title ON sources(title)');
+      }
+
+      // Step 4: Create citations table (depends on new sources + events)
+      run(`CREATE TABLE IF NOT EXISTS citations (
+        id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        detail TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
+        accessed TEXT NOT NULL DEFAULT '',
+        confidence TEXT NOT NULL DEFAULT '' CHECK(confidence IN ('','primary','secondary','questionable')),
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run('CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id)');
+      run('CREATE INDEX IF NOT EXISTS idx_citations_event ON citations(event_id)');
+
+      // Step 5: Migrate old data (only if there is old data to migrate)
+      if (oldSources.length > 0) {
+        const repoMap = {}; // domain -> repo id
+        const sourceMap = {}; // "repoId|title" -> new source id
+
+        for (const old of oldSources) {
+          let repoId = null;
+
+          // Auto-create repository from URL domain
+          if (old.url) {
+            try {
+              const u = new URL(old.url);
+              const domain = u.hostname.replace(/^www\./, '');
+              if (!repoMap[domain]) {
+                repoMap[domain] = generateId();
+                run('INSERT INTO repositories (id, name, type, url, address, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                  [repoMap[domain], domain, 'website', u.origin, '', '', now, now]);
+              }
+              repoId = repoMap[domain];
+            } catch (e) { /* invalid URL, skip repo */ }
+          }
+
+          // De-duplicate sources by repo + title
+          const sourceKey = `${repoId || ''}|${old.title || ''}`;
+          if (!sourceMap[sourceKey] && (old.title || old.url)) {
+            sourceMap[sourceKey] = generateId();
+            const sourceType = old.url ? 'webpage' : '';
+            run('INSERT INTO sources (id, repository_id, title, type, url, author, publisher, year, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [sourceMap[sourceKey], repoId, old.title || '', sourceType, old.url || '', '', '', '', old.notes || '', now, now]);
+          }
+
+          // Create citation linking source to event
+          const newSourceId = sourceMap[sourceKey];
+          if (newSourceId) {
+            const citationId = generateId();
+            run('INSERT INTO citations (id, source_id, event_id, detail, url, accessed, confidence, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [citationId, newSourceId, old.event_id, '', old.url || '', old.accessed || '', '', '', now, now]);
+          }
+        }
+      }
+
+      // Step 6: Clean up
+      run('DROP TABLE IF EXISTS sources_old');
+    },
+  },
 ];
 
 function applyMigrations() {
@@ -369,20 +571,23 @@ function applyMigrations() {
 
   pending.sort((a, b) => a.version - b.version);
 
-  db.exec('BEGIN');
-  try {
-    for (const m of pending) {
-      console.log(`[worker] Running migration v${m.version}: ${m.description}`);
+  // Run each migration individually — DDL like ALTER TABLE RENAME is not
+  // transactional in SQLite, so a single wrapping transaction can leave
+  // the DB in an inconsistent state on failure. Instead, each migration
+  // is responsible for being idempotent (safe to re-run if partially applied).
+  for (const m of pending) {
+    console.log(`[worker] Running migration v${m.version}: ${m.description}`);
+    try {
       m.up();
       run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [String(m.version)]);
+      console.log(`[worker] Migration v${m.version} complete`);
+    } catch (e) {
+      console.error(`[worker] Migration v${m.version} failed:`, e);
+      throw e;
     }
-    db.exec('COMMIT');
-    console.log(`[worker] Migrations complete — now at v${pending[pending.length - 1].version}`);
-  } catch (e) {
-    db.exec('ROLLBACK');
-    console.error('[worker] Migration failed, rolled back:', e);
-    throw e;
   }
+
+  console.log(`[worker] All migrations complete — now at v${pending[pending.length - 1].version}`);
 }
 
 // ─── Queue & Message Handler ──────────────────────────────────────────────────

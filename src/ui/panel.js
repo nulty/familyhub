@@ -152,9 +152,13 @@ export async function renderPanel(personId) {
 }
 
 function renderEvent(ev, editable) {
-  const sourcesHtml = (ev.sources || []).filter(s => s.title || s.url).map(s =>
-    s.url ? `<div><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></div>` : `<div>${esc(s.title)}</div>`
-  ).join('');
+  const citationsHtml = (ev.citations || []).filter(c => c.source_title || c.url).map(c => {
+    const label = c.source_title + (c.detail ? `, ${c.detail}` : '');
+    const link = c.url || c.source_url;
+    return link
+      ? `<div><a href="${esc(link)}" target="_blank" rel="noopener">${esc(label || link)}</a>${c.repository_name ? ` <span class="citation-repo">(${esc(c.repository_name)})</span>` : ''}</div>`
+      : `<div>${esc(label)}${c.repository_name ? ` <span class="citation-repo">(${esc(c.repository_name)})</span>` : ''}</div>`;
+  }).join('');
 
   return `
     <div class="event-item">
@@ -169,7 +173,7 @@ function renderEvent(ev, editable) {
       </div>
       ${ev.place ? `<div class="event-place">${esc(ev.place)}</div>` : ''}
       ${ev.notes ? `<div class="event-notes">${linkify(ev.notes)}</div>` : ''}
-      ${sourcesHtml ? `<div class="event-sources">${sourcesHtml}</div>` : ''}
+      ${citationsHtml ? `<div class="event-sources">${citationsHtml}</div>` : ''}
     </div>
   `;
 }

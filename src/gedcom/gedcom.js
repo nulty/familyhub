@@ -29,7 +29,9 @@ export function triggerImport() {
         <dt>People:</dt><dd>${stats.people}</dd>
         <dt>Relationships:</dt><dd>${stats.relationships}</dd>
         <dt>Events:</dt><dd>${stats.events}</dd>
+        <dt>Repositories:</dt><dd>${stats.repositories}</dd>
         <dt>Sources:</dt><dd>${stats.sources}</dd>
+        <dt>Citations:</dt><dd>${stats.citations}</dd>
       </dl>
       ${warnings.length ? `<div class="import-warnings"><strong>Warnings:</strong><ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul></div>` : ''}
       <div class="form-actions">

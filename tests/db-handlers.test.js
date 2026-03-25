@@ -210,36 +210,191 @@ describe('Participants', () => {
   });
 });
 
+// ─── Repositories ─────────────────────────────────────────────────────────────
+
+describe('Repositories', () => {
+  it('createRepository inserts and returns record', () => {
+    const repo = h.createRepository({ id: 'R1', name: 'Ancestry.com', type: 'website', url: 'https://ancestry.com' });
+    expect(repo.id).toBe('R1');
+    expect(repo.name).toBe('Ancestry.com');
+    expect(repo.type).toBe('website');
+    expect(repo.url).toBe('https://ancestry.com');
+  });
+
+  it('getRepository retrieves by ID', () => {
+    h.createRepository({ id: 'R1', name: 'National Archives' });
+    expect(h.getRepository('R1').name).toBe('National Archives');
+  });
+
+  it('getRepository returns null for missing', () => {
+    expect(h.getRepository('MISSING')).toBeNull();
+  });
+
+  it('updateRepository updates allowed fields', () => {
+    h.createRepository({ id: 'R1', name: 'Old Name' });
+    const updated = h.updateRepository('R1', { name: 'New Name', type: 'archive' });
+    expect(updated.name).toBe('New Name');
+    expect(updated.type).toBe('archive');
+  });
+
+  it('deleteRepository removes it and nullifies source references', () => {
+    h.createRepository({ id: 'R1', name: 'Ancestry' });
+    h.createSource({ id: 'S1', repository_id: 'R1', title: 'Census' });
+    h.deleteRepository('R1');
+    expect(h.getRepository('R1')).toBeNull();
+    const src = h.getSource('S1');
+    expect(src.repository_id).toBeNull();
+  });
+
+  it('listRepositories returns all sorted by name', () => {
+    h.createRepository({ id: 'R1', name: 'Zeta' });
+    h.createRepository({ id: 'R2', name: 'Alpha' });
+    const list = h.listRepositories();
+    expect(list).toHaveLength(2);
+    expect(list[0].name).toBe('Alpha');
+  });
+
+  it('searchRepositories finds by name or url', () => {
+    h.createRepository({ id: 'R1', name: 'Ancestry', url: 'https://ancestry.com' });
+    h.createRepository({ id: 'R2', name: 'FamilySearch', url: 'https://familysearch.org' });
+    expect(h.searchRepositories('Anc')).toHaveLength(1);
+    expect(h.searchRepositories('familysearch')).toHaveLength(1);
+    expect(h.searchRepositories('')).toHaveLength(0);
+  });
+});
+
 // ─── Sources ──────────────────────────────────────────────────────────────────
 
 describe('Sources', () => {
-  beforeEach(() => {
-    h.createPerson({ id: 'P1', given_name: 'John' });
-    h.createEvent({ id: 'E1', person_id: 'P1' });
+  it('createSource inserts and returns record', () => {
+    const src = h.createSource({ id: 'S1', title: 'Census 1901', type: 'census', url: 'https://example.com/census' });
+    expect(src.id).toBe('S1');
+    expect(src.title).toBe('Census 1901');
+    expect(src.type).toBe('census');
   });
 
-  it('createSource inserts linked to event', () => {
-    const src = h.createSource({ id: 'S1', event_id: 'E1', title: 'Census', url: 'https://example.com' });
-    expect(src.title).toBe('Census');
-    expect(src.event_id).toBe('E1');
+  it('createSource with repository_id links to repo', () => {
+    h.createRepository({ id: 'R1', name: 'Ancestry' });
+    const src = h.createSource({ id: 'S1', repository_id: 'R1', title: 'Census' });
+    expect(src.repository_id).toBe('R1');
+  });
+
+  it('getSource includes repository_name', () => {
+    h.createRepository({ id: 'R1', name: 'Ancestry' });
+    h.createSource({ id: 'S1', repository_id: 'R1', title: 'Census' });
+    const src = h.getSource('S1');
+    expect(src.repository_name).toBe('Ancestry');
+  });
+
+  it('getSource returns null repository_name when no repo', () => {
+    h.createSource({ id: 'S1', title: 'My Notes' });
+    const src = h.getSource('S1');
+    expect(src.repository_name).toBeNull();
   });
 
   it('updateSource updates allowed fields', () => {
-    h.createSource({ id: 'S1', event_id: 'E1', title: 'Old' });
-    const updated = h.updateSource('S1', { title: 'New' });
+    h.createSource({ id: 'S1', title: 'Old' });
+    const updated = h.updateSource('S1', { title: 'New', author: 'John' });
     expect(updated.title).toBe('New');
+    expect(updated.author).toBe('John');
   });
 
-  it('deleteSource removes it', () => {
-    h.createSource({ id: 'S1', event_id: 'E1' });
+  it('deleteSource removes it and cascades to citations', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1' });
+    h.createSource({ id: 'S1', title: 'Census' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
     h.deleteSource('S1');
-    expect(h.listSources('E1')).toHaveLength(0);
+    expect(h.getCitation('C1')).toBeNull();
   });
 
-  it('listSources returns sources for event', () => {
-    h.createSource({ id: 'S1', event_id: 'E1', title: 'A' });
-    h.createSource({ id: 'S2', event_id: 'E1', title: 'B' });
-    expect(h.listSources('E1')).toHaveLength(2);
+  it('listSources returns all sources sorted by title', () => {
+    h.createSource({ id: 'S1', title: 'Zebra' });
+    h.createSource({ id: 'S2', title: 'Alpha' });
+    const list = h.listSources();
+    expect(list).toHaveLength(2);
+    expect(list[0].title).toBe('Alpha');
+  });
+
+  it('searchSources finds by title', () => {
+    h.createSource({ id: 'S1', title: 'Census 1901' });
+    h.createSource({ id: 'S2', title: 'Birth Cert' });
+    expect(h.searchSources('Census')).toHaveLength(1);
+    expect(h.searchSources('')).toHaveLength(0);
+  });
+
+  it('listSourcesForEvent returns sources cited in event', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1' });
+    h.createSource({ id: 'S1', title: 'Census' });
+    h.createSource({ id: 'S2', title: 'Other' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+    const sources = h.listSourcesForEvent('E1');
+    expect(sources).toHaveLength(1);
+    expect(sources[0].title).toBe('Census');
+  });
+});
+
+// ─── Citations ────────────────────────────────────────────────────────────────
+
+describe('Citations', () => {
+  beforeEach(() => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1' });
+    h.createRepository({ id: 'R1', name: 'Ancestry' });
+    h.createSource({ id: 'S1', repository_id: 'R1', title: 'Census 1901' });
+  });
+
+  it('createCitation inserts and returns record', () => {
+    const c = h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 42', url: 'https://example.com/page', confidence: 'primary' });
+    expect(c.id).toBe('C1');
+    expect(c.source_id).toBe('S1');
+    expect(c.event_id).toBe('E1');
+    expect(c.detail).toBe('p. 42');
+    expect(c.confidence).toBe('primary');
+  });
+
+  it('updateCitation updates allowed fields', () => {
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'old' });
+    const updated = h.updateCitation('C1', { detail: 'new', confidence: 'secondary' });
+    expect(updated.detail).toBe('new');
+    expect(updated.confidence).toBe('secondary');
+  });
+
+  it('deleteCitation removes it', () => {
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+    h.deleteCitation('C1');
+    expect(h.getCitation('C1')).toBeNull();
+  });
+
+  it('listCitationsForEvent returns enriched rows', () => {
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 42' });
+    const list = h.listCitationsForEvent('E1');
+    expect(list).toHaveLength(1);
+    expect(list[0].source_title).toBe('Census 1901');
+    expect(list[0].repository_name).toBe('Ancestry');
+    expect(list[0].detail).toBe('p. 42');
+  });
+
+  it('listCitationsForSource returns citation details with event info', () => {
+    h.createEvent({ id: 'E2', person_id: 'P1', type: 'death' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+    h.createCitation({ id: 'C2', source_id: 'S1', event_id: 'E2' });
+    const list = h.listCitationsForSource('S1');
+    expect(list).toHaveLength(2);
+    expect(list[0].given_name).toBe('John');
+  });
+
+  it('deleting event cascades to citations', () => {
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+    h.deleteEvent('E1');
+    expect(h.getCitation('C1')).toBeNull();
+  });
+
+  it('deleting person cascades through events to citations', () => {
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+    h.deletePerson('P1');
+    expect(h.getCitation('C1')).toBeNull();
   });
 });
 
@@ -444,7 +599,7 @@ describe('Places', () => {
   it('bulkImport with places inserts place records', () => {
     h.createPerson({ id: 'P1', given_name: 'John' });
     const counts = h.bulkImport({
-      people: [], relationships: [], sources: [], participants: [],
+      people: [], relationships: [], sources: [], citations: [], repositories: [], participants: [],
       places: [{ id: 'PL1', name: 'Dublin', type: 'city' }],
       events: [{ id: 'E1', person_id: 'P1', type: 'birth', place: 'Dublin', place_id: 'PL1' }],
     });
@@ -467,51 +622,67 @@ describe('Bulk', () => {
       people: [{ id: 'P1', given_name: 'John', surname: 'Smith', gender: 'M', notes: '' }],
       relationships: [],
       events: [{ id: 'E1', person_id: 'P1', type: 'birth', date: '1900' }],
-      sources: [{ id: 'S1', event_id: 'E1', title: 'Census' }],
+      repositories: [{ id: 'R1', name: 'Ancestry', type: 'website' }],
+      sources: [{ id: 'S1', repository_id: 'R1', title: 'Census' }],
+      citations: [{ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 42' }],
       participants: [],
     });
     expect(counts.people).toBe(1);
     expect(counts.events).toBe(1);
+    expect(counts.repositories).toBe(1);
     expect(counts.sources).toBe(1);
+    expect(counts.citations).toBe(1);
   });
 
-  it('exportAll returns all data', () => {
+  it('exportAll returns all data including repositories and citations', () => {
     h.createPerson({ id: 'P1', given_name: 'John' });
     h.createEvent({ id: 'E1', person_id: 'P1' });
+    h.createRepository({ id: 'R1', name: 'Ancestry' });
+    h.createSource({ id: 'S1', repository_id: 'R1', title: 'Census' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
     const data = h.exportAll();
     expect(data.people).toHaveLength(1);
     expect(data.events).toHaveLength(1);
+    expect(data.repositories).toHaveLength(1);
+    expect(data.sources).toHaveLength(1);
+    expect(data.citations).toHaveLength(1);
   });
 });
 
 // ─── Cascade Deletes ──────────────────────────────────────────────────────────
 
 describe('Cascade deletes', () => {
-  it('deleting a person cascades to events and relationships', () => {
+  it('deleting a person cascades to events, citations, and relationships', () => {
     h.createPerson({ id: 'P1', given_name: 'John' });
     h.createPerson({ id: 'P2', given_name: 'Mary' });
     h.addPartner('R1', 'P1', 'P2');
     h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth' });
-    h.createSource({ id: 'S1', event_id: 'E1', title: 'Census' });
+    h.createSource({ id: 'S1', title: 'Census' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
 
     h.deletePerson('P1');
 
     expect(h.getStats().events).toBe(0);
-    expect(h.getStats().sources).toBe(0);
+    expect(h.getStats().citations).toBe(0);
     expect(h.getStats().relationships).toBe(0);
+    // Source itself remains (not cascade-deleted from citation)
+    expect(h.getStats().sources).toBe(1);
   });
 
-  it('deleting an event cascades to sources and participants', () => {
+  it('deleting an event cascades to citations and participants', () => {
     h.createPerson({ id: 'P1', given_name: 'John' });
     h.createPerson({ id: 'P2', given_name: 'Mary' });
     h.createEvent({ id: 'E1', person_id: 'P1' });
-    h.createSource({ id: 'S1', event_id: 'E1', title: 'Census' });
+    h.createSource({ id: 'S1', title: 'Census' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
     h.addParticipant({ id: 'EP1', event_id: 'E1', person_id: 'P2' });
 
     h.deleteEvent('E1');
 
-    expect(h.listSources('E1')).toHaveLength(0);
+    expect(h.getCitation('C1')).toBeNull();
     expect(h.getParticipantsForEvent('E1')).toHaveLength(0);
+    // Source still exists
+    expect(h.getSource('S1')).not.toBeNull();
   });
 });
 
@@ -519,14 +690,14 @@ describe('Cascade deletes', () => {
 
 describe('Stats', () => {
   it('getStats returns correct counts', () => {
-    expect(h.getStats()).toEqual({ people: 0, events: 0, sources: 0, relationships: 0, places: 0 });
+    expect(h.getStats()).toEqual({ people: 0, events: 0, repositories: 0, sources: 0, citations: 0, relationships: 0, places: 0 });
 
     h.createPerson({ id: 'P1', given_name: 'John' });
     h.createPerson({ id: 'P2', given_name: 'Mary' });
     h.createEvent({ id: 'E1', person_id: 'P1' });
     h.addPartner('R1', 'P1', 'P2');
 
-    expect(h.getStats()).toEqual({ people: 2, events: 1, sources: 0, relationships: 1, places: 0 });
+    expect(h.getStats()).toEqual({ people: 2, events: 1, repositories: 0, sources: 0, citations: 0, relationships: 1, places: 0 });
   });
 });
 
@@ -537,18 +708,22 @@ describe('getPersonWithEvents', () => {
     expect(h.getPersonWithEvents('MISSING')).toBeNull();
   });
 
-  it('returns person with events, family, and sources', () => {
+  it('returns person with events, family, and citations', () => {
     h.createPerson({ id: 'P1', given_name: 'John', gender: 'M' });
     h.createPerson({ id: 'P2', given_name: 'Mary', gender: 'F' });
     h.addPartner('R1', 'P1', 'P2');
     h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', date: '1900' });
-    h.createSource({ id: 'S1', event_id: 'E1', title: 'Census' });
+    h.createRepository({ id: 'REPO1', name: 'Ancestry' });
+    h.createSource({ id: 'S1', repository_id: 'REPO1', title: 'Census' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 5' });
 
     const result = h.getPersonWithEvents('P1');
     expect(result.person.given_name).toBe('John');
     expect(result.events).toHaveLength(1);
-    expect(result.events[0].sources).toHaveLength(1);
-    expect(result.events[0].sources[0].title).toBe('Census');
+    expect(result.events[0].citations).toHaveLength(1);
+    expect(result.events[0].citations[0].source_title).toBe('Census');
+    expect(result.events[0].citations[0].repository_name).toBe('Ancestry');
+    expect(result.events[0].citations[0].detail).toBe('p. 5');
     expect(result.partners).toHaveLength(1);
   });
 });

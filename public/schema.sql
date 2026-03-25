@@ -70,18 +70,54 @@ CREATE TABLE IF NOT EXISTS event_participants (
 CREATE INDEX IF NOT EXISTS idx_ep_event  ON event_participants(event_id);
 CREATE INDEX IF NOT EXISTS idx_ep_person ON event_participants(person_id);
 
-CREATE TABLE IF NOT EXISTS sources (
+CREATE TABLE IF NOT EXISTS repositories (
   id          TEXT PRIMARY KEY,
-  event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-  title       TEXT NOT NULL DEFAULT '',
-  url         TEXT NOT NULL DEFAULT '',
-  accessed    TEXT NOT NULL DEFAULT '',
+  name        TEXT NOT NULL DEFAULT '',
+  type        TEXT NOT NULL DEFAULT ''
+    CHECK(type IN ('','archive','library','website','database','church','government','personal','other')),
+  url         TEXT NOT NULL DEFAULT '',   -- base URL for online repositories
+  address     TEXT NOT NULL DEFAULT '',   -- physical address for brick-and-mortar repositories
   notes       TEXT NOT NULL DEFAULT '',
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_sources_event ON sources(event_id);
+CREATE INDEX IF NOT EXISTS idx_repositories_name ON repositories(name);
+
+CREATE TABLE IF NOT EXISTS sources (
+  id            TEXT PRIMARY KEY,
+  repository_id TEXT REFERENCES repositories(id) ON DELETE SET NULL,
+  title         TEXT NOT NULL DEFAULT '',
+  type          TEXT NOT NULL DEFAULT ''
+    CHECK(type IN ('','document','register','census','webpage','book','newspaper','certificate','photograph','other')),
+  url           TEXT NOT NULL DEFAULT '',   -- source-level URL (e.g. a specific collection page)
+  author        TEXT NOT NULL DEFAULT '',
+  publisher     TEXT NOT NULL DEFAULT '',
+  year          TEXT NOT NULL DEFAULT '',
+  notes         TEXT NOT NULL DEFAULT '',
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sources_repo  ON sources(repository_id);
+CREATE INDEX IF NOT EXISTS idx_sources_title ON sources(title);
+
+CREATE TABLE IF NOT EXISTS citations (
+  id          TEXT PRIMARY KEY,
+  source_id   TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  detail      TEXT NOT NULL DEFAULT '',   -- page number, entry number, film number
+  url         TEXT NOT NULL DEFAULT '',   -- direct URL to this specific record/image
+  accessed    TEXT NOT NULL DEFAULT '',   -- date accessed (for online sources)
+  confidence  TEXT NOT NULL DEFAULT ''
+    CHECK(confidence IN ('','primary','secondary','questionable')),
+  notes       TEXT NOT NULL DEFAULT '',
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
+CREATE INDEX IF NOT EXISTS idx_citations_event  ON citations(event_id);
 
 CREATE TABLE IF NOT EXISTS places (
   id         TEXT PRIMARY KEY,

@@ -112,7 +112,7 @@ describe('parseGEDCOM', () => {
     expect(marriages[0].date).toBe('15 JUN 1935');
   });
 
-  it('parses sources on events', () => {
+  it('parses sources on events into repositories, sources, and citations', () => {
     const ged = `0 @I1@ INDI
 1 NAME John /Smith/
 1 BIRT
@@ -120,8 +120,14 @@ describe('parseGEDCOM', () => {
 2 SOUR https://example.com/record
 0 TRLR`;
     const { data, stats } = parseGEDCOM(ged);
+    expect(stats.repositories).toBe(1);
     expect(stats.sources).toBe(1);
+    expect(stats.citations).toBe(1);
+    expect(data.repositories[0].name).toBe('example.com');
     expect(data.sources[0].url).toBe('https://example.com/record');
+    expect(data.citations[0].url).toBe('https://example.com/record');
+    expect(data.citations[0].source_id).toBe(data.sources[0].id);
+    expect(data.citations[0].event_id).toBe(data.events[0].id);
   });
 
   it('parses NOTE with CONT continuation', () => {
@@ -145,6 +151,8 @@ describe('parseGEDCOM', () => {
     expect(stats.events).toBe(data.events.length);
     expect(stats.relationships).toBe(data.relationships.length);
     expect(stats.sources).toBe(data.sources.length);
+    expect(stats.citations).toBe(data.citations.length);
+    expect(stats.repositories).toBe(data.repositories.length);
   });
 
   it('handles empty input without crashing', () => {

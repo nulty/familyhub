@@ -3,17 +3,21 @@
  */
 
 import { places } from '../db/db.js';
-import { emit, DATA_CHANGED } from '../state.js';
+import { emit, PERSON_SELECTED, DATA_CHANGED } from '../state.js';
 import { openModal } from './modal.js';
 import { showToast } from './toast.js';
 import { openPlaceForm } from '../forms/place-form.js';
 import { openOrganizeWizard } from './places-organize.js';
+import { focusPerson } from './tree.js';
+
+let closeModal = null;
 
 export async function openPlacesPage() {
   const content = document.createElement('div');
   content.className = 'places-page';
 
-  const { close, body } = openModal({ title: 'Places', content });
+  const { close, body } = openModal({ title: 'Places', content, wide: true });
+  closeModal = close;
 
   await renderPlaces(body);
 }
@@ -95,8 +99,7 @@ async function renderPlaces(container) {
           try {
             const newParentId = p.parent_id ? (idMap[p.parent_id] || null) : null;
             // Check if a place with the same name, type, and parent already exists
-            const existing = await places.search(p.name);
-            const match = existing.find(e => e.name === p.name && e.type === (p.type || '') && (e.parent_id || null) === newParentId);
+            const match = await places.findByNameTypeParent(p.name, p.type || '', newParentId);
             if (match) {
               idMap[p.id] = match.id;
               skipped++;
@@ -179,6 +182,44 @@ function renderTree(byParent, parentKey, rootContainer) {
       row.appendChild(badge);
     }
 
+    const eventsBtn = document.createElement('button');
+    eventsBtn.className = 'btn-link btn-sm place-events-toggle';
+    eventsBtn.textContent = 'events';
+    eventsBtn.onclick = async (e) => {
+      e.stopPropagation();
+      const existing = li.querySelector('.place-events-list');
+      if (existing) {
+        existing.remove();
+        return;
+      }
+      const eventList = await places.events(place.id);
+      const eventsDiv = document.createElement('div');
+      eventsDiv.className = 'place-events-list';
+      if (eventList.length === 0) {
+        eventsDiv.innerHTML = '<div class="section-empty" style="padding:4px 0">No linked events</div>';
+      } else {
+        for (const ev of eventList) {
+          const personName = [ev.given_name, ev.surname].filter(Boolean).join(' ') || 'Unnamed';
+          const evRow = document.createElement('div');
+          evRow.className = 'place-event-row';
+          evRow.innerHTML = `
+            <span class="place-event-type">${esc(ev.type)}</span>
+            ${ev.date ? `<span class="place-event-date">${esc(ev.date)}</span>` : ''}
+            <a href="#" class="place-event-person" data-person-id="${ev.person_id}">${esc(personName)}</a>
+          `;
+          evRow.querySelector('a').onclick = (e2) => {
+            e2.preventDefault();
+            focusPerson(ev.person_id);
+            emit(PERSON_SELECTED, ev.person_id);
+            closeModal?.();
+          };
+          eventsDiv.appendChild(evRow);
+        }
+      }
+      li.appendChild(eventsDiv);
+    };
+    row.appendChild(eventsBtn);
+
     const actions = document.createElement('span');
     actions.className = 'place-tree-actions';
 
@@ -221,4 +262,10 @@ function renderTree(byParent, parentKey, rootContainer) {
   const frag = document.createDocumentFragment();
   frag.appendChild(ul);
   return frag;
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
 }

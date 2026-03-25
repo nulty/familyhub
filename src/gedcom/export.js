@@ -18,7 +18,7 @@ const EVENT_TYPE_TO_TAG = {
   other:          'EVEN',
 };
 
-export function exportGEDCOM({ people, relationships, events, sources, participants }) {
+export function exportGEDCOM({ people, relationships, events, sources, citations, participants }) {
   const lines = [];
 
   const now = new Date();
@@ -34,17 +34,26 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
   lines.push('2 FORM LINEAGE-LINKED');
   lines.push('1 CHAR UTF-8');
 
-  // Index events and sources by person
+  // Index events by person
   const eventsByPerson = {};
   for (const ev of events) {
     if (!eventsByPerson[ev.person_id]) eventsByPerson[ev.person_id] = [];
     eventsByPerson[ev.person_id].push(ev);
   }
 
-  const sourcesByEvent = {};
-  for (const src of sources) {
-    if (!sourcesByEvent[src.event_id]) sourcesByEvent[src.event_id] = [];
-    sourcesByEvent[src.event_id].push(src);
+  // Build citation lookup: event_id -> [{ source, citation }]
+  const sourceById = {};
+  for (const src of (sources || [])) {
+    sourceById[src.id] = src;
+  }
+
+  const citationsByEvent = {};
+  for (const c of (citations || [])) {
+    if (!citationsByEvent[c.event_id]) citationsByEvent[c.event_id] = [];
+    const source = sourceById[c.source_id];
+    if (source) {
+      citationsByEvent[c.event_id].push({ citation: c, source });
+    }
   }
 
   const participantsByEvent = {};
@@ -55,7 +64,6 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
 
   // Index relationships
   const partners   = {}; // personId → [personId]
-  const children   = {}; // personId → [personId] (as parent)
   const famGroups  = []; // { id, husbId, wifeId, childIds[] }
 
   for (const rel of relationships) {
@@ -79,9 +87,7 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
 
   for (const rel of relationships) {
     if (rel.type === 'parent_child') {
-      // Find this parent's partner(s) to group family
       const parentPartners = partners[rel.person_a_id] || [];
-      // For now: create fam per unique parent (simplified - full impl would group siblings)
       const famKey = rel.person_a_id;
       if (!famMap['solo_' + famKey]) famMap['solo_' + famKey] = `F${famCounter++}`;
     }
@@ -108,7 +114,6 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
   // Assign children to families
   for (const rel of relationships) {
     if (rel.type !== 'parent_child') continue;
-    // Find a FAM that this parent is in
     const parentFams = personFams[rel.person_a_id] || [];
     if (parentFams.length > 0) {
       const fam = famGroups.find(f => f.famId === parentFams[0]);
@@ -117,7 +122,6 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
         personFamc[rel.person_b_id] = fam.famId;
       }
     } else {
-      // Single parent family
       const famId = `F${famCounter++}`;
       famGroups.push({ famId, a: rel.person_a_id, b: null, childIds: [rel.person_b_id] });
       if (!personFams[rel.person_a_id]) personFams[rel.person_a_id] = [];
@@ -133,7 +137,6 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
 
   for (const p of people) {
     lines.push(`0 @${p.id}@ INDI`);
-    const fullName = [p.given_name, p.surname].filter(Boolean).join(' ');
     lines.push(`1 NAME ${p.given_name} /${p.surname}/`);
     if (p.given_name) lines.push(`2 GIVN ${p.given_name}`);
     if (p.surname)    lines.push(`2 SURN ${p.surname}`);
@@ -142,7 +145,7 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
     // Events
     const personEvents = (eventsByPerson[p.id] || [])
       .filter(e => e.type !== 'marriage'); // marriages go on FAM records
-    
+
     for (const ev of personEvents) {
       const tag = EVENT_TYPE_TO_TAG[ev.type] || 'EVEN';
       lines.push(`1 ${tag}`);
@@ -155,12 +158,14 @@ export function exportGEDCOM({ people, relationships, events, sources, participa
           lines.push(`3 CONT ${noteLines[i]}`);
         }
       }
-      // Sources
-      const evSources = sourcesByEvent[ev.id] || [];
-      for (const src of evSources) {
-        if (src.url) {
-          lines.push(`2 SOUR ${src.url}`);
-          if (src.title) lines.push(`3 PAGE ${src.title}`);
+      // Citations → SOUR records
+      const evCitations = citationsByEvent[ev.id] || [];
+      for (const { citation, source } of evCitations) {
+        const sourVal = source.url || source.title;
+        if (sourVal) {
+          lines.push(`2 SOUR ${sourVal}`);
+          if (citation.detail) lines.push(`3 PAGE ${citation.detail}`);
+          if (citation.url && citation.url !== source.url) lines.push(`3 WWW ${citation.url}`);
         }
       }
       // Participants (ASSO records)

@@ -2,14 +2,14 @@
  * modal.js — Generic modal shell
  */
 
-export function openModal({ title, content, onClose } = {}) {
+export function openModal({ title, content, onClose, wide } = {}) {
   const root = document.getElementById('modal-root');
 
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
 
   const modal = document.createElement('div');
-  modal.className = 'modal';
+  modal.className = wide ? 'modal modal-wide' : 'modal';
 
   const header = document.createElement('div');
   header.className = 'modal-header';

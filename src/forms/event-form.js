@@ -1,12 +1,14 @@
 /**
- * event-form.js — Modal form for create/edit event + inline sources
+ * event-form.js — Modal form for create/edit event + inline citations
  */
 
-import { events, sources, places } from '../db/db.js';
+import { events, citations, places } from '../db/db.js';
 import { emit, DATA_CHANGED } from '../state.js';
 import { openModal } from '../ui/modal.js';
 import { showToast } from '../ui/toast.js';
 import { createPersonPicker } from './person-picker.js';
+import { createSourcePicker } from './source-picker.js';
+import { openPlaceForm } from './place-form.js';
 
 const EVENT_TYPES = [
   'birth', 'death', 'marriage', 'burial', 'residence',
@@ -19,6 +21,13 @@ const PARTICIPANT_ROLES = [
   'informant', 'spouse', 'other',
 ];
 
+const CONFIDENCE_OPTIONS = [
+  { value: '', label: '(unspecified)' },
+  { value: 'primary', label: 'Primary' },
+  { value: 'secondary', label: 'Secondary' },
+  { value: 'questionable', label: 'Questionable' },
+];
+
 /**
  * @param {string} personId
  * @param {string} [eventId] — if provided, edit mode
@@ -26,7 +35,7 @@ const PARTICIPANT_ROLES = [
 export async function openEventForm(personId, eventId) {
   const isEdit = !!eventId;
   let existing = null;
-  let existingSources = [];
+  let existingCitations = [];
 
   let existingParticipants = [];
 
@@ -34,7 +43,7 @@ export async function openEventForm(personId, eventId) {
     const eventList = await events.list(personId);
     existing = eventList.find(e => e.id === eventId);
     if (!existing) return;
-    existingSources = await sources.list(eventId);
+    existingCitations = await citations.listForEvent(eventId);
     existingParticipants = await events.getParticipants(eventId);
   }
 
@@ -55,6 +64,7 @@ export async function openEventForm(personId, eventId) {
       <label for="ef-place">Place</label>
       <input id="ef-place" type="text" value="${esc(existing?.place || '')}" autocomplete="off">
       <div id="ef-place-suggestions" class="place-suggestions"></div>
+      <button type="button" class="btn btn-sm btn-link" id="ef-new-place">+ New place</button>
     </div>
     <div class="form-group">
       <label for="ef-notes">Notes</label>
@@ -68,9 +78,9 @@ export async function openEventForm(personId, eventId) {
     </div>
 
     <div class="form-group">
-      <label>Sources</label>
-      <div id="ef-sources"></div>
-      <button type="button" class="btn btn-sm btn-link" id="ef-add-source">+ Add Source</button>
+      <label>Citations</label>
+      <div id="ef-citations"></div>
+      <button type="button" class="btn btn-sm btn-link" id="ef-add-citation">+ Add Citation</button>
     </div>
 
     <div class="form-actions">
@@ -82,14 +92,22 @@ export async function openEventForm(personId, eventId) {
   const title = isEdit ? `Edit Event` : 'New Event';
   const { close } = openModal({ title, content: form });
 
-  // Render existing sources
-  const sourcesContainer = form.querySelector('#ef-sources');
-  const sourceEntries = []; // { id?, title, url, deleted? }
+  // Render existing citations
+  const citationsContainer = form.querySelector('#ef-citations');
+  const citationEntries = []; // { id?, source_id, source_title, detail, url, accessed, confidence, deleted? }
 
-  for (const s of existingSources) {
-    sourceEntries.push({ id: s.id, title: s.title, url: s.url });
+  for (const c of existingCitations) {
+    citationEntries.push({
+      id: c.id,
+      source_id: c.source_id,
+      source_title: c.source_title,
+      detail: c.detail,
+      url: c.url,
+      accessed: c.accessed,
+      confidence: c.confidence,
+    });
   }
-  renderSources();
+  renderCitations();
 
   // Participants
   const participantsContainer = form.querySelector('#ef-participants');
@@ -162,7 +180,6 @@ export async function openEventForm(personId, eventId) {
     if (!q) { placeSuggestions.innerHTML = ''; placeSuggestions.style.display = 'none'; return; }
     placeTimer = setTimeout(async () => {
       const results = await places.search(q);
-      if (results.length === 0) { placeSuggestions.style.display = 'none'; return; }
       placeSuggestions.innerHTML = '';
       for (const r of results) {
         const div = document.createElement('div');
@@ -185,32 +202,89 @@ export async function openEventForm(personId, eventId) {
     }
   });
 
-  form.querySelector('#ef-add-source').onclick = () => {
-    sourceEntries.push({ title: '', url: '' });
-    renderSources();
+  form.querySelector('#ef-new-place').onclick = () => {
+    openPlaceForm(null, (newPlace) => {
+      placeInput.value = newPlace.name;
+      selectedPlaceId = newPlace.id;
+      places.hierarchy(newPlace.id).then(h => {
+        if (h.length > 0) placeInput.value = h.map(p => p.name).reverse().join(', ');
+      });
+    });
   };
 
-  function renderSources() {
-    sourcesContainer.innerHTML = '';
-    sourceEntries.forEach((s, i) => {
-      if (s.deleted) return;
+  form.querySelector('#ef-add-citation').onclick = () => {
+    citationEntries.push({ source_id: null, source_title: '', detail: '', url: '', accessed: '', confidence: '' });
+    renderCitations();
+  };
+
+  function renderCitations() {
+    citationsContainer.innerHTML = '';
+    citationEntries.forEach((c, i) => {
+      if (c.deleted) return;
       const row = document.createElement('div');
-      row.className = 'source-add-fields';
-      row.innerHTML = `
-        <input type="text" placeholder="Title" value="${esc(s.title)}" data-idx="${i}" data-field="title">
-        <input type="text" placeholder="URL" value="${esc(s.url)}" data-idx="${i}" data-field="url">
-        <button type="button" class="btn-link btn-sm" style="color:var(--danger);align-self:flex-start" data-remove="${i}">Remove</button>
-      `;
-      row.querySelectorAll('input').forEach(inp => {
-        inp.oninput = () => {
-          sourceEntries[inp.dataset.idx][inp.dataset.field] = inp.value;
+      row.className = 'citation-row';
+
+      // Source picker row
+      const sourceRow = document.createElement('div');
+      sourceRow.className = 'citation-source-row';
+
+      if (c.source_id) {
+        // Show selected source name
+        const sourceLabel = document.createElement('span');
+        sourceLabel.className = 'citation-source-label';
+        sourceLabel.textContent = c.source_title || '(unnamed source)';
+        sourceRow.appendChild(sourceLabel);
+        const changeBtn = document.createElement('button');
+        changeBtn.type = 'button';
+        changeBtn.className = 'btn-link btn-sm';
+        changeBtn.textContent = 'change';
+        changeBtn.onclick = () => {
+          c.source_id = null;
+          c.source_title = '';
+          renderCitations();
         };
+        sourceRow.appendChild(changeBtn);
+      } else {
+        // Show source picker
+        const sourcePicker = createSourcePicker({
+          onSelect: (source) => {
+            c.source_id = source.id;
+            c.source_title = source.title;
+            renderCitations();
+          },
+        });
+        sourceRow.appendChild(sourcePicker);
+      }
+
+      row.appendChild(sourceRow);
+
+      // Detail fields
+      const detailsRow = document.createElement('div');
+      detailsRow.className = 'citation-details-row';
+      detailsRow.innerHTML = `
+        <input type="text" placeholder="Detail (page, entry, volume...)" value="${esc(c.detail)}" data-idx="${i}" data-field="detail">
+        <input type="text" placeholder="Direct URL to record" value="${esc(c.url)}" data-idx="${i}" data-field="url">
+        <input type="text" placeholder="Date accessed" value="${esc(c.accessed)}" data-idx="${i}" data-field="accessed">
+        <select data-idx="${i}" data-field="confidence">
+          ${CONFIDENCE_OPTIONS.map(o => `<option value="${o.value}" ${o.value === c.confidence ? 'selected' : ''}>${o.label}</option>`).join('')}
+        </select>
+        <div class="citation-details-actions">
+          <button type="button" class="btn-link btn-sm" style="color:var(--danger)" data-remove="${i}">Remove</button>
+        </div>
+      `;
+      detailsRow.querySelectorAll('input').forEach(inp => {
+        inp.oninput = () => { citationEntries[inp.dataset.idx][inp.dataset.field] = inp.value; };
       });
-      row.querySelector('[data-remove]').onclick = () => {
-        sourceEntries[i].deleted = true;
-        renderSources();
+      detailsRow.querySelector('select').onchange = (e) => {
+        citationEntries[e.target.dataset.idx].confidence = e.target.value;
       };
-      sourcesContainer.appendChild(row);
+      detailsRow.querySelector('[data-remove]').onclick = () => {
+        citationEntries[i].deleted = true;
+        renderCitations();
+      };
+
+      row.appendChild(detailsRow);
+      citationsContainer.appendChild(row);
     });
   }
 
@@ -229,14 +303,14 @@ export async function openEventForm(personId, eventId) {
     try {
       if (isEdit) {
         await events.update(eventId, data);
-        // Handle sources: delete removed, update existing, create new
-        for (const s of sourceEntries) {
-          if (s.deleted && s.id) {
-            await sources.delete(s.id);
-          } else if (s.id && !s.deleted) {
-            await sources.update(s.id, { title: s.title, url: s.url });
-          } else if (!s.id && !s.deleted && (s.title || s.url)) {
-            await sources.create(eventId, { title: s.title, url: s.url });
+        // Handle citations: delete removed, update existing, create new
+        for (const c of citationEntries) {
+          if (c.deleted && c.id) {
+            await citations.delete(c.id);
+          } else if (c.id && !c.deleted && c.source_id) {
+            await citations.update(c.id, { source_id: c.source_id, detail: c.detail, url: c.url, accessed: c.accessed, confidence: c.confidence });
+          } else if (!c.id && !c.deleted && c.source_id) {
+            await citations.create({ source_id: c.source_id, event_id: eventId, detail: c.detail, url: c.url, accessed: c.accessed, confidence: c.confidence });
           }
         }
         // Handle participants: remove deleted, update roles, add new
@@ -254,10 +328,10 @@ export async function openEventForm(personId, eventId) {
         showToast('Event updated');
       } else {
         const created = await events.create(personId, data);
-        // Create sources
-        for (const s of sourceEntries) {
-          if (!s.deleted && (s.title || s.url)) {
-            await sources.create(created.id, { title: s.title, url: s.url });
+        // Create citations
+        for (const c of citationEntries) {
+          if (!c.deleted && c.source_id) {
+            await citations.create({ source_id: c.source_id, event_id: created.id, detail: c.detail, url: c.url, accessed: c.accessed, confidence: c.confidence });
           }
         }
         // Create participants
