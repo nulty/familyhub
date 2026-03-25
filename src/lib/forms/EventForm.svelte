@@ -2,9 +2,7 @@
   import { events, citations, places } from '../../db/db.js';
   import { emit, DATA_CHANGED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
-  import { openPlaceForm } from '../../forms/place-form.js';
-  import { openPersonForm } from '../../forms/person-form.js';
-  import { openSourceForm } from '../../forms/source-form.js';
+  import { openPlaceForm, openPersonForm, openSourceForm } from '../shared/open.js';
   import Modal from './Modal.svelte';
   import PersonPicker from '../pickers/PersonPicker.svelte';
   import SourcePicker from '../pickers/SourcePicker.svelte';

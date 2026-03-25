@@ -2,8 +2,7 @@
   import { repositories, sources, citations } from '../../db/db.js';
   import { emit, PERSON_SELECTED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
-  import { openRepositoryForm } from '../../forms/repository-form.js';
-  import { openSourceForm } from '../../forms/source-form.js';
+  import { openRepositoryForm, openSourceForm } from '../shared/open.js';
   import { focusPerson } from '../../ui/tree.js';
   import Modal from '../forms/Modal.svelte';
 

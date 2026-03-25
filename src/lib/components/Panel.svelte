@@ -1,9 +1,7 @@
 <script>
   import { people, relationships, events as eventsApi } from '../../db/db.js';
   import { emit, PERSON_DESELECTED, PERSON_SELECTED, DATA_CHANGED } from '../../state.js';
-  import { openPersonForm } from '../../forms/person-form.js';
-  import { openEventForm } from '../../forms/event-form.js';
-  import { openRelationshipForm } from '../../forms/relationship-form.js';
+  import { openPersonForm, openEventForm, openRelationshipForm } from '../shared/open.js';
   import { focusPerson } from '../../ui/tree.js';
   import { showToast } from '../shared/toast-store.js';
   import { getConfig, setConfig } from '../../config.js';

@@ -4,7 +4,7 @@
   import { showToast } from '../shared/toast-store.js';
   import Modal from './Modal.svelte';
   import PlacePicker from '../pickers/PlacePicker.svelte';
-  import { openPlaceForm } from '../../forms/place-form.js';
+  import { openPlaceForm } from '../shared/open.js';
   import { PLACE_TYPES, formatPlaceType } from '../../util/place-types.js';
 
   let { placeId = null, onclose, oncomplete } = $props();

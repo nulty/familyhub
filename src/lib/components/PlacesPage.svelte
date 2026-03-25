@@ -2,7 +2,7 @@
   import { places } from '../../db/db.js';
   import { emit, PERSON_SELECTED, DATA_CHANGED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
-  import { openPlaceForm } from '../../forms/place-form.js';
+  import { openPlaceForm } from '../shared/open.js';
   import { openOrganizeWizard } from '../../ui/places-organize.js';
   import { focusPerson } from '../../ui/tree.js';
   import Modal from '../forms/Modal.svelte';

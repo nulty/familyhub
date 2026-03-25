@@ -4,7 +4,7 @@
 
 import { places } from '../db/db.js';
 import { emit, DATA_CHANGED } from '../state.js';
-import { openPlaceForm } from '../forms/place-form.js';
+import { openPlaceForm } from '../lib/shared/open.js';
 import { showToast } from '../lib/shared/toast-store.js';
 
 /** Minimal imperative modal for the organize wizard (last vanilla consumer). */

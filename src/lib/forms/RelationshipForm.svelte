@@ -4,7 +4,7 @@
   import { showToast } from '../shared/toast-store.js';
   import Modal from './Modal.svelte';
   import PersonPicker from '../pickers/PersonPicker.svelte';
-  import { openPersonForm } from '../../forms/person-form.js';
+  import { openPersonForm } from '../shared/open.js';
 
   let { person, type, onclose } = $props();
 

@@ -2,7 +2,7 @@
   import { sources, repositories } from '../../db/db.js';
   import { emit, DATA_CHANGED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
-  import { openRepositoryForm } from '../../forms/repository-form.js';
+  import { openRepositoryForm } from '../shared/open.js';
   import Modal from './Modal.svelte';
 
   const SOURCE_TYPES = [

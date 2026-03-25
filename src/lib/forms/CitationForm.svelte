@@ -2,7 +2,7 @@
   import { citations } from '../../db/db.js';
   import { emit, DATA_CHANGED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
-  import { openSourceForm } from '../../forms/source-form.js';
+  import { openSourceForm } from '../shared/open.js';
   import Modal from './Modal.svelte';
   import SourcePicker from '../pickers/SourcePicker.svelte';
 

@@ -5,11 +5,10 @@
   import { initTree, refreshTree } from '../../ui/tree.js';
   import { getConfig, setConfig } from '../../config.js';
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
-  import { openPersonForm } from '../../forms/person-form.js';
+  import { openPersonForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
   import { triggerImport, triggerExport } from '../../gedcom/gedcom.js';
-  import { openPlacesPage } from '../../ui/places-page.js';
-  import { openSourcesPage } from '../../ui/sources-page.js';
   import { showToast } from '../shared/toast-store.js';
+  import { getStack } from '../shared/modal-stack.svelte.js';
   import Search from './Search.svelte';
   import Panel from './Panel.svelte';
   import Toast from '../shared/Toast.svelte';
@@ -17,6 +16,8 @@
   let hasData = $state(false);
   let selectedPersonId = $state(null);
   let dataVersion = $state(0);
+
+  const modalStack = getStack;
 
   onMount(() => {
     initDB();
@@ -130,7 +131,12 @@
   </div>
 </div>
 
-<div id="modal-root"></div>
+<div id="modal-root">
+  {#each modalStack() as modal (modal.id)}
+    <modal.component {...modal.props} />
+  {/each}
+</div>
+
 <div id="toast-root">
   <Toast />
 </div>
