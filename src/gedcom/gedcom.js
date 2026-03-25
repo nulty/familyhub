@@ -2,13 +2,12 @@
  * gedcom.js — GEDCOM import/export UI
  */
 
-import { bulk, nukeDatabase } from '../db/db.js';
-import { setConfig } from '../config.js';
-import { emit, DATA_CHANGED, DB_POPULATED } from '../state.js';
+import { bulk } from '../db/db.js';
 import { parseGEDCOM } from './import.js';
 import { exportGEDCOM } from './export.js';
-import { openModal } from '../ui/modal.js';
 import { showToast } from '../ui/toast.js';
+import { mount, unmount } from 'svelte';
+import GedcomImport from '../lib/components/GedcomImport.svelte';
 
 export function triggerImport() {
   const input = document.createElement('input');
@@ -22,48 +21,27 @@ export function triggerImport() {
     const text = await file.text();
     const { data, warnings, stats } = parseGEDCOM(text);
 
-    const content = document.createElement('div');
-    content.innerHTML = `
-      <p>Ready to import <strong>${file.name}</strong>:</p>
-      <dl class="import-stats">
-        <dt>People:</dt><dd>${stats.people}</dd>
-        <dt>Relationships:</dt><dd>${stats.relationships}</dd>
-        <dt>Events:</dt><dd>${stats.events}</dd>
-        <dt>Repositories:</dt><dd>${stats.repositories}</dd>
-        <dt>Sources:</dt><dd>${stats.sources}</dd>
-        <dt>Citations:</dt><dd>${stats.citations}</dd>
-      </dl>
-      ${warnings.length ? `<div class="import-warnings"><strong>Warnings:</strong><ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul></div>` : ''}
-      <div class="form-actions">
-        <button class="btn" data-action="cancel">Cancel</button>
-        <button class="btn btn-danger" data-action="reset-import">Reset & Import</button>
-        <button class="btn btn-primary" data-action="confirm">Import</button>
-      </div>
-    `;
+    const target = document.getElementById('modal-root');
+    const container = document.createElement('div');
+    target.appendChild(container);
 
-    const { close } = openModal({ title: 'Import GEDCOM', content });
+    let component;
 
-    content.querySelector('[data-action="cancel"]').onclick = close;
-
-    async function doImport(reset) {
-      try {
-        if (reset) {
-          if (!confirm('This will delete ALL existing data and recreate the database. Continue?')) return;
-          await nukeDatabase();
-          setConfig('resolvedPlaceSegments', {});
-          setConfig('skippedPlaceSegments', []);
-        }
-        const counts = await bulk.import(data);
-        close();
-        emit(DATA_CHANGED);
-        showToast(`Imported ${counts.people} people, ${counts.events} events`);
-      } catch (err) {
-        showToast('Import failed: ' + err.message);
-      }
+    function close() {
+      if (component) unmount(component);
+      container.remove();
     }
 
-    content.querySelector('[data-action="confirm"]').onclick = () => doImport(false);
-    content.querySelector('[data-action="reset-import"]').onclick = () => doImport(true);
+    component = mount(GedcomImport, {
+      target: container,
+      props: {
+        filename: file.name,
+        data,
+        stats,
+        warnings,
+        onclose: close,
+      },
+    });
   };
 
   input.click();
