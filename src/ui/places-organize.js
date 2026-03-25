@@ -4,9 +4,34 @@
 
 import { places } from '../db/db.js';
 import { emit, DATA_CHANGED } from '../state.js';
-import { openModal } from './modal.js';
 import { openPlaceForm } from '../forms/place-form.js';
-import { showToast } from './toast.js';
+import { showToast } from '../lib/shared/toast-store.js';
+
+/** Minimal imperative modal for the organize wizard (last vanilla consumer). */
+function openModal({ title, content }) {
+  const root = document.getElementById('modal-root');
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  const header = document.createElement('div');
+  header.className = 'modal-header';
+  header.innerHTML = `<h2>${title || ''}</h2><button class="modal-close" aria-label="Close">&times;</button>`;
+  const body = document.createElement('div');
+  body.className = 'modal-body';
+  if (content instanceof Node) body.appendChild(content);
+  modal.appendChild(header);
+  modal.appendChild(body);
+  backdrop.appendChild(modal);
+  root.appendChild(backdrop);
+
+  function close() { backdrop.remove(); }
+  header.querySelector('.modal-close').onclick = close;
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+  function onKey(e) { if (e.key === 'Escape') { close(); window.removeEventListener('keydown', onKey); } }
+  window.addEventListener('keydown', onKey);
+  return { close, body };
+}
 import { placeTypeOptions } from '../util/place-types.js';
 import { getConfig, setConfig } from '../config.js';
 

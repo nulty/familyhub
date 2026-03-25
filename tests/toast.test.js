@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { showToast } from './toast.js';
-import { toasts } from '../lib/shared/toast-store.js';
+import { showToast, toasts } from '../src/lib/shared/toast-store.js';
 import { get } from 'svelte/store';
 
 describe('showToast', () => {

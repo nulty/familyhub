@@ -5,7 +5,7 @@
 import { bulk } from '../db/db.js';
 import { parseGEDCOM } from './import.js';
 import { exportGEDCOM } from './export.js';
-import { showToast } from '../ui/toast.js';
+import { showToast } from '../lib/shared/toast-store.js';
 import { mount, unmount } from 'svelte';
 import GedcomImport from '../lib/components/GedcomImport.svelte';
 
