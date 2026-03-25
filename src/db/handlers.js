@@ -196,18 +196,18 @@ export function createHandlers(h, opts = {}) {
 
     // ── Events ───────────────────────────────────────────────────────────────
 
-    createEvent({ id, person_id, type = 'other', date = '', place = '', notes = '', sort_date = null }) {
+    createEvent({ id, person_id, type = 'other', date = '', place = '', place_id = null, notes = '', sort_date = null }) {
       const now = Date.now();
       run(
-        `INSERT INTO events (id, person_id, type, date, place, notes, sort_date, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, person_id, type, date, place, notes, sort_date, now, now]
+        `INSERT INTO events (id, person_id, type, date, place, place_id, notes, sort_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, person_id, type, date, place, place_id, notes, sort_date, now, now]
       );
       return get('SELECT * FROM events WHERE id = ?', [id]);
     },
 
     updateEvent(id, fields) {
-      const allowed = ['type', 'date', 'place', 'notes', 'sort_date'];
+      const allowed = ['type', 'date', 'place', 'place_id', 'notes', 'sort_date'];
       const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
       if (updates.length === 0) return get('SELECT * FROM events WHERE id = ?', [id]);
       const now = Date.now();
@@ -309,6 +309,91 @@ export function createHandlers(h, opts = {}) {
       return all('SELECT * FROM sources WHERE event_id = ? ORDER BY created_at', [eventId]);
     },
 
+    // ── Places ──────────────────────────────────────────────────────────────
+
+    createPlace({ id, name, type = '', parent_id = null, notes = '' }) {
+      const now = Date.now();
+      run(
+        `INSERT INTO places (id, name, type, parent_id, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, name, type, parent_id, notes, now, now]
+      );
+      return get('SELECT * FROM places WHERE id = ?', [id]);
+    },
+
+    getPlace(id) {
+      return get('SELECT * FROM places WHERE id = ?', [id]);
+    },
+
+    updatePlace(id, fields) {
+      const allowed = ['name', 'type', 'parent_id', 'notes'];
+      const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
+      if (updates.length === 0) return get('SELECT * FROM places WHERE id = ?', [id]);
+      const now = Date.now();
+      const setClauses = [...updates.map(([k]) => `${k} = ?`), 'updated_at = ?'].join(', ');
+      const values = [...updates.map(([, v]) => v), now, id];
+      run(`UPDATE places SET ${setClauses} WHERE id = ?`, values);
+      return get('SELECT * FROM places WHERE id = ?', [id]);
+    },
+
+    deletePlace(id) {
+      run('DELETE FROM places WHERE id = ?', [id]);
+      return { ok: true };
+    },
+
+    listPlaces() {
+      return all('SELECT * FROM places ORDER BY name');
+    },
+
+    getPlaceTree() {
+      return all('SELECT * FROM places ORDER BY name');
+    },
+
+    searchPlaces(query) {
+      if (!query || query.trim() === '') return [];
+      const q = `%${query}%`;
+      const results = all(
+        `SELECT * FROM places WHERE name LIKE ? ORDER BY name LIMIT 20`,
+        [q]
+      );
+      for (const r of results) {
+        const chain = handlers.getPlaceHierarchy(r.id);
+        r.full_name = chain.map(p => p.name).reverse().join(', ');
+      }
+      return results;
+    },
+
+    getPlaceHierarchy(id) {
+      const chain = [];
+      let currentId = id;
+      const visited = new Set();
+      while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const place = get('SELECT * FROM places WHERE id = ?', [currentId]);
+        if (!place) break;
+        chain.unshift(place);
+        currentId = place.parent_id;
+      }
+      return chain;
+    },
+
+    getPeopleByPlace(placeIdOrName) {
+      return all(
+        `SELECT DISTINCT p.id, p.given_name, p.surname FROM people p
+         JOIN events e ON e.person_id = p.id
+         WHERE e.place_id = ? OR e.place LIKE ?
+         ORDER BY p.surname, p.given_name LIMIT 10`,
+        [placeIdOrName, `%${placeIdOrName}%`]
+      );
+    },
+
+    getPlaceChildren(parentId) {
+      if (!parentId) {
+        return all('SELECT * FROM places WHERE parent_id IS NULL ORDER BY name');
+      }
+      return all('SELECT * FROM places WHERE parent_id = ? ORDER BY name', [parentId]);
+    },
+
     // ── Temporal queries ─────────────────────────────────────────────────────
 
     findEventsNearDate(targetMs, windowMs, options = {}) {
@@ -403,9 +488,9 @@ export function createHandlers(h, opts = {}) {
 
     // ── Bulk import (for GEDCOM) ─────────────────────────────────────────────
 
-    bulkImport({ people, relationships, events, sources, participants }) {
+    bulkImport({ people, relationships, events, sources, participants, places }) {
       return transaction(() => {
-        let counts = { people: 0, relationships: 0, events: 0, sources: 0, participants: 0 };
+        let counts = { people: 0, relationships: 0, events: 0, sources: 0, participants: 0, places: 0 };
         const now = Date.now();
 
         for (const p of (people || [])) {
@@ -426,11 +511,21 @@ export function createHandlers(h, opts = {}) {
           counts.relationships++;
         }
 
+        // Places must be inserted before events (events reference place_id)
+        for (const pl of (places || [])) {
+          run(
+            `INSERT OR IGNORE INTO places (id, name, type, parent_id, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [pl.id, pl.name||'', pl.type||'', pl.parent_id||null, pl.notes||'', now, now]
+          );
+          counts.places++;
+        }
+
         for (const e of (events || [])) {
           run(
-            `INSERT OR REPLACE INTO events (id, person_id, type, date, place, notes, sort_date, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [e.id, e.person_id, e.type||'other', e.date||'', e.place||'', e.notes||'', e.sort_date||null, now, now]
+            `INSERT OR REPLACE INTO events (id, person_id, type, date, place, place_id, notes, sort_date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [e.id, e.person_id, e.type||'other', e.date||'', e.place||'', e.place_id||null, e.notes||'', e.sort_date||null, now, now]
           );
           counts.events++;
         }
@@ -466,7 +561,21 @@ export function createHandlers(h, opts = {}) {
         events:        all('SELECT * FROM events ORDER BY person_id, sort_date'),
         sources:       all('SELECT * FROM sources ORDER BY event_id, created_at'),
         participants:  all('SELECT * FROM event_participants ORDER BY event_id'),
+        places:        all('SELECT * FROM places ORDER BY name'),
       };
+    },
+
+    // ── Reset ────────────────────────────────────────────────────────────────
+
+    resetDatabase() {
+      run('DROP TABLE IF EXISTS sources');
+      run('DROP TABLE IF EXISTS event_participants');
+      run('DROP TABLE IF EXISTS events');
+      run('DROP TABLE IF EXISTS relationships');
+      run('DROP TABLE IF EXISTS people');
+      run('DROP TABLE IF EXISTS places');
+      run("UPDATE meta SET value = '1' WHERE key = 'schema_version'");
+      return { ok: true };
     },
 
     // ── Stats ────────────────────────────────────────────────────────────────
@@ -477,6 +586,7 @@ export function createHandlers(h, opts = {}) {
         events:        get('SELECT COUNT(*) as n FROM events').n,
         sources:       get('SELECT COUNT(*) as n FROM sources').n,
         relationships: get('SELECT COUNT(*) as n FROM relationships').n,
+        places:        get('SELECT COUNT(*) as n FROM places').n,
       };
     },
   };

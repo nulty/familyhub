@@ -309,6 +309,156 @@ describe('Graph', () => {
   });
 });
 
+// ─── Places ───────────────────────────────────────────────────────────────────
+
+describe('Places', () => {
+  it('createPlace inserts and returns a record', () => {
+    const pl = h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
+    expect(pl.id).toBe('PL1');
+    expect(pl.name).toBe('Ireland');
+    expect(pl.type).toBe('country');
+    expect(pl.parent_id).toBeNull();
+  });
+
+  it('getPlace retrieves by ID', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    expect(h.getPlace('PL1').name).toBe('Ireland');
+  });
+
+  it('getPlace returns null for missing', () => {
+    expect(h.getPlace('MISSING')).toBeNull();
+  });
+
+  it('updatePlace updates allowed fields', () => {
+    h.createPlace({ id: 'PL1', name: 'Irland', type: '' });
+    const updated = h.updatePlace('PL1', { name: 'Ireland', type: 'country' });
+    expect(updated.name).toBe('Ireland');
+    expect(updated.type).toBe('country');
+  });
+
+  it('deletePlace removes the record', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    h.deletePlace('PL1');
+    expect(h.getPlace('PL1')).toBeNull();
+  });
+
+  it('deletePlace sets children parent_id to null', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    h.createPlace({ id: 'PL2', name: 'Dublin', parent_id: 'PL1' });
+    h.deletePlace('PL1');
+    expect(h.getPlace('PL2').parent_id).toBeNull();
+  });
+
+  it('deletePlace sets events place_id to null', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin' });
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', place: 'Dublin', place_id: 'PL1' });
+    h.deletePlace('PL1');
+    const ev = h.listEvents('P1');
+    expect(ev[0].place_id).toBeNull();
+    expect(ev[0].place).toBe('Dublin'); // text preserved
+  });
+
+  it('listPlaces returns all sorted by name', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin' });
+    h.createPlace({ id: 'PL2', name: 'Cork' });
+    const list = h.listPlaces();
+    expect(list).toHaveLength(2);
+    expect(list[0].name).toBe('Cork');
+    expect(list[1].name).toBe('Dublin');
+  });
+
+  it('searchPlaces finds by name', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin' });
+    h.createPlace({ id: 'PL2', name: 'Cork' });
+    const results = h.searchPlaces('Dub');
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe('Dublin');
+  });
+
+  it('searchPlaces returns full_name computed from hierarchy', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    h.createPlace({ id: 'PL2', name: 'Leinster', parent_id: 'PL1' });
+    h.createPlace({ id: 'PL3', name: 'Dublin', parent_id: 'PL2' });
+    const results = h.searchPlaces('Dublin');
+    expect(results).toHaveLength(1);
+    expect(results[0].full_name).toBe('Dublin, Leinster, Ireland');
+  });
+
+  it('searchPlaces full_name for root place is just the name', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    const results = h.searchPlaces('Ireland');
+    expect(results[0].full_name).toBe('Ireland');
+  });
+
+  it('searchPlaces with empty query returns empty array', () => {
+    expect(h.searchPlaces('')).toEqual([]);
+    expect(h.searchPlaces(null)).toEqual([]);
+  });
+
+  it('getPlaceHierarchy returns ancestor chain', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
+    h.createPlace({ id: 'PL2', name: 'Leinster', type: 'province', parent_id: 'PL1' });
+    h.createPlace({ id: 'PL3', name: 'Dublin', type: 'county', parent_id: 'PL2' });
+    const chain = h.getPlaceHierarchy('PL3');
+    expect(chain).toHaveLength(3);
+    expect(chain[0].name).toBe('Ireland');
+    expect(chain[1].name).toBe('Leinster');
+    expect(chain[2].name).toBe('Dublin');
+  });
+
+  it('getPlaceChildren returns immediate children', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    h.createPlace({ id: 'PL2', name: 'Dublin', parent_id: 'PL1' });
+    h.createPlace({ id: 'PL3', name: 'Cork', parent_id: 'PL1' });
+    const children = h.getPlaceChildren('PL1');
+    expect(children).toHaveLength(2);
+  });
+
+  it('getPlaceChildren with null returns root places', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland' });
+    h.createPlace({ id: 'PL2', name: 'Dublin', parent_id: 'PL1' });
+    const roots = h.getPlaceChildren(null);
+    expect(roots).toHaveLength(1);
+    expect(roots[0].name).toBe('Ireland');
+  });
+
+  it('createEvent with place_id links to place', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin' });
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', place: 'Dublin', place_id: 'PL1' });
+    const ev = h.listEvents('P1');
+    expect(ev[0].place_id).toBe('PL1');
+  });
+
+  it('updateEvent can change place_id', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin' });
+    h.createPlace({ id: 'PL2', name: 'Cork' });
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', place: 'Dublin', place_id: 'PL1' });
+    h.updateEvent('E1', { place: 'Cork', place_id: 'PL2' });
+    const ev = h.listEvents('P1');
+    expect(ev[0].place_id).toBe('PL2');
+  });
+
+  it('bulkImport with places inserts place records', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    const counts = h.bulkImport({
+      people: [], relationships: [], sources: [], participants: [],
+      places: [{ id: 'PL1', name: 'Dublin', type: 'city' }],
+      events: [{ id: 'E1', person_id: 'P1', type: 'birth', place: 'Dublin', place_id: 'PL1' }],
+    });
+    expect(counts.places).toBe(1);
+    expect(h.getPlace('PL1').name).toBe('Dublin');
+    expect(h.listEvents('P1')[0].place_id).toBe('PL1');
+  });
+
+  it('getStats includes places count', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin' });
+    expect(h.getStats().places).toBe(1);
+  });
+});
+
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
 
 describe('Bulk', () => {
@@ -369,14 +519,14 @@ describe('Cascade deletes', () => {
 
 describe('Stats', () => {
   it('getStats returns correct counts', () => {
-    expect(h.getStats()).toEqual({ people: 0, events: 0, sources: 0, relationships: 0 });
+    expect(h.getStats()).toEqual({ people: 0, events: 0, sources: 0, relationships: 0, places: 0 });
 
     h.createPerson({ id: 'P1', given_name: 'John' });
     h.createPerson({ id: 'P2', given_name: 'Mary' });
     h.createEvent({ id: 'E1', person_id: 'P1' });
     h.addPartner('R1', 'P1', 'P2');
 
-    expect(h.getStats()).toEqual({ people: 2, events: 1, sources: 0, relationships: 1 });
+    expect(h.getStats()).toEqual({ people: 2, events: 1, sources: 0, relationships: 1, places: 0 });
   });
 });
 

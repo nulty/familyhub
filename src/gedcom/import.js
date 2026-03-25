@@ -275,9 +275,23 @@ export function parseGEDCOM(text) {
     }
   }
 
+  // Build place records from distinct event place strings
+  const outPlaces = [];
+  const placeMap = {};
+  for (const ev of outEvents) {
+    if (ev.place && !placeMap[ev.place]) {
+      const placeId = ulid();
+      placeMap[ev.place] = placeId;
+      outPlaces.push({ id: placeId, name: ev.place, type: '', parent_id: null, notes: '' });
+    }
+    if (ev.place) {
+      ev.place_id = placeMap[ev.place] || null;
+    }
+  }
+
   const warnings = [];
   return {
-    data: { people: outPeople, relationships: outRelationships, events: outEvents, sources: outSources, participants: outParticipants },
+    data: { people: outPeople, relationships: outRelationships, events: outEvents, sources: outSources, participants: outParticipants, places: outPlaces },
     warnings,
     stats: {
       people: outPeople.length,
@@ -285,6 +299,7 @@ export function parseGEDCOM(text) {
       events: outEvents.length,
       sources: outSources.length,
       participants: outParticipants.length,
+      places: outPlaces.length,
     }
   };
 }

@@ -14,6 +14,13 @@ export function setupTestDB() {
   const schema = readFileSync('public/schema.sql', 'utf-8');
   db.exec(schema);
 
+  // Apply migrations (same as worker does on boot)
+  // v2: add place_id to events
+  const cols = db.prepare("PRAGMA table_info(events)").all();
+  if (!cols.some(c => c.name === 'place_id')) {
+    db.exec('ALTER TABLE events ADD COLUMN place_id TEXT REFERENCES places(id) ON DELETE SET NULL');
+  }
+
   const helpers = createBetterSqliteHelpers(db);
   const handlers = createHandlers(helpers);
 

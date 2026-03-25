@@ -82,3 +82,18 @@ CREATE TABLE IF NOT EXISTS sources (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sources_event ON sources(event_id);
+
+CREATE TABLE IF NOT EXISTS places (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL DEFAULT '',
+  type       TEXT NOT NULL DEFAULT ''
+    CHECK(type IN ('','country','province','county','barony','civil_parish','church_parish','parish','townland','city','town','suburb','village','street','address','cemetery')),
+  parent_id  TEXT REFERENCES places(id) ON DELETE SET NULL,
+  notes      TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id);
+CREATE INDEX IF NOT EXISTS idx_places_name   ON places(name);
+CREATE INDEX IF NOT EXISTS idx_places_type   ON places(type);

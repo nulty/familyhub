@@ -152,13 +152,13 @@ function createHandlersFromHelpers(h) {
       const partners = all(`SELECT p.*, r.id as rel_id FROM people p JOIN relationships r ON (r.person_a_id = ? AND r.person_b_id = p.id) OR (r.person_b_id = ? AND r.person_a_id = p.id) WHERE r.type = 'partner'`, [personId, personId]);
       return { parents, children, partners };
     },
-    createEvent({ id, person_id, type = 'other', date = '', place = '', notes = '', sort_date = null }) {
+    createEvent({ id, person_id, type = 'other', date = '', place = '', place_id = null, notes = '', sort_date = null }) {
       const now = Date.now();
-      run(`INSERT INTO events (id, person_id, type, date, place, notes, sort_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [id, person_id, type, date, place, notes, sort_date, now, now]);
+      run(`INSERT INTO events (id, person_id, type, date, place, place_id, notes, sort_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [id, person_id, type, date, place, place_id, notes, sort_date, now, now]);
       return get('SELECT * FROM events WHERE id = ?', [id]);
     },
     updateEvent(id, fields) {
-      const allowed = ['type', 'date', 'place', 'notes', 'sort_date'];
+      const allowed = ['type', 'date', 'place', 'place_id', 'notes', 'sort_date'];
       const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
       if (updates.length === 0) return get('SELECT * FROM events WHERE id = ?', [id]);
       const now = Date.now();
@@ -195,6 +195,16 @@ function createHandlersFromHelpers(h) {
     },
     deleteSource(id) { run('DELETE FROM sources WHERE id = ?', [id]); return { ok: true }; },
     listSources(eventId) { return all('SELECT * FROM sources WHERE event_id = ? ORDER BY created_at', [eventId]); },
+    createPlace({ id, name, type = '', parent_id = null, notes = '' }) { const now = Date.now(); run(`INSERT INTO places (id, name, type, parent_id, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [id, name, type, parent_id, notes, now, now]); return get('SELECT * FROM places WHERE id = ?', [id]); },
+    getPlace(id) { return get('SELECT * FROM places WHERE id = ?', [id]); },
+    updatePlace(id, fields) { const allowed = ['name', 'type', 'parent_id', 'notes']; const updates = Object.entries(fields).filter(([k]) => allowed.includes(k)); if (updates.length === 0) return get('SELECT * FROM places WHERE id = ?', [id]); const now = Date.now(); const setClauses = [...updates.map(([k]) => `${k} = ?`), 'updated_at = ?'].join(', '); const values = [...updates.map(([, v]) => v), now, id]; run(`UPDATE places SET ${setClauses} WHERE id = ?`, values); return get('SELECT * FROM places WHERE id = ?', [id]); },
+    deletePlace(id) { run('DELETE FROM places WHERE id = ?', [id]); return { ok: true }; },
+    listPlaces() { return all('SELECT * FROM places ORDER BY name'); },
+    getPlaceTree() { return all('SELECT * FROM places ORDER BY name'); },
+    searchPlaces(query) { if (!query || query.trim() === '') return []; const q = `%${query}%`; const results = all('SELECT * FROM places WHERE name LIKE ? ORDER BY name LIMIT 20', [q]); for (const r of results) { const chain = handlers.getPlaceHierarchy(r.id); r.full_name = chain.map(p => p.name).reverse().join(', '); } return results; },
+    getPlaceHierarchy(id) { const chain = []; let cur = id; const visited = new Set(); while (cur && !visited.has(cur)) { visited.add(cur); const p = get('SELECT * FROM places WHERE id = ?', [cur]); if (!p) break; chain.unshift(p); cur = p.parent_id; } return chain; },
+    getPeopleByPlace(placeIdOrName) { return all(`SELECT DISTINCT p.id, p.given_name, p.surname FROM people p JOIN events e ON e.person_id = p.id WHERE e.place_id = ? OR e.place LIKE ? ORDER BY p.surname, p.given_name LIMIT 10`, [placeIdOrName, `%${placeIdOrName}%`]); },
+    getPlaceChildren(parentId) { if (!parentId) return all('SELECT * FROM places WHERE parent_id IS NULL ORDER BY name'); return all('SELECT * FROM places WHERE parent_id = ? ORDER BY name', [parentId]); },
     findEventsNearDate(targetMs, windowMs, options = {}) {
       const { excludePersonId, personIds, eventTypes, limit = 100 } = options;
       const lo = targetMs - windowMs; const hi = targetMs + windowMs;
@@ -223,22 +233,70 @@ function createHandlersFromHelpers(h) {
       }
       return Object.values(nodeMap);
     },
-    bulkImport({ people, relationships, events, sources, participants }) {
+    bulkImport({ people, relationships, events, sources, participants, places }) {
       return transaction(() => {
-        let counts = { people: 0, relationships: 0, events: 0, sources: 0, participants: 0 }; const now = Date.now();
+        let counts = { people: 0, relationships: 0, events: 0, sources: 0, participants: 0, places: 0 }; const now = Date.now();
         for (const p of (people || [])) { run(`INSERT OR REPLACE INTO people (id, given_name, surname, gender, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [p.id, p.given_name||'', p.surname||'', p.gender||'U', p.notes||'', now, now]); counts.people++; }
         for (const r of (relationships || [])) { run(`INSERT OR IGNORE INTO relationships (id, person_a_id, person_b_id, type, created_at) VALUES (?, ?, ?, ?, ?)`, [r.id, r.person_a_id, r.person_b_id, r.type, now]); counts.relationships++; }
-        for (const e of (events || [])) { run(`INSERT OR REPLACE INTO events (id, person_id, type, date, place, notes, sort_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [e.id, e.person_id, e.type||'other', e.date||'', e.place||'', e.notes||'', e.sort_date||null, now, now]); counts.events++; }
+        for (const pl of (places || [])) { run(`INSERT OR IGNORE INTO places (id, name, type, parent_id, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [pl.id, pl.name||'', pl.type||'', pl.parent_id||null, pl.notes||'', now, now]); counts.places++; }
+        for (const e of (events || [])) { run(`INSERT OR REPLACE INTO events (id, person_id, type, date, place, place_id, notes, sort_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [e.id, e.person_id, e.type||'other', e.date||'', e.place||'', e.place_id||null, e.notes||'', e.sort_date||null, now, now]); counts.events++; }
         for (const s of (sources || [])) { run(`INSERT OR REPLACE INTO sources (id, event_id, title, url, accessed, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [s.id, s.event_id, s.title||'', s.url||'', s.accessed||'', s.notes||'', now, now]); counts.sources++; }
         for (const ep of (participants || [])) { run(`INSERT OR IGNORE INTO event_participants (id, event_id, person_id, role, created_at) VALUES (?, ?, ?, ?, ?)`, [ep.id, ep.event_id, ep.person_id, ep.role||'witness', now]); counts.participants++; }
         return counts;
       });
     },
     exportAll() {
-      return { people: all('SELECT * FROM people ORDER BY created_at'), relationships: all('SELECT * FROM relationships ORDER BY created_at'), events: all('SELECT * FROM events ORDER BY person_id, sort_date'), sources: all('SELECT * FROM sources ORDER BY event_id, created_at'), participants: all('SELECT * FROM event_participants ORDER BY event_id') };
+      return { people: all('SELECT * FROM people ORDER BY created_at'), relationships: all('SELECT * FROM relationships ORDER BY created_at'), events: all('SELECT * FROM events ORDER BY person_id, sort_date'), sources: all('SELECT * FROM sources ORDER BY event_id, created_at'), participants: all('SELECT * FROM event_participants ORDER BY event_id'), places: all('SELECT * FROM places ORDER BY name') };
+    },
+    resetDatabase() { run('DROP TABLE IF EXISTS sources'); run('DROP TABLE IF EXISTS event_participants'); run('DROP TABLE IF EXISTS events'); run('DROP TABLE IF EXISTS relationships'); run('DROP TABLE IF EXISTS people'); run('DROP TABLE IF EXISTS places'); run("UPDATE meta SET value = '1' WHERE key = 'schema_version'"); return { ok: true }; },
+    nukeDatabase() {
+      // Drop all application tables and reset schema version
+      // The worker stays alive; tables are recreated by re-running schema + migrations
+      run('DROP TABLE IF EXISTS sources');
+      run('DROP TABLE IF EXISTS event_participants');
+      run('DROP TABLE IF EXISTS events');
+      run('DROP TABLE IF EXISTS relationships');
+      run('DROP TABLE IF EXISTS people');
+      run('DROP TABLE IF EXISTS places');
+      run("UPDATE meta SET value = '1' WHERE key = 'schema_version'");
+
+      // Re-apply schema to recreate tables
+      // (can't fetch schema.sql here, so recreate inline)
+      run(`CREATE TABLE IF NOT EXISTS people (
+        id TEXT PRIMARY KEY, given_name TEXT NOT NULL DEFAULT '', surname TEXT NOT NULL DEFAULT '',
+        gender TEXT NOT NULL DEFAULT 'U' CHECK(gender IN ('M','F','U')),
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run('CREATE INDEX IF NOT EXISTS idx_people_surname ON people(surname)');
+      run(`CREATE TABLE IF NOT EXISTS relationships (
+        id TEXT PRIMARY KEY, person_a_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        person_b_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        type TEXT NOT NULL CHECK(type IN ('partner','parent_child')),
+        created_at INTEGER NOT NULL, UNIQUE(person_a_id, person_b_id, type))`);
+      run(`CREATE TABLE IF NOT EXISTS events (
+        id TEXT PRIMARY KEY, person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        type TEXT NOT NULL DEFAULT 'other', date TEXT NOT NULL DEFAULT '', place TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '', sort_date INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run(`CREATE TABLE IF NOT EXISTS event_participants (
+        id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        role TEXT NOT NULL DEFAULT 'witness', created_at INTEGER NOT NULL, UNIQUE(event_id, person_id))`);
+      run(`CREATE TABLE IF NOT EXISTS sources (
+        id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        title TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '', accessed TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      run(`CREATE TABLE IF NOT EXISTS places (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
+        type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','country','province','county','barony','civil_parish','church_parish','parish','townland','city','town','suburb','village','street','address','cemetery')),
+        parent_id TEXT REFERENCES places(id) ON DELETE SET NULL,
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+      // Add place_id to events (migration v2 equivalent)
+      run('ALTER TABLE events ADD COLUMN place_id TEXT REFERENCES places(id) ON DELETE SET NULL');
+      run("UPDATE meta SET value = '2' WHERE key = 'schema_version'");
+
+      return { ok: true };
     },
     getStats() {
-      return { people: get('SELECT COUNT(*) as n FROM people').n, events: get('SELECT COUNT(*) as n FROM events').n, sources: get('SELECT COUNT(*) as n FROM sources').n, relationships: get('SELECT COUNT(*) as n FROM relationships').n };
+      return { people: get('SELECT COUNT(*) as n FROM people').n, events: get('SELECT COUNT(*) as n FROM events').n, sources: get('SELECT COUNT(*) as n FROM sources').n, relationships: get('SELECT COUNT(*) as n FROM relationships').n, places: get('SELECT COUNT(*) as n FROM places').n };
     },
     exportDatabase() {
       const tmp = new sqlite3Api.oo1.DB(':memory:');
@@ -256,9 +314,50 @@ function createHandlersFromHelpers(h) {
   return handlers;
 }
 
+// ─── ID Generator (for migrations — can't import ulid.js in classic worker) ───
+
+const ULID_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function generateId() {
+  let t = Date.now(), s = '';
+  for (let i = 9; i >= 0; i--) { s = ULID_CHARS[t % 32] + s; t = Math.floor(t / 32); }
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  for (let i = 0; i < 16; i++) s += ULID_CHARS[b[i] % 32];
+  return s;
+}
+
 // ─── Migrations ───────────────────────────────────────────────────────────────
 
-const migrations = [];
+const migrations = [
+  {
+    version: 2,
+    description: 'Add places table and events.place_id',
+    up() {
+      const { run, all, get } = helpers;
+      run(`CREATE TABLE IF NOT EXISTS places (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
+        type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','country','province','county','barony','civil_parish','church_parish','parish','townland','city','town','suburb','village','street','address','cemetery')),
+        parent_id TEXT REFERENCES places(id) ON DELETE SET NULL,
+        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+      )`);
+      run('CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id)');
+      run('CREATE INDEX IF NOT EXISTS idx_places_name ON places(name)');
+      run('CREATE INDEX IF NOT EXISTS idx_places_type ON places(type)');
+      // Add place_id if not already present (may exist from base schema or previous run)
+      const evCols = all("PRAGMA table_info(events)");
+      if (!evCols.some(c => c.name === 'place_id')) {
+        run('ALTER TABLE events ADD COLUMN place_id TEXT REFERENCES places(id) ON DELETE SET NULL');
+      }
+      // Populate places from existing events
+      const now = Date.now();
+      const distinct = all("SELECT DISTINCT place FROM events WHERE place != ''");
+      for (const { place } of distinct) {
+        const placeId = generateId();
+        run('INSERT INTO places (id, name, type, parent_id, notes, created_at, updated_at) VALUES (?, ?, \'\', NULL, \'\', ?, ?)', [placeId, place, now, now]);
+        run('UPDATE events SET place_id = ? WHERE place = ?', [placeId, place]);
+      }
+    },
+  },
+];
 
 function applyMigrations() {
   const { get, run } = helpers;

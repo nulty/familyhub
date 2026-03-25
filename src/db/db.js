@@ -143,6 +143,41 @@ export const sources = {
   },
 };
 
+// ─── Places ──────────────────────────────────────────────────────────────────
+
+export const places = {
+  create(data) {
+    return call('createPlace', { id: ulid(), ...data });
+  },
+  get(id) {
+    return call('getPlace', id);
+  },
+  update(id, fields) {
+    return call('updatePlace', id, fields);
+  },
+  delete(id) {
+    return call('deletePlace', id);
+  },
+  list() {
+    return call('listPlaces');
+  },
+  tree() {
+    return call('getPlaceTree');
+  },
+  search(query) {
+    return call('searchPlaces', query);
+  },
+  hierarchy(id) {
+    return call('getPlaceHierarchy', id);
+  },
+  children(parentId) {
+    return call('getPlaceChildren', parentId);
+  },
+  people(placeId) {
+    return call('getPeopleByPlace', placeId);
+  },
+};
+
 // ─── Temporal ─────────────────────────────────────────────────────────────────
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
@@ -181,6 +216,16 @@ export const bulk = {
     return call('exportDatabase');
   },
 };
+
+// ─── Reset ───────────────────────────────────────────────────────────────────
+
+export function resetDatabase() {
+  return call('resetDatabase');
+}
+
+export function nukeDatabase() {
+  return call('nukeDatabase');
+}
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 

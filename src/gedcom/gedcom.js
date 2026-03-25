@@ -2,7 +2,8 @@
  * gedcom.js — GEDCOM import/export UI
  */
 
-import { bulk } from '../db/db.js';
+import { bulk, nukeDatabase } from '../db/db.js';
+import { setConfig } from '../config.js';
 import { emit, DATA_CHANGED, DB_POPULATED } from '../state.js';
 import { parseGEDCOM } from './import.js';
 import { exportGEDCOM } from './export.js';
@@ -33,6 +34,7 @@ export function triggerImport() {
       ${warnings.length ? `<div class="import-warnings"><strong>Warnings:</strong><ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul></div>` : ''}
       <div class="form-actions">
         <button class="btn" data-action="cancel">Cancel</button>
+        <button class="btn btn-danger" data-action="reset-import">Reset & Import</button>
         <button class="btn btn-primary" data-action="confirm">Import</button>
       </div>
     `;
@@ -40,8 +42,15 @@ export function triggerImport() {
     const { close } = openModal({ title: 'Import GEDCOM', content });
 
     content.querySelector('[data-action="cancel"]').onclick = close;
-    content.querySelector('[data-action="confirm"]').onclick = async () => {
+
+    async function doImport(reset) {
       try {
+        if (reset) {
+          if (!confirm('This will delete ALL existing data and recreate the database. Continue?')) return;
+          await nukeDatabase();
+          setConfig('resolvedPlaceSegments', {});
+          setConfig('skippedPlaceSegments', []);
+        }
         const counts = await bulk.import(data);
         close();
         emit(DATA_CHANGED);
@@ -49,7 +58,10 @@ export function triggerImport() {
       } catch (err) {
         showToast('Import failed: ' + err.message);
       }
-    };
+    }
+
+    content.querySelector('[data-action="confirm"]').onclick = () => doImport(false);
+    content.querySelector('[data-action="reset-import"]').onclick = () => doImport(true);
   };
 
   input.click();

@@ -153,6 +153,42 @@ describe('parseGEDCOM', () => {
     expect(data.people).toEqual([]);
   });
 
+  it('creates place records from event places', () => {
+    const ged = `0 @I1@ INDI
+1 NAME John /Smith/
+1 BIRT
+2 DATE 1900
+2 PLAC Dublin, Ireland
+1 DEAT
+2 DATE 1950
+2 PLAC Dublin, Ireland
+0 @I2@ INDI
+1 NAME Mary /Jones/
+1 BIRT
+2 DATE 1905
+2 PLAC Cork, Ireland
+0 TRLR`;
+    const { data, stats } = parseGEDCOM(ged);
+    expect(stats.places).toBe(2); // Dublin + Cork (deduplicated)
+    expect(data.places).toHaveLength(2);
+
+    // Events should have place_id set
+    const dublinPlace = data.places.find(p => p.name === 'Dublin, Ireland');
+    const dublinEvents = data.events.filter(e => e.place_id === dublinPlace.id);
+    expect(dublinEvents.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('events without places have no place_id', () => {
+    const ged = `0 @I1@ INDI
+1 NAME John /Smith/
+1 BIRT
+2 DATE 1900
+0 TRLR`;
+    const { data } = parseGEDCOM(ged);
+    expect(data.places).toHaveLength(0);
+    expect(data.events[0].place_id).toBeUndefined();
+  });
+
   it('assigns unique IDs to all records', () => {
     const ged = `0 @I1@ INDI
 1 NAME John /Smith/

@@ -2,7 +2,7 @@
  * app.js — Application bootstrap
  */
 
-import { initDB, getStats, bulk } from './db/db.js';
+import { initDB, getStats, bulk, resetDatabase } from './db/db.js';
 import { on, emit, state, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED } from './state.js';
 import { initTree, refreshTree, focusPerson } from './ui/tree.js';
 import { renderPanel, clearPanel } from './ui/panel.js';
@@ -12,6 +12,7 @@ import { initSearch } from './ui/search.js';
 import { showToast } from './ui/toast.js';
 import { getConfig, setConfig } from './config.js';
 import { openTreeConfig, applyTreeColors, applyCardDisplay, getTreeConfig } from './ui/tree-config.js';
+import { openPlacesPage } from './ui/places-page.js';
 
 const mainEl = document.getElementById('main');
 const emptyEl = document.getElementById('empty-state');
@@ -54,6 +55,7 @@ function showFullUI() {
 }
 
 function wireButtons() {
+  document.getElementById('btn-places').onclick = () => openPlacesPage();
   document.getElementById('btn-settings').onclick = () => openTreeConfig();
   document.getElementById('btn-add-person').onclick = () => openPersonForm();
   document.getElementById('empty-add-person').onclick = () => openPersonForm();

@@ -2,7 +2,7 @@
  * event-form.js — Modal form for create/edit event + inline sources
  */
 
-import { events, sources } from '../db/db.js';
+import { events, sources, places } from '../db/db.js';
 import { emit, DATA_CHANGED } from '../state.js';
 import { openModal } from '../ui/modal.js';
 import { showToast } from '../ui/toast.js';
@@ -42,9 +42,10 @@ export async function openEventForm(personId, eventId) {
       <input id="ef-date" type="text" value="${esc(existing?.date || '')}" placeholder="e.g. 3 SEP 1913, ABT 1890" autocomplete="off">
       <span class="form-hint">Free text — e.g. "1901", "BET 1889 AND 1890", "ABT MAR 1920"</span>
     </div>
-    <div class="form-group">
+    <div class="form-group" style="position:relative">
       <label for="ef-place">Place</label>
       <input id="ef-place" type="text" value="${esc(existing?.place || '')}" autocomplete="off">
+      <div id="ef-place-suggestions" class="place-suggestions"></div>
     </div>
     <div class="form-group">
       <label for="ef-notes">Notes</label>
@@ -74,6 +75,42 @@ export async function openEventForm(personId, eventId) {
     sourceEntries.push({ id: s.id, title: s.title, url: s.url });
   }
   renderSources();
+
+  // Place autocomplete
+  const placeInput = form.querySelector('#ef-place');
+  const placeSuggestions = form.querySelector('#ef-place-suggestions');
+  let placeTimer = null;
+  let selectedPlaceId = existing?.place_id || null;
+
+  placeInput.addEventListener('input', () => {
+    selectedPlaceId = null; // clear link when user types
+    clearTimeout(placeTimer);
+    const q = placeInput.value.trim();
+    if (!q) { placeSuggestions.innerHTML = ''; placeSuggestions.style.display = 'none'; return; }
+    placeTimer = setTimeout(async () => {
+      const results = await places.search(q);
+      if (results.length === 0) { placeSuggestions.style.display = 'none'; return; }
+      placeSuggestions.innerHTML = '';
+      for (const r of results) {
+        const div = document.createElement('div');
+        div.className = 'place-suggestion';
+        div.textContent = (r.full_name || r.name) + (r.type ? ` (${r.type})` : '');
+        div.onclick = () => {
+          placeInput.value = r.full_name || r.name;
+          selectedPlaceId = r.id;
+          placeSuggestions.style.display = 'none';
+        };
+        placeSuggestions.appendChild(div);
+      }
+      placeSuggestions.style.display = 'block';
+    }, 200);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!placeInput.contains(e.target) && !placeSuggestions.contains(e.target)) {
+      placeSuggestions.style.display = 'none';
+    }
+  });
 
   form.querySelector('#ef-add-source').onclick = () => {
     sourceEntries.push({ title: '', url: '' });
@@ -112,6 +149,7 @@ export async function openEventForm(personId, eventId) {
       type: form.querySelector('#ef-type').value,
       date: form.querySelector('#ef-date').value.trim(),
       place: form.querySelector('#ef-place').value.trim(),
+      place_id: selectedPlaceId,
       notes: form.querySelector('#ef-notes').value.trim(),
     };
 
