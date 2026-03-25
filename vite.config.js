@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import crossOriginIsolation from 'vite-plugin-cross-origin-isolation';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? '/familyhub/' : '/',
   plugins: [
+    svelte(),
     basicSsl(),               // self-signed cert for HTTPS (needed for OPFS over LAN)
     crossOriginIsolation(),   // adds COOP/COEP headers needed for SharedArrayBuffer
   ],
