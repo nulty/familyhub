@@ -15,7 +15,7 @@
         setConfig('resolvedPlaceSegments', {});
         setConfig('skippedPlaceSegments', []);
       }
-      const counts = await bulk.import(data);
+      const counts = await bulk.import($state.snapshot(data));
       onclose?.();
       emit(DATA_CHANGED);
       showToast(`Imported ${counts.people} people, ${counts.events} events`);

@@ -45,11 +45,7 @@ async function call(method, ...args) {
   return new Promise((resolve, reject) => {
     const id = ++msgId;
     pending.set(id, { resolve, reject });
-    const transferables = [];
-    for (const arg of args) {
-      if (arg instanceof Uint8Array) transferables.push(arg.buffer);
-    }
-    worker.postMessage({ id, method, args }, transferables);
+    worker.postMessage({ id, method, args });
   });
 }
 
