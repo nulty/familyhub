@@ -113,8 +113,8 @@
   }
 
   function menuAction(fn) {
-    menuOpen = false;
     fn();
+    menuOpen = false;
   }
 
   async function nukeDB() {
