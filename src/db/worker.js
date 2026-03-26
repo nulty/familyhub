@@ -97,6 +97,92 @@ async function initDB() {
     return { ok: true };
   };
 
+  handlers.importDatabase = async (bytes) => {
+    // Open uploaded bytes as temp in-memory DB via sqlite3_deserialize
+    const tmp = new sqlite3Api.oo1.DB();
+    const pData = sqlite3Api.wasm.allocFromTypedArray(bytes);
+    const rc = sqlite3Api.capi.sqlite3_deserialize(
+      tmp.pointer, 'main', pData, bytes.byteLength, bytes.byteLength,
+      sqlite3Api.capi.SQLITE_DESERIALIZE_FREEONCLOSE
+    );
+    tmp.checkRc(rc);
+
+    // Validate required tables exist
+    const tmpTables = [];
+    tmp.exec({
+      sql: "SELECT name FROM sqlite_master WHERE type='table'",
+      rowMode: 'object',
+      callback: (row) => tmpTables.push(row.name),
+    });
+    const required = ['people', 'relationships', 'events', 'meta'];
+    const missing = required.filter((t) => !tmpTables.includes(t));
+    if (missing.length > 0) {
+      tmp.close();
+      throw new Error(`Invalid database: missing tables: ${missing.join(', ')}`);
+    }
+
+    // Nuke current DB (re-applies schema + migrations)
+    await handlers.nukeDatabase();
+
+    // Copy data from temp DB into current DB.
+    // Iterate current DB tables (post-nuke) so we handle old exports that
+    // are missing newer tables. Only copy columns that exist in both schemas.
+    helpers.run('PRAGMA foreign_keys=OFF');
+    try {
+      helpers.transaction(() => {
+        // Tables in the uploaded DB
+        const tmpTableSet = new Set();
+        tmp.exec({
+          sql: "SELECT name FROM sqlite_master WHERE type='table'",
+          rowMode: 'object',
+          callback: (row) => tmpTableSet.add(row.name),
+        });
+
+        // Tables in the current DB (after nuke = full current schema)
+        const currentTables = helpers.all("SELECT name FROM sqlite_master WHERE type='table'");
+
+        for (const { name } of currentTables) {
+          if (!tmpTableSet.has(name)) continue;
+
+          // Get column names from the current schema
+          const currentCols = new Set(
+            helpers.all(`PRAGMA table_info("${name}")`).map((c) => c.name)
+          );
+
+          const rows = [];
+          tmp.exec({
+            sql: `SELECT * FROM "${name}"`,
+            rowMode: 'object',
+            callback: (row) => rows.push(row),
+          });
+          if (rows.length === 0) continue;
+
+          // Only copy columns that exist in both source and target
+          const srcCols = Object.keys(rows[0]);
+          const cols = srcCols.filter((c) => currentCols.has(c));
+          if (cols.length === 0) continue;
+
+          // Clear any default data from schema/migrations
+          helpers.run(`DELETE FROM "${name}"`);
+
+          const placeholders = cols.map(() => '?').join(',');
+          const insertSql = `INSERT OR REPLACE INTO "${name}" (${cols.map((c) => `"${c}"`).join(',')}) VALUES (${placeholders})`;
+          for (const row of rows) {
+            helpers.run(insertSql, cols.map((c) => row[c]));
+          }
+        }
+      });
+    } finally {
+      helpers.run('PRAGMA foreign_keys=ON');
+    }
+
+    // Re-run migrations in case imported DB was older
+    applyMigrations(helpers);
+
+    tmp.close();
+    return { ok: true };
+  };
+
   // Run migrations
   applyMigrations(helpers);
 }

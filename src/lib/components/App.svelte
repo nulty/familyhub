@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { initDB, getStats, bulk } from '../../db/db.js';
+  import { initDB, getStats, nukeDatabase, bulk } from '../../db/db.js';
   import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED } from '../../state.js';
   import { initTree, refreshTree } from '../../ui/tree.js';
   import { getConfig, setConfig } from '../../config.js';
@@ -16,6 +16,8 @@
   let hasData = $state(false);
   let selectedPersonId = $state(null);
   let dataVersion = $state(0);
+  let menuOpen = $state(false);
+  let uploadStatus = $state(null);
 
   const modalStack = getStack;
 
@@ -83,6 +85,54 @@
       showToast('Download failed: ' + err.message);
     }
   }
+
+  function uploadDB() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.db,.sqlite,.sqlite3';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!confirm(`Replace the current database with "${file.name}"? This cannot be undone.`)) return;
+      try {
+        uploadStatus = 'Reading file\u2026';
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        uploadStatus = 'Restoring database\u2026';
+        await bulk.importDatabase(bytes);
+        emit(PERSON_DESELECTED);
+        emit(DATA_CHANGED);
+        showToast('Database restored from ' + file.name);
+      } catch (err) {
+        showToast('Upload failed: ' + err.message);
+      } finally {
+        uploadStatus = null;
+      }
+    };
+    input.click();
+  }
+
+  function menuAction(fn) {
+    menuOpen = false;
+    fn();
+  }
+
+  async function nukeDB() {
+    if (!confirm('Delete ALL data? This cannot be undone.')) return;
+    try {
+      uploadStatus = 'Deleting all data\u2026';
+      await nukeDatabase();
+      emit(PERSON_DESELECTED);
+      emit(DATA_CHANGED);
+      showToast('Database wiped');
+    } finally {
+      uploadStatus = null;
+    }
+  }
+
+  function handleMenuKeydown(e) {
+    if (e.key === 'Escape') menuOpen = false;
+  }
 </script>
 
 <div id="app">
@@ -92,13 +142,31 @@
     <Search />
 
     <div class="header-actions">
-      <button class="btn" onclick={() => openSourcesPage()}>Sources</button>
-      <button class="btn" onclick={() => openPlacesPage()}>Places</button>
-      <button class="btn" onclick={() => openTreeConfig()}>Settings</button>
       <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Person</button>
-      <button class="btn" onclick={() => triggerImport()}>Import</button>
-      <button class="btn" onclick={() => triggerExport()}>Export</button>
-      <button class="btn" onclick={downloadDB}>Download DB</button>
+      <div class="menu-wrapper">
+        <button class="btn menu-toggle" onclick={() => menuOpen = !menuOpen} aria-label="Menu">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="3" y1="4" x2="15" y2="4"/><line x1="3" y1="9" x2="15" y2="9"/><line x1="3" y1="14" x2="15" y2="14"/>
+          </svg>
+        </button>
+        {#if menuOpen}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="menu-backdrop" onclick={() => menuOpen = false} onkeydown={handleMenuKeydown}></div>
+          <div class="menu-dropdown">
+            <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
+            <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
+            <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
+            <hr class="menu-divider" />
+            <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
+            <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
+            <hr class="menu-divider" />
+            <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
+            <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
+            <hr class="menu-divider" />
+            <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>Delete All Data</button>
+          </div>
+        {/if}
+      </div>
     </div>
   </header>
 
@@ -136,6 +204,15 @@
     <modal.component {...modal.props} />
   {/each}
 </div>
+
+{#if uploadStatus}
+  <div class="upload-overlay">
+    <div class="upload-card">
+      <div class="upload-progress-bar"><div class="upload-progress-fill"></div></div>
+      <p class="upload-status">{uploadStatus}</p>
+    </div>
+  </div>
+{/if}
 
 <div id="toast-root">
   <Toast />
