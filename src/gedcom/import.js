@@ -333,20 +333,44 @@ export function parseGEDCOM(text) {
       }
     }
 
-    // Marriage event on both spouses
+    // Marriage event — one shared event, second spouse as participant
     for (const ev of rec.events) {
       if (ev.tag !== 'MARR' || (!ev.date && !ev.place)) continue;
-      for (const xref of parents) {
-        const eid = ulid();
-        outEvents.push({
-          id: eid,
-          person_id: getId(xref),
-          type: 'marriage',
-          date: ev.date,
-          place: ev.place,
-          notes: ev.notes.trim(),
-          sort_date: parseSortDate(ev.date),
+      if (parents.length === 0) continue;
+      const eid = ulid();
+      outEvents.push({
+        id: eid,
+        person_id: getId(parents[0]),
+        type: 'marriage',
+        date: ev.date,
+        place: ev.place,
+        notes: ev.notes.trim(),
+        sort_date: parseSortDate(ev.date),
+      });
+      if (parents.length > 1) {
+        outParticipants.push({
+          id: ulid(),
+          event_id: eid,
+          person_id: getId(parents[1]),
+          role: 'spouse',
         });
+      }
+      for (const src of ev.sources) {
+        if (src.url || src.title) {
+          const repo = getOrCreateRepo(src.url);
+          const title = src.title || inferTitle(src.url, ev);
+          const source = getOrCreateSource(repo?.id, title, src.url);
+          outCitations.push({
+            id: ulid(),
+            source_id: source.id,
+            event_id: eid,
+            detail: src.detail || '',
+            url: src.url || '',
+            accessed: '',
+            confidence: '',
+            notes: '',
+          });
+        }
       }
     }
   }

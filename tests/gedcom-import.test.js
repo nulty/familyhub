@@ -65,7 +65,7 @@ describe('parseGEDCOM', () => {
     expect(parentChild).toHaveLength(2);
   });
 
-  it('parses marriage events on both spouses', () => {
+  it('parses marriage as one event with spouse participant', () => {
     const ged = `0 HEAD
 0 @I1@ INDI
 1 NAME John /Smith/
@@ -82,9 +82,11 @@ describe('parseGEDCOM', () => {
 0 TRLR`;
     const { data } = parseGEDCOM(ged);
     const marriages = data.events.filter(e => e.type === 'marriage');
-    expect(marriages).toHaveLength(2);
+    expect(marriages).toHaveLength(1);
     expect(marriages[0].date).toBe('5 JUN 1920');
-    expect(marriages[1].date).toBe('5 JUN 1920');
+    const marrParticipants = data.participants.filter(p => p.event_id === marriages[0].id);
+    expect(marrParticipants).toHaveLength(1);
+    expect(marrParticipants[0].role).toBe('spouse');
   });
 
   it('parses inline sources and creates citations', () => {
@@ -330,7 +332,7 @@ describe('GEDCOM → bulkImport round-trip', () => {
 
     expect(counts.people).toBe(2);
     expect(counts.relationships).toBe(1);
-    expect(counts.events).toBe(3); // 1 birth + 2 marriages (one per spouse)
+    expect(counts.events).toBe(2); // 1 birth + 1 marriage (shared)
   });
 
   it('import is idempotent with OR REPLACE/IGNORE', () => {

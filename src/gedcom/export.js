@@ -213,6 +213,33 @@ export function exportGEDCOM({ people, relationships, events, sources, citations
       const tag = pb?.gender === 'F' ? 'WIFE' : 'HUSB';
       lines.push(`1 ${tag} @${fam.b}@`);
     }
+
+    // Marriage events — check both partners for marriage events
+    for (const spouseId of [fam.a, fam.b].filter(Boolean)) {
+      const spouseEvents = (eventsByPerson[spouseId] || []).filter(e => e.type === 'marriage');
+      for (const ev of spouseEvents) {
+        lines.push('1 MARR');
+        if (ev.date)  lines.push(`2 DATE ${ev.date}`);
+        if (ev.place) lines.push(`2 PLAC ${ev.place}`);
+        if (ev.notes) {
+          const noteLines = ev.notes.split('\n');
+          lines.push(`2 NOTE ${noteLines[0]}`);
+          for (let i = 1; i < noteLines.length; i++) {
+            lines.push(`3 CONT ${noteLines[i]}`);
+          }
+        }
+        const evCitations = citationsByEvent[ev.id] || [];
+        for (const { citation, source } of evCitations) {
+          const sourVal = source.url || source.title;
+          if (sourVal) {
+            lines.push(`2 SOUR ${sourVal}`);
+            if (citation.detail) lines.push(`3 PAGE ${citation.detail}`);
+            if (citation.url && citation.url !== source.url) lines.push(`3 WWW ${citation.url}`);
+          }
+        }
+      }
+    }
+
     for (const childId of fam.childIds) {
       lines.push(`1 CHIL @${childId}@`);
     }
