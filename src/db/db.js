@@ -194,11 +194,20 @@ export const citations = {
   delete(id) {
     return call('deleteCitation', id);
   },
+  search(query) {
+    return call('searchCitations', query);
+  },
   listForEvent(eventId) {
     return call('listCitationsForEvent', eventId);
   },
   listForSource(sourceId) {
     return call('listCitationsForSource', sourceId);
+  },
+  linkEvent(citationId, eventId) {
+    return call('linkCitationEvent', citationId, eventId);
+  },
+  unlinkEvent(citationId, eventId) {
+    return call('unlinkCitationEvent', citationId, eventId);
   },
 };
 

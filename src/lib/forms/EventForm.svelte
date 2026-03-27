@@ -6,6 +6,7 @@
   import Modal from './Modal.svelte';
   import PersonPicker from '../pickers/PersonPicker.svelte';
   import SourcePicker from '../pickers/SourcePicker.svelte';
+  import CitationPicker from '../pickers/CitationPicker.svelte';
 
   const EVENT_TYPES = [
     'birth', 'death', 'marriage', 'burial', 'residence',
@@ -73,6 +74,7 @@
           accessed: c.accessed || '',
           confidence: c.confidence || '',
           deleted: false,
+          existing: false, // loaded from this event — treat as owned, not linked
         }));
 
         const existingParticipants = await events.getParticipants(eventId);
@@ -153,9 +155,28 @@
   }
 
   // Citations
+  let showCitationPicker = $state(false);
+
   function addCitation() {
     citationEntries = [...citationEntries, {
-      source_id: null, source_title: '', detail: '', url: '', accessed: '', confidence: '', deleted: false,
+      source_id: null, source_title: '', detail: '', url: '', accessed: '', confidence: '', deleted: false, existing: false,
+    }];
+  }
+
+  function handleExistingCitationSelect(citation) {
+    showCitationPicker = false;
+    // Don't add duplicates
+    if (citationEntries.some(c => c.id === citation.id && !c.deleted)) return;
+    citationEntries = [...citationEntries, {
+      id: citation.id,
+      source_id: citation.source_id,
+      source_title: citation.source_title,
+      detail: citation.detail || '',
+      url: citation.url || '',
+      accessed: citation.accessed || '',
+      confidence: citation.confidence || '',
+      deleted: false,
+      existing: true,
     }];
   }
 
@@ -204,9 +225,15 @@
       if (isEdit) {
         await events.update(eventId, data);
         for (const c of citationEntries) {
-          if (c.deleted && c.id) {
+          if (c.deleted && c.id && c.existing) {
+            // Unlink existing citation from this event (don't delete the citation itself)
+            await citations.unlinkEvent(c.id, eventId);
+          } else if (c.deleted && c.id && !c.existing) {
             await citations.delete(c.id);
-          } else if (c.id && !c.deleted && c.source_id) {
+          } else if (c.existing && !c.deleted && c.id) {
+            // Existing citation newly linked — ensure junction row exists
+            await citations.linkEvent(c.id, eventId);
+          } else if (c.id && !c.deleted && !c.existing && c.source_id) {
             await citations.update(c.id, { source_id: c.source_id, detail: c.detail, url: c.url, accessed: c.accessed, confidence: c.confidence });
           } else if (!c.id && !c.deleted && c.source_id) {
             await citations.create({ source_id: c.source_id, event_id: eventId, detail: c.detail, url: c.url, accessed: c.accessed, confidence: c.confidence });
@@ -227,7 +254,10 @@
       } else {
         const created = await events.create(personId, data);
         for (const c of citationEntries) {
-          if (!c.deleted && c.source_id) {
+          if (c.deleted) continue;
+          if (c.existing && c.id) {
+            await citations.linkEvent(c.id, created.id);
+          } else if (c.source_id) {
             await citations.create({ source_id: c.source_id, event_id: created.id, detail: c.detail, url: c.url, accessed: c.accessed, confidence: c.confidence });
           }
         }
@@ -323,36 +353,57 @@
       <div>
         {#each citationEntries as c, idx}
           {#if !c.deleted}
-            <div class="citation-row">
-              <div class="citation-source-row">
-                {#if c.source_id}
+            {#if c.existing}
+              <div class="citation-row citation-existing">
+                <div class="citation-source-row">
                   <span class="citation-source-label">{c.source_title || '(unnamed source)'}</span>
-                  <button type="button" class="btn-link btn-sm" onclick={() => changeCitationSource(idx)}>change</button>
-                {:else}
-                  <SourcePicker
-                    onselect={(source) => handleCitationSourceSelect(idx, source)}
-                    oncreate={() => handleCitationSourceCreate(idx)}
-                  />
-                {/if}
+                  {#if c.detail}<span class="citation-detail-label"> — {c.detail}</span>{/if}
+                </div>
+                <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={() => removeCitation(idx)}>Remove</button>
               </div>
-              <div class="citation-details-row">
-                <input type="text" placeholder="Detail (page, entry, volume...)" value={c.detail} oninput={(e) => updateCitation(idx, 'detail', e.target.value)}>
-                <input type="text" placeholder="Direct URL to record" value={c.url} oninput={(e) => updateCitation(idx, 'url', e.target.value)}>
-                <input type="text" placeholder="Date accessed" value={c.accessed} oninput={(e) => updateCitation(idx, 'accessed', e.target.value)}>
-                <select value={c.confidence} onchange={(e) => updateCitation(idx, 'confidence', e.target.value)}>
-                  {#each CONFIDENCE_OPTIONS as o}
-                    <option value={o.value}>{o.label}</option>
-                  {/each}
-                </select>
-                <div class="citation-details-actions">
-                  <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={() => removeCitation(idx)}>Remove</button>
+            {:else}
+              <div class="citation-row">
+                <div class="citation-source-row">
+                  {#if c.source_id}
+                    <span class="citation-source-label">{c.source_title || '(unnamed source)'}</span>
+                    <button type="button" class="btn-link btn-sm" onclick={() => changeCitationSource(idx)}>change</button>
+                  {:else}
+                    <SourcePicker
+                      onselect={(source) => handleCitationSourceSelect(idx, source)}
+                      oncreate={() => handleCitationSourceCreate(idx)}
+                    />
+                  {/if}
+                </div>
+                <div class="citation-details-row">
+                  <input type="text" placeholder="Detail (page, entry, volume...)" value={c.detail} oninput={(e) => updateCitation(idx, 'detail', e.target.value)}>
+                  <input type="text" placeholder="Direct URL to record" value={c.url} oninput={(e) => updateCitation(idx, 'url', e.target.value)}>
+                  <input type="text" placeholder="Date accessed" value={c.accessed} oninput={(e) => updateCitation(idx, 'accessed', e.target.value)}>
+                  <select value={c.confidence} onchange={(e) => updateCitation(idx, 'confidence', e.target.value)}>
+                    {#each CONFIDENCE_OPTIONS as o}
+                      <option value={o.value}>{o.label}</option>
+                    {/each}
+                  </select>
+                  <div class="citation-details-actions">
+                    <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={() => removeCitation(idx)}>Remove</button>
+                  </div>
                 </div>
               </div>
-            </div>
+            {/if}
           {/if}
         {/each}
       </div>
-      <button type="button" class="btn btn-sm btn-link" onclick={addCitation}>+ Add Citation</button>
+      {#if showCitationPicker}
+        <CitationPicker
+          onselect={handleExistingCitationSelect}
+          excludeIds={citationEntries.filter(c => !c.deleted && c.id).map(c => c.id)}
+        />
+      {/if}
+      <div class="citation-add-actions">
+        <button type="button" class="btn btn-sm btn-link" onclick={addCitation}>+ New Citation</button>
+        <button type="button" class="btn btn-sm btn-link" onclick={() => showCitationPicker = !showCitationPicker}>
+          {showCitationPicker ? 'Cancel' : '+ Link Existing'}
+        </button>
+      </div>
     </div>
 
     <div class="form-actions">

@@ -90,16 +90,22 @@ export const migrations = [
         run('CREATE INDEX IF NOT EXISTS idx_sources_title ON sources(title)');
       }
 
-      run(`CREATE TABLE IF NOT EXISTS citations (
-        id TEXT PRIMARY KEY,
-        source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-        event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-        detail TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
-        accessed TEXT NOT NULL DEFAULT '',
-        confidence TEXT NOT NULL DEFAULT '' CHECK(confidence IN ('','primary','secondary','questionable')),
-        notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
-      run('CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id)');
-      run('CREATE INDEX IF NOT EXISTS idx_citations_event ON citations(event_id)');
+      // Create citations table if it doesn't exist yet (fresh v2→v3 upgrade).
+      // On newer schemas (v4+), citations already exists without event_id — that's fine,
+      // the IF NOT EXISTS skips it and v4 migration handles the junction table.
+      const citTables = all("SELECT name FROM sqlite_master WHERE type='table' AND name='citations'");
+      if (citTables.length === 0) {
+        run(`CREATE TABLE citations (
+          id TEXT PRIMARY KEY,
+          source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+          event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+          detail TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
+          accessed TEXT NOT NULL DEFAULT '',
+          confidence TEXT NOT NULL DEFAULT '' CHECK(confidence IN ('','primary','secondary','questionable')),
+          notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+        run('CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id)');
+        run('CREATE INDEX IF NOT EXISTS idx_citations_event ON citations(event_id)');
+      }
 
       if (oldSources.length > 0) {
         const repoMap = {};
@@ -139,6 +145,70 @@ export const migrations = [
       }
 
       run('DROP TABLE IF EXISTS sources_old');
+    },
+  },
+  {
+    version: 4,
+    description: 'Move citations.event_id to citation_events junction table',
+    up(helpers) {
+      const { run, all } = helpers;
+
+      const tables = all("SELECT name FROM sqlite_master WHERE type='table'");
+      const hasJunction = tables.some(t => t.name === 'citation_events');
+      const citCols = all("PRAGMA table_info(citations)");
+      const hasEventId = citCols.some(c => c.name === 'event_id');
+
+      if (hasEventId) {
+        // Table swap: recreate citations without event_id, move links to junction table.
+        // Must create junction table AFTER the swap (not before) because renaming
+        // the parent table would break FK references in citation_events.
+        run('PRAGMA foreign_keys=OFF');
+
+        // Drop existing junction table if partial previous run left one
+        run('DROP TABLE IF EXISTS citation_events');
+
+        run('ALTER TABLE citations RENAME TO citations_old');
+        run(`CREATE TABLE citations (
+          id TEXT PRIMARY KEY,
+          source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+          detail TEXT NOT NULL DEFAULT '',
+          url TEXT NOT NULL DEFAULT '',
+          accessed TEXT NOT NULL DEFAULT '',
+          confidence TEXT NOT NULL DEFAULT '' CHECK(confidence IN ('','primary','secondary','questionable')),
+          notes TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`);
+        run('CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id)');
+        run(`INSERT INTO citations (id, source_id, detail, url, accessed, confidence, notes, created_at, updated_at)
+             SELECT id, source_id, detail, url, accessed, confidence, notes, created_at, updated_at
+             FROM citations_old`);
+
+        // Now create junction table referencing the new citations table
+        run(`CREATE TABLE citation_events (
+          citation_id TEXT NOT NULL REFERENCES citations(id) ON DELETE CASCADE,
+          event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+          PRIMARY KEY (citation_id, event_id)
+        )`);
+        run('CREATE INDEX IF NOT EXISTS idx_ce_citation ON citation_events(citation_id)');
+        run('CREATE INDEX IF NOT EXISTS idx_ce_event ON citation_events(event_id)');
+
+        // Copy event links from old table
+        run(`INSERT OR IGNORE INTO citation_events (citation_id, event_id)
+             SELECT id, event_id FROM citations_old WHERE event_id IS NOT NULL`);
+
+        run('DROP TABLE citations_old');
+        run('PRAGMA foreign_keys=ON');
+      } else if (!hasJunction) {
+        // Fresh schema (v4 schema.sql) or partial run — just create junction table
+        run(`CREATE TABLE IF NOT EXISTS citation_events (
+          citation_id TEXT NOT NULL REFERENCES citations(id) ON DELETE CASCADE,
+          event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+          PRIMARY KEY (citation_id, event_id)
+        )`);
+        run('CREATE INDEX IF NOT EXISTS idx_ce_citation ON citation_events(citation_id)');
+        run('CREATE INDEX IF NOT EXISTS idx_ce_event ON citation_events(event_id)');
+      }
     },
   },
 ];

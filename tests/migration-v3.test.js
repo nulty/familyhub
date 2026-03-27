@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setupV2TestDB, applyMigrationV3 } from './db-helpers.js';
+import { setupV2TestDB, applyMigrationV3, applyMigrationV4 } from './db-helpers.js';
 import { createHandlers } from '../src/db/handlers.js';
 
 function insertOldSource(helpers, { id, event_id, title = '', url = '', accessed = '', notes = '' }) {
@@ -185,6 +185,7 @@ describe('Migration v3', () => {
     insertOldSource(helpers, { id: 'S1', event_id: 'E1', title: 'Census', url: 'https://example.com/rec' });
 
     applyMigrationV3(helpers);
+    applyMigrationV4(helpers);
 
     const handlers = createHandlers(helpers);
 
@@ -198,7 +199,7 @@ describe('Migration v3', () => {
     const citation = handlers.createCitation({ id: 'C1', source_id: 'NEW1', event_id: 'E1', detail: 'p. 5' });
     expect(citation.detail).toBe('p. 5');
 
-    // Verify migrated data is accessible
+    // Verify migrated data is accessible via junction table
     const result = handlers.getPersonWithEvents('P1');
     expect(result.events).toHaveLength(1);
     // Should have the migrated citation + the new one

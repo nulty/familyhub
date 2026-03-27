@@ -18,7 +18,7 @@ const EVENT_TYPE_TO_TAG = {
   other:          'EVEN',
 };
 
-export function exportGEDCOM({ people, relationships, events, sources, citations, participants }) {
+export function exportGEDCOM({ people, relationships, events, sources, citations, citation_events, participants }) {
   const lines = [];
 
   const now = new Date();
@@ -47,12 +47,18 @@ export function exportGEDCOM({ people, relationships, events, sources, citations
     sourceById[src.id] = src;
   }
 
-  const citationsByEvent = {};
+  const citationById = {};
   for (const c of (citations || [])) {
-    if (!citationsByEvent[c.event_id]) citationsByEvent[c.event_id] = [];
-    const source = sourceById[c.source_id];
-    if (source) {
-      citationsByEvent[c.event_id].push({ citation: c, source });
+    citationById[c.id] = c;
+  }
+
+  const citationsByEvent = {};
+  for (const ce of (citation_events || [])) {
+    if (!citationsByEvent[ce.event_id]) citationsByEvent[ce.event_id] = [];
+    const c = citationById[ce.citation_id];
+    const source = c ? sourceById[c.source_id] : null;
+    if (c && source) {
+      citationsByEvent[ce.event_id].push({ citation: c, source });
     }
   }
 

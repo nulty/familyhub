@@ -111,10 +111,11 @@ export function createHandlers(h, opts = {}) {
             'accessed', c.accessed, 'confidence', c.confidence,
             'source_title', s.title, 'source_url', s.url,
             'repository_name', COALESCE(r.name, '')
-          )) FROM citations c
+          )) FROM citation_events ce
+            JOIN citations c ON c.id = ce.citation_id
             JOIN sources s ON s.id = c.source_id
             LEFT JOIN repositories r ON r.id = s.repository_id
-            WHERE c.event_id = e.id) as citations_json,
+            WHERE ce.event_id = e.id) as citations_json,
           (SELECT json_group_array(json_object(
             'person_id', ep.person_id, 'role', ep.role,
             'name', p.given_name || ' ' || p.surname
@@ -137,10 +138,11 @@ export function createHandlers(h, opts = {}) {
             'accessed', c.accessed, 'confidence', c.confidence,
             'source_title', s.title, 'source_url', s.url,
             'repository_name', COALESCE(r.name, '')
-          )) FROM citations c
+          )) FROM citation_events ce
+            JOIN citations c ON c.id = ce.citation_id
             JOIN sources s ON s.id = c.source_id
             LEFT JOIN repositories r ON r.id = s.repository_id
-            WHERE c.event_id = e.id) as citations_json
+            WHERE ce.event_id = e.id) as citations_json
          FROM event_participants ep
          JOIN events e ON e.id = ep.event_id
          JOIN people owner ON owner.id = e.person_id
@@ -394,10 +396,11 @@ export function createHandlers(h, opts = {}) {
     listSourcesForEvent(eventId) {
       return all(
         `SELECT DISTINCT s.*, r.name AS repository_name
-         FROM citations c
+         FROM citation_events ce
+         JOIN citations c ON c.id = ce.citation_id
          JOIN sources s ON s.id = c.source_id
          LEFT JOIN repositories r ON r.id = s.repository_id
-         WHERE c.event_id = ?
+         WHERE ce.event_id = ?
          ORDER BY s.title`,
         [eventId]
       );
@@ -408,10 +411,13 @@ export function createHandlers(h, opts = {}) {
     createCitation({ id, source_id, event_id, detail = '', url = '', accessed = '', confidence = '', notes = '' }) {
       const now = Date.now();
       run(
-        `INSERT INTO citations (id, source_id, event_id, detail, url, accessed, confidence, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, source_id, event_id, detail, url, accessed, confidence, notes, now, now]
+        `INSERT INTO citations (id, source_id, detail, url, accessed, confidence, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, source_id, detail, url, accessed, confidence, notes, now, now]
       );
+      if (event_id) {
+        run(`INSERT OR IGNORE INTO citation_events (citation_id, event_id) VALUES (?, ?)`, [id, event_id]);
+      }
       return get('SELECT * FROM citations WHERE id = ?', [id]);
     },
 
@@ -435,14 +441,45 @@ export function createHandlers(h, opts = {}) {
       return { ok: true };
     },
 
+    linkCitationEvent(citationId, eventId) {
+      run(`INSERT OR IGNORE INTO citation_events (citation_id, event_id) VALUES (?, ?)`, [citationId, eventId]);
+      return { ok: true };
+    },
+
+    unlinkCitationEvent(citationId, eventId) {
+      run(`DELETE FROM citation_events WHERE citation_id = ? AND event_id = ?`, [citationId, eventId]);
+      return { ok: true };
+    },
+
+    searchCitations(query) {
+      if (!query || !query.trim()) return [];
+      const q = `%${query.trim()}%`;
+      return all(
+        `SELECT DISTINCT c.*, s.title AS source_title, s.url AS source_url,
+                r.name AS repository_name
+         FROM citations c
+         JOIN sources s ON s.id = c.source_id
+         LEFT JOIN repositories r ON r.id = s.repository_id
+         LEFT JOIN citation_events ce ON ce.citation_id = c.id
+         LEFT JOIN events e ON e.id = ce.event_id
+         LEFT JOIN people p ON p.id = e.person_id
+         WHERE s.title LIKE ? OR c.detail LIKE ? OR c.url LIKE ?
+            OR p.given_name LIKE ? OR p.surname LIKE ?
+         ORDER BY c.created_at DESC
+         LIMIT 20`,
+        [q, q, q, q, q]
+      );
+    },
+
     listCitationsForEvent(eventId) {
       return all(
         `SELECT c.*, s.title AS source_title, s.url AS source_url, s.type AS source_type,
                 r.name AS repository_name, r.id AS repository_id
-         FROM citations c
+         FROM citation_events ce
+         JOIN citations c ON c.id = ce.citation_id
          JOIN sources s ON s.id = c.source_id
          LEFT JOIN repositories r ON r.id = s.repository_id
-         WHERE c.event_id = ?
+         WHERE ce.event_id = ?
          ORDER BY c.created_at`,
         [eventId]
       );
@@ -453,7 +490,8 @@ export function createHandlers(h, opts = {}) {
         `SELECT c.*, e.type AS event_type, e.date AS event_date, e.place AS event_place,
                 e.person_id, p.given_name, p.surname
          FROM citations c
-         JOIN events e ON e.id = c.event_id
+         JOIN citation_events ce ON ce.citation_id = c.id
+         JOIN events e ON e.id = ce.event_id
          JOIN people p ON p.id = e.person_id
          WHERE c.source_id = ?
          ORDER BY c.created_at`,
@@ -664,7 +702,7 @@ export function createHandlers(h, opts = {}) {
 
     // ── Bulk import (for GEDCOM) ─────────────────────────────────────────────
 
-    bulkImport({ people, relationships, events, sources, repositories, citations, participants, places }) {
+    bulkImport({ people, relationships, events, sources, repositories, citations, citation_events, participants, places }) {
       return transaction(() => {
         let counts = { people: 0, relationships: 0, events: 0, repositories: 0, sources: 0, citations: 0, participants: 0, places: 0 };
         const now = Date.now();
@@ -728,11 +766,19 @@ export function createHandlers(h, opts = {}) {
         // Citations must be inserted after sources and events
         for (const c of (citations || [])) {
           run(
-            `INSERT OR REPLACE INTO citations (id, source_id, event_id, detail, url, accessed, confidence, notes, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [c.id, c.source_id, c.event_id, c.detail||'', c.url||'', c.accessed||'', c.confidence||'', c.notes||'', now, now]
+            `INSERT OR REPLACE INTO citations (id, source_id, detail, url, accessed, confidence, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [c.id, c.source_id, c.detail||'', c.url||'', c.accessed||'', c.confidence||'', c.notes||'', now, now]
           );
+          if (c.event_id) {
+            run(`INSERT OR IGNORE INTO citation_events (citation_id, event_id) VALUES (?, ?)`, [c.id, c.event_id]);
+          }
           counts.citations++;
+        }
+
+        // Citation-event junction rows (from exportAll round-trips)
+        for (const ce of (citation_events || [])) {
+          run(`INSERT OR IGNORE INTO citation_events (citation_id, event_id) VALUES (?, ?)`, [ce.citation_id, ce.event_id]);
         }
 
         for (const ep of (participants || [])) {
@@ -757,8 +803,9 @@ export function createHandlers(h, opts = {}) {
         events:        all('SELECT * FROM events ORDER BY person_id, sort_date'),
         repositories:  all('SELECT * FROM repositories ORDER BY name'),
         sources:       all('SELECT * FROM sources ORDER BY title'),
-        citations:     all('SELECT * FROM citations ORDER BY event_id, created_at'),
-        participants:  all('SELECT * FROM event_participants ORDER BY event_id'),
+        citations:       all('SELECT * FROM citations ORDER BY created_at'),
+        citation_events: all('SELECT * FROM citation_events ORDER BY citation_id'),
+        participants:    all('SELECT * FROM event_participants ORDER BY event_id'),
         places:        all('SELECT * FROM places ORDER BY name'),
       };
     },
@@ -766,6 +813,7 @@ export function createHandlers(h, opts = {}) {
     // ── Reset ────────────────────────────────────────────────────────────────
 
     resetDatabase() {
+      run('DROP TABLE IF EXISTS citation_events');
       run('DROP TABLE IF EXISTS citations');
       run('DROP TABLE IF EXISTS sources');
       run('DROP TABLE IF EXISTS repositories');

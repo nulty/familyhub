@@ -1039,6 +1039,22 @@ a:hover { text-decoration: underline; }
   justify-content: flex-end;
 }
 
+.citation-existing {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.citation-detail-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.citation-add-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .citation-repo {
   color: var(--text-muted);
   font-size: 11px;

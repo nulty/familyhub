@@ -105,7 +105,6 @@ CREATE INDEX IF NOT EXISTS idx_sources_title ON sources(title);
 CREATE TABLE IF NOT EXISTS citations (
   id          TEXT PRIMARY KEY,
   source_id   TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-  event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   detail      TEXT NOT NULL DEFAULT '',   -- page number, entry number, film number
   url         TEXT NOT NULL DEFAULT '',   -- direct URL to this specific record/image
   accessed    TEXT NOT NULL DEFAULT '',   -- date accessed (for online sources)
@@ -117,7 +116,15 @@ CREATE TABLE IF NOT EXISTS citations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
-CREATE INDEX IF NOT EXISTS idx_citations_event  ON citations(event_id);
+
+CREATE TABLE IF NOT EXISTS citation_events (
+  citation_id TEXT NOT NULL REFERENCES citations(id) ON DELETE CASCADE,
+  event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  PRIMARY KEY (citation_id, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ce_citation ON citation_events(citation_id);
+CREATE INDEX IF NOT EXISTS idx_ce_event    ON citation_events(event_id);
 
 CREATE TABLE IF NOT EXISTS places (
   id         TEXT PRIMARY KEY,

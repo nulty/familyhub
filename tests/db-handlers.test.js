@@ -349,9 +349,12 @@ describe('Citations', () => {
     const c = h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 42', url: 'https://example.com/page', confidence: 'primary' });
     expect(c.id).toBe('C1');
     expect(c.source_id).toBe('S1');
-    expect(c.event_id).toBe('E1');
     expect(c.detail).toBe('p. 42');
     expect(c.confidence).toBe('primary');
+    // event_id is now in citation_events junction table
+    const linked = h.listCitationsForEvent('E1');
+    expect(linked).toHaveLength(1);
+    expect(linked[0].id).toBe('C1');
   });
 
   it('updateCitation updates allowed fields', () => {
@@ -385,16 +388,20 @@ describe('Citations', () => {
     expect(list[0].given_name).toBe('John');
   });
 
-  it('deleting event cascades to citations', () => {
+  it('deleting event removes junction rows but citation remains', () => {
     h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
     h.deleteEvent('E1');
-    expect(h.getCitation('C1')).toBeNull();
+    // Citation itself is preserved (many-to-many: may link to other events)
+    expect(h.getCitation('C1')).not.toBeNull();
+    // But it's no longer linked to any event
+    expect(h.listCitationsForEvent('E1')).toHaveLength(0);
   });
 
-  it('deleting person cascades through events to citations', () => {
+  it('deleting person removes junction rows but citation remains', () => {
     h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
     h.deletePerson('P1');
-    expect(h.getCitation('C1')).toBeNull();
+    // Citation preserved, junction rows gone via cascade (event deleted → citation_events rows deleted)
+    expect(h.getCitation('C1')).not.toBeNull();
   });
 });
 
@@ -646,13 +653,16 @@ describe('Bulk', () => {
     expect(data.repositories).toHaveLength(1);
     expect(data.sources).toHaveLength(1);
     expect(data.citations).toHaveLength(1);
+    expect(data.citation_events).toHaveLength(1);
+    expect(data.citation_events[0].citation_id).toBe('C1');
+    expect(data.citation_events[0].event_id).toBe('E1');
   });
 });
 
 // ─── Cascade Deletes ──────────────────────────────────────────────────────────
 
 describe('Cascade deletes', () => {
-  it('deleting a person cascades to events, citations, and relationships', () => {
+  it('deleting a person cascades to events and relationships; citations remain orphaned', () => {
     h.createPerson({ id: 'P1', given_name: 'John' });
     h.createPerson({ id: 'P2', given_name: 'Mary' });
     h.addPartner('R1', 'P1', 'P2');
@@ -663,13 +673,13 @@ describe('Cascade deletes', () => {
     h.deletePerson('P1');
 
     expect(h.getStats().events).toBe(0);
-    expect(h.getStats().citations).toBe(0);
     expect(h.getStats().relationships).toBe(0);
-    // Source itself remains (not cascade-deleted from citation)
+    // Citation itself remains (junction rows are cascade-deleted via event)
+    expect(h.getStats().citations).toBe(1);
     expect(h.getStats().sources).toBe(1);
   });
 
-  it('deleting an event cascades to citations and participants', () => {
+  it('deleting an event removes junction rows and participants; citation remains', () => {
     h.createPerson({ id: 'P1', given_name: 'John' });
     h.createPerson({ id: 'P2', given_name: 'Mary' });
     h.createEvent({ id: 'E1', person_id: 'P1' });
@@ -679,9 +689,10 @@ describe('Cascade deletes', () => {
 
     h.deleteEvent('E1');
 
-    expect(h.getCitation('C1')).toBeNull();
+    // Citation preserved, junction rows gone
+    expect(h.getCitation('C1')).not.toBeNull();
+    expect(h.listCitationsForEvent('E1')).toHaveLength(0);
     expect(h.getParticipantsForEvent('E1')).toHaveLength(0);
-    // Source still exists
     expect(h.getSource('S1')).not.toBeNull();
   });
 });

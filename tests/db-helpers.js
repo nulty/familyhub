@@ -9,7 +9,7 @@ import { createHandlers } from '../src/db/handlers.js';
 import { applyMigrations, migrations } from '../src/db/migrations.js';
 
 /**
- * Creates a test DB with the current (v3) schema — loads schema.sql and applies all migrations.
+ * Creates a test DB with the current (v4) schema — loads schema.sql and applies all migrations.
  */
 export function setupTestDB() {
   const db = new Database(':memory:');
@@ -88,6 +88,26 @@ export function applyMigrationV3(helpers) {
   const v3 = migrations.find(m => m.version === 3);
   v3.up(helpers);
   helpers.run("UPDATE meta SET value = '3' WHERE key = 'schema_version'");
+}
+
+/**
+ * Creates a test DB with the v3 schema (citations has event_id, no junction table).
+ */
+export function setupV3TestDB() {
+  const { db, helpers } = setupV2TestDB();
+  // Upgrade to v3 schema version
+  helpers.run("UPDATE meta SET value = '2' WHERE key = 'schema_version'");
+  applyMigrationV3(helpers);
+  return { db, helpers };
+}
+
+/**
+ * Run migration v4 against a DB — delegates to shared migrations module.
+ */
+export function applyMigrationV4(helpers) {
+  const v4 = migrations.find(m => m.version === 4);
+  v4.up(helpers);
+  helpers.run("UPDATE meta SET value = '4' WHERE key = 'schema_version'");
 }
 
 function createBetterSqliteHelpers(db) {

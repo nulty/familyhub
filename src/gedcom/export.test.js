@@ -76,7 +76,8 @@ describe('exportGEDCOM', () => {
       relationships: [],
       events: [{ id: 'E1', person_id: 'P1', type: 'birth', date: '1900', place: '', notes: '' }],
       sources: [{ id: 'S1', title: 'Census', url: 'https://example.com' }],
-      citations: [{ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 42', url: '', accessed: '' }],
+      citations: [{ id: 'C1', source_id: 'S1', detail: 'p. 42', url: '', accessed: '' }],
+      citation_events: [{ citation_id: 'C1', event_id: 'E1' }],
       participants: [],
     });
     expect(text).toContain('2 SOUR https://example.com');
