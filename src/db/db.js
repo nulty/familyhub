@@ -35,7 +35,12 @@ export async function initDB() {
   // Pass the base URL so the worker can fetch schema.sql from public/
   const schemaBaseUrl = new URL(base, window.location.origin).href;
   readyPromise = call('init', schemaBaseUrl);
-  return readyPromise;
+  const result = await readyPromise;
+  return result;
+}
+
+export function runMigrations() {
+  return call('runMigrations');
 }
 
 async function call(method, ...args) {

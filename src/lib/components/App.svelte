@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { initDB, getStats, nukeDatabase, bulk } from '../../db/db.js';
+  import { initDB, getStats, nukeDatabase, bulk, runMigrations } from '../../db/db.js';
   import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED } from '../../state.js';
   import { initTree, refreshTree } from '../../ui/tree.js';
   import { getConfig, setConfig } from '../../config.js';
@@ -18,11 +18,19 @@
   let dataVersion = $state(0);
   let menuOpen = $state(false);
   let uploadStatus = $state(null);
+  let migrationPrompt = $state(null);
+  let migrationFromUpload = $state(false);
 
   const modalStack = getStack;
 
   onMount(() => {
-    initDB();
+    initDB().then(async (result) => {
+      if (result.pendingMigrations?.length > 0) {
+        migrationPrompt = result.pendingMigrations;
+        return; // wait for user to dismiss prompt before booting
+      }
+      boot();
+    });
 
     on(PERSON_SELECTED, (id) => {
       appState.selectedPersonId = id;
@@ -53,8 +61,6 @@
     on(DB_POPULATED, async () => {
       await initTree();
     });
-
-    boot();
   });
 
   async function boot() {
@@ -86,6 +92,27 @@
     }
   }
 
+  async function proceedWithMigrations() {
+    migrationFromUpload = false;
+    migrationPrompt = null;
+    uploadStatus = 'Updating database\u2026';
+    try {
+      await runMigrations();
+      showToast('Database updated successfully');
+    } catch (err) {
+      showToast('Migration failed: ' + err.message);
+    } finally {
+      uploadStatus = null;
+    }
+    emit(DATA_CHANGED);
+    boot();
+  }
+
+  async function backupThenMigrate() {
+    await downloadDB();
+    await proceedWithMigrations();
+  }
+
   function uploadDB() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -99,7 +126,13 @@
         const buffer = await file.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         uploadStatus = 'Restoring database\u2026';
-        await bulk.importDatabase(bytes);
+        const result = await bulk.importDatabase(bytes);
+        if (result.pendingMigrations?.length > 0) {
+          uploadStatus = null;
+          migrationFromUpload = true;
+          migrationPrompt = result.pendingMigrations;
+          return;
+        }
         emit(PERSON_DESELECTED);
         emit(DATA_CHANGED);
         showToast('Database restored from ' + file.name);
@@ -204,6 +237,32 @@
     <modal.component {...modal.props} />
   {/each}
 </div>
+
+{#if migrationPrompt}
+  <div class="upload-overlay">
+    <div class="migration-card">
+      <h3>Database Update Required</h3>
+      {#if migrationFromUpload}
+        <p>The uploaded database needs to be updated to work with this version of FamilyHub. Keep your original file safe in case anything goes wrong.</p>
+      {:else}
+        <p>Your database needs to be updated to work with this version of FamilyHub. We recommend downloading a backup first.</p>
+      {/if}
+      <ul class="migration-list">
+        {#each migrationPrompt as m}
+          <li>v{m.version}: {m.description}</li>
+        {/each}
+      </ul>
+      <div class="migration-actions">
+        {#if !migrationFromUpload}
+          <button class="btn btn-primary" onclick={backupThenMigrate}>Download Backup &amp; Update</button>
+        {/if}
+        <button class="btn{migrationFromUpload ? ' btn-primary' : ''}" onclick={proceedWithMigrations}>
+          {migrationFromUpload ? 'Continue' : 'Update Without Backup'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if uploadStatus}
   <div class="upload-overlay">

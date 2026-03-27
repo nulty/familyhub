@@ -144,6 +144,24 @@ export const migrations = [
 ];
 
 /**
+ * Return pending migrations without applying them.
+ * @param {Object} helpers — { all, get, run, transaction }
+ * @returns {{ currentVersion: number, pending: Array<{ version: number, description: string }> }}
+ */
+export function getPendingMigrations(helpers) {
+  const { get } = helpers;
+  const currentRow = get("SELECT value FROM meta WHERE key = 'schema_version'");
+  const currentVersion = currentRow ? parseInt(currentRow.value, 10) : 1;
+
+  const pending = migrations
+    .filter(m => m.version > currentVersion)
+    .sort((a, b) => a.version - b.version)
+    .map(m => ({ version: m.version, description: m.description }));
+
+  return { currentVersion, pending };
+}
+
+/**
  * Run pending migrations against the database.
  * @param {Object} helpers — { all, get, run, transaction }
  */

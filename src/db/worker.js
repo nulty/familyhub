@@ -7,7 +7,7 @@
 
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import { createHandlers } from './handlers.js';
-import { applyMigrations } from './migrations.js';
+import { applyMigrations, getPendingMigrations, migrations } from './migrations.js';
 
 let db = null;
 let sqlite3Api = null;
@@ -88,11 +88,20 @@ async function initDB() {
     helpers.run('DROP TABLE IF EXISTS places');
     helpers.run("UPDATE meta SET value = '1' WHERE key = 'schema_version'");
 
-    // Re-apply schema and migrations
+    // Re-apply schema
     const schemaResponse = await fetch(schemaBaseUrl + 'schema.sql');
     const schemaText = await schemaResponse.text();
     db.exec(schemaText);
-    applyMigrations(helpers);
+
+    // Add columns that only exist via migrations
+    const evCols = helpers.all("PRAGMA table_info(events)");
+    if (!evCols.some(c => c.name === 'place_id')) {
+      helpers.run('ALTER TABLE events ADD COLUMN place_id TEXT REFERENCES places(id) ON DELETE SET NULL');
+    }
+
+    // Set schema version to latest so migrations don't re-run
+    const latest = Math.max(...migrations.map(m => m.version));
+    helpers.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [String(latest)]);
 
     return { ok: true };
   };
@@ -176,15 +185,20 @@ async function initDB() {
       helpers.run('PRAGMA foreign_keys=ON');
     }
 
-    // Re-run migrations in case imported DB was older
-    applyMigrations(helpers);
-
     tmp.close();
-    return { ok: true };
+
+    // Check if imported DB needs migrations (don't auto-apply)
+    const migrationInfo = getPendingMigrations(helpers);
+    return { ok: true, pendingMigrations: migrationInfo.pending };
   };
 
-  // Run migrations
-  applyMigrations(helpers);
+  // Check for pending migrations (don't apply yet — main thread decides)
+  const migrationInfo = getPendingMigrations(helpers);
+  if (migrationInfo.pending.length === 0) {
+    // No migrations needed, nothing to wait for
+    return { pendingMigrations: [] };
+  }
+  return { pendingMigrations: migrationInfo.pending };
 }
 
 // ─── SQL Helpers (WASM adapter) ───────────────────────────────────────────────
@@ -241,7 +255,12 @@ self.onmessage = async (e) => {
   try {
     if (method === 'init') {
       schemaBaseUrl = args?.[0] || '';
-      await initDB();
+      const initResult = await initDB();
+      self.postMessage({ id, result: { ok: true, ...initResult } });
+      return;
+    }
+    if (method === 'runMigrations') {
+      applyMigrations(helpers);
       self.postMessage({ id, result: { ok: true } });
       return;
     }
