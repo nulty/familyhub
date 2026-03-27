@@ -34,11 +34,26 @@ export function exportGEDCOM({ people, relationships, events, sources, citations
   lines.push('2 FORM LINEAGE-LINKED');
   lines.push('1 CHAR UTF-8');
 
-  // Index events by person
+  // Index events by person (owned events)
   const eventsByPerson = {};
+  const sharedEvents = []; // events with null person_id
   for (const ev of events) {
-    if (!eventsByPerson[ev.person_id]) eventsByPerson[ev.person_id] = [];
-    eventsByPerson[ev.person_id].push(ev);
+    if (ev.person_id) {
+      if (!eventsByPerson[ev.person_id]) eventsByPerson[ev.person_id] = [];
+      eventsByPerson[ev.person_id].push(ev);
+    } else {
+      sharedEvents.push(ev);
+    }
+  }
+
+  // Index shared events by participant
+  const sharedEventsByPerson = {};
+  for (const ep of (participants || [])) {
+    const ev = sharedEvents.find(e => e.id === ep.event_id);
+    if (ev) {
+      if (!sharedEventsByPerson[ep.person_id]) sharedEventsByPerson[ep.person_id] = [];
+      sharedEventsByPerson[ep.person_id].push({ ...ev, participant_role: ep.role });
+    }
   }
 
   // Build citation lookup: event_id -> [{ source, citation }]
@@ -214,10 +229,14 @@ export function exportGEDCOM({ people, relationships, events, sources, citations
       lines.push(`1 ${tag} @${fam.b}@`);
     }
 
-    // Marriage events — check both partners for marriage events
+    // Marriage events — find shared marriage events where either spouse is a participant
+    const emittedMarriages = new Set();
     for (const spouseId of [fam.a, fam.b].filter(Boolean)) {
-      const spouseEvents = (eventsByPerson[spouseId] || []).filter(e => e.type === 'marriage');
-      for (const ev of spouseEvents) {
+      // Check shared events (person_id IS NULL)
+      const spouseShared = (sharedEventsByPerson[spouseId] || []).filter(e => e.type === 'marriage');
+      for (const ev of spouseShared) {
+        if (emittedMarriages.has(ev.id)) continue; // don't emit same marriage twice
+        emittedMarriages.add(ev.id);
         lines.push('1 MARR');
         if (ev.date)  lines.push(`2 DATE ${ev.date}`);
         if (ev.place) lines.push(`2 PLAC ${ev.place}`);
@@ -237,6 +256,15 @@ export function exportGEDCOM({ people, relationships, events, sources, citations
             if (citation.url && citation.url !== source.url) lines.push(`3 WWW ${citation.url}`);
           }
         }
+      }
+      // Also check owned marriage events (legacy data)
+      const ownedMarriages = (eventsByPerson[spouseId] || []).filter(e => e.type === 'marriage');
+      for (const ev of ownedMarriages) {
+        if (emittedMarriages.has(ev.id)) continue;
+        emittedMarriages.add(ev.id);
+        lines.push('1 MARR');
+        if (ev.date)  lines.push(`2 DATE ${ev.date}`);
+        if (ev.place) lines.push(`2 PLAC ${ev.place}`);
       }
     }
 

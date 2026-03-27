@@ -10,17 +10,25 @@
 
   let person = $state(null);
   let events = $state([]);
+  let sharedEvents = $state([]);
   let participatingEvents = $state([]);
   let parents = $state([]);
   let children = $state([]);
   let partners = $state([]);
-  let birth = $derived(events.find(e => e.type === 'birth'));
-  let death = $derived(events.find(e => e.type === 'death'));
+  // Merge owned events + shared events into one timeline
+  let allEvents = $derived.by(() => {
+    const shared = sharedEvents.map(e => ({ ...e, _shared: true }));
+    return [...events, ...shared].sort((a, b) =>
+      (a.sort_date ?? Infinity) - (b.sort_date ?? Infinity)
+    );
+  });
+  let birth = $derived(allEvents.find(e => e.type === 'birth'));
+  let death = $derived(allEvents.find(e => e.type === 'death'));
   let isRoot = $derived(person && person.id === getConfig('rootPerson'));
 
   let uniquePlaces = $derived.by(() => {
     const placeEntries = [];
-    for (const ev of events) {
+    for (const ev of allEvents) {
       if (ev.place) placeEntries.push({ place: ev.place, date: ev.date, sort_date: ev.sort_date, type: ev.type, via: null });
     }
     for (const ev of participatingEvents) {
@@ -46,6 +54,7 @@
     if (!result) { person = null; return; }
     person = result.person;
     events = result.events;
+    sharedEvents = result.sharedEvents || [];
     participatingEvents = result.participatingEvents;
     parents = result.parents;
     children = result.children;
@@ -136,21 +145,28 @@
   {/if}
 
   <details class="panel-section" open>
-    <summary>Events ({events.length})</summary>
+    <summary>Events ({allEvents.length})</summary>
     <div class="panel-events">
-      {#if events.length === 0}
+      {#if allEvents.length === 0}
         <div class="section-empty">No events</div>
       {:else}
-        {#each events as ev}
+        {#each allEvents as ev}
           <div class="event-item">
             <div class="event-item-header">
               <span class="event-type">{ev.type}</span>
               {#if ev.date}<span class="event-date">{ev.date}</span>{/if}
               <span class="event-actions">
-                <button class="btn-link btn-sm" onclick={() => openEventForm(person.id, ev.id)}>edit</button>
+                <button class="btn-link btn-sm" onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>edit</button>
                 <button class="btn-link btn-sm" style="color:var(--danger)" onclick={() => deleteEvent(ev.id)}>delete</button>
               </span>
             </div>
+            {#if ev._shared && ev.participants?.length > 0}
+              <div class="event-participants-list">
+                {#each ev.participants.filter(p => p.person_id !== person.id) as p}
+                  <span class="event-participant-link" onclick={() => navigate(p.person_id)}>{p.name?.trim() || 'Unnamed'}</span>
+                {/each}
+              </div>
+            {/if}
             {#if ev.place}<div class="event-place">{ev.place}</div>{/if}
             {#if ev.notes}<div class="event-notes">{@html linkify(ev.notes)}</div>{/if}
             {#if ev.citations?.some(c => c.source_title || c.url)}

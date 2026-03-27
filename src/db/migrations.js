@@ -211,6 +211,105 @@ export const migrations = [
       }
     },
   },
+  {
+    version: 5,
+    description: 'Make events.person_id nullable and convert marriages to shared events',
+    up(helpers) {
+      const { run, all, get } = helpers;
+
+      // Check if person_id is already nullable
+      const evCols = all("PRAGMA table_info(events)");
+      const personIdCol = evCols.find(c => c.name === 'person_id');
+      if (!personIdCol) return; // no person_id column?
+      const isNotNull = personIdCol.notnull === 1;
+
+      if (isNotNull) {
+        // Table swap to make person_id nullable.
+        // Must also recreate tables that reference events (event_participants,
+        // citation_events) because SQLite renames FK targets during ALTER RENAME.
+        run('PRAGMA foreign_keys=OFF');
+
+        // Save dependent data
+        const epData = all('SELECT * FROM event_participants');
+        const ceData = all('SELECT * FROM citation_events');
+
+        run('DROP TABLE event_participants');
+        run('DROP TABLE citation_events');
+        run('ALTER TABLE events RENAME TO events_old');
+
+        run(`CREATE TABLE events (
+          id TEXT PRIMARY KEY,
+          person_id TEXT REFERENCES people(id) ON DELETE CASCADE,
+          type TEXT NOT NULL DEFAULT 'other',
+          date TEXT NOT NULL DEFAULT '',
+          place TEXT NOT NULL DEFAULT '',
+          place_id TEXT REFERENCES places(id) ON DELETE SET NULL,
+          notes TEXT NOT NULL DEFAULT '',
+          sort_date INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`);
+        run('CREATE INDEX IF NOT EXISTS idx_events_person ON events(person_id, sort_date)');
+        run('CREATE INDEX IF NOT EXISTS idx_events_type ON events(type)');
+        run('CREATE INDEX IF NOT EXISTS idx_events_place ON events(place)');
+        run('CREATE INDEX IF NOT EXISTS idx_events_sort_date ON events(sort_date) WHERE sort_date IS NOT NULL');
+
+        run(`INSERT INTO events SELECT * FROM events_old`);
+        run('DROP TABLE events_old');
+
+        // Recreate dependent tables with correct FK references
+        run(`CREATE TABLE event_participants (
+          id TEXT PRIMARY KEY,
+          event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+          person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+          role TEXT NOT NULL DEFAULT 'witness',
+          created_at INTEGER NOT NULL,
+          UNIQUE(event_id, person_id)
+        )`);
+        run('CREATE INDEX IF NOT EXISTS idx_ep_event ON event_participants(event_id)');
+        run('CREATE INDEX IF NOT EXISTS idx_ep_person ON event_participants(person_id)');
+        for (const ep of epData) {
+          run('INSERT INTO event_participants (id, event_id, person_id, role, created_at) VALUES (?, ?, ?, ?, ?)',
+            [ep.id, ep.event_id, ep.person_id, ep.role, ep.created_at]);
+        }
+
+        run(`CREATE TABLE citation_events (
+          citation_id TEXT NOT NULL REFERENCES citations(id) ON DELETE CASCADE,
+          event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+          PRIMARY KEY (citation_id, event_id)
+        )`);
+        run('CREATE INDEX IF NOT EXISTS idx_ce_citation ON citation_events(citation_id)');
+        run('CREATE INDEX IF NOT EXISTS idx_ce_event ON citation_events(event_id)');
+        for (const ce of ceData) {
+          run('INSERT INTO citation_events (citation_id, event_id) VALUES (?, ?)',
+            [ce.citation_id, ce.event_id]);
+        }
+
+        run('PRAGMA foreign_keys=ON');
+      }
+
+      // Convert existing marriage events to shared events
+      const marriages = all("SELECT * FROM events WHERE type = 'marriage' AND person_id IS NOT NULL");
+      const now = Date.now();
+
+      for (const m of marriages) {
+        // Add the owner as a spouse participant if not already
+        const existing = get(
+          "SELECT id FROM event_participants WHERE event_id = ? AND person_id = ?",
+          [m.id, m.person_id]
+        );
+        if (!existing) {
+          run(
+            "INSERT INTO event_participants (id, event_id, person_id, role, created_at) VALUES (?, ?, ?, 'spouse', ?)",
+            [ulid(), m.id, m.person_id, now]
+          );
+        }
+
+        // Null out person_id — event is now shared
+        run("UPDATE events SET person_id = NULL WHERE id = ?", [m.id]);
+      }
+    },
+  },
 ];
 
 /**

@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_rel_b ON relationships(person_b_id);
 
 CREATE TABLE IF NOT EXISTS events (
   id         TEXT PRIMARY KEY,
-  person_id  TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  person_id  TEXT REFERENCES people(id) ON DELETE CASCADE,
   type       TEXT NOT NULL DEFAULT 'other',
   -- birth|death|residence|marriage|census|immigration|emigration|burial|other
   date       TEXT NOT NULL DEFAULT '',   -- free text: "1901", "3 SEP 1913"

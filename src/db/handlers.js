@@ -104,9 +104,9 @@ export function createHandlers(h, opts = {}) {
     getPersonWithEvents(id) {
       const person = get('SELECT * FROM people WHERE id = ?', [id]);
       if (!person) return null;
-      const events = all(
-        `SELECT e.*,
-          (SELECT json_group_array(json_object(
+
+      // Subquery fragments reused across queries
+      const citationsSub = `(SELECT json_group_array(json_object(
             'id', c.id, 'source_id', c.source_id, 'detail', c.detail, 'url', c.url,
             'accessed', c.accessed, 'confidence', c.confidence,
             'source_title', s.title, 'source_url', s.url,
@@ -115,38 +115,52 @@ export function createHandlers(h, opts = {}) {
             JOIN citations c ON c.id = ce.citation_id
             JOIN sources s ON s.id = c.source_id
             LEFT JOIN repositories r ON r.id = s.repository_id
-            WHERE ce.event_id = e.id) as citations_json,
-          (SELECT json_group_array(json_object(
-            'person_id', ep.person_id, 'role', ep.role,
-            'name', p.given_name || ' ' || p.surname
-          )) FROM event_participants ep JOIN people p ON p.id = ep.person_id WHERE ep.event_id = e.id) as participants_json
+            WHERE ce.event_id = e.id)`;
+      const participantsSub = `(SELECT json_group_array(json_object(
+            'person_id', ep2.person_id, 'role', ep2.role,
+            'name', p2.given_name || ' ' || p2.surname
+          )) FROM event_participants ep2 JOIN people p2 ON p2.id = ep2.person_id WHERE ep2.event_id = e.id)`;
+
+      // 1. Owned events (person_id = this person)
+      const ownedEvents = all(
+        `SELECT e.*, ${citationsSub} as citations_json, ${participantsSub} as participants_json
          FROM events e WHERE e.person_id = ?
          ORDER BY COALESCE(e.sort_date, 9999999999999)`,
         [id]
       );
-      for (const ev of events) {
+      for (const ev of ownedEvents) {
         ev.citations = JSON.parse(ev.citations_json || '[]');
         ev.participants = JSON.parse(ev.participants_json || '[]');
         delete ev.citations_json;
         delete ev.participants_json;
       }
+
+      // 2. Shared events (person_id IS NULL, person is a participant)
+      const sharedEvents = all(
+        `SELECT e.*, ep.role AS participant_role,
+          ${citationsSub} as citations_json, ${participantsSub} as participants_json
+         FROM event_participants ep
+         JOIN events e ON e.id = ep.event_id
+         WHERE ep.person_id = ? AND e.person_id IS NULL
+         ORDER BY COALESCE(e.sort_date, 9999999999999)`,
+        [id]
+      );
+      for (const ev of sharedEvents) {
+        ev.citations = JSON.parse(ev.citations_json || '[]');
+        ev.participants = JSON.parse(ev.participants_json || '[]');
+        delete ev.citations_json;
+        delete ev.participants_json;
+      }
+
+      // 3. Participating events (someone else's owned event, person is a participant)
       const participatingEvents = all(
         `SELECT e.*, ep.role AS participant_role,
           owner.given_name || ' ' || owner.surname AS owner_name, owner.id AS owner_id,
-          (SELECT json_group_array(json_object(
-            'id', c.id, 'source_id', c.source_id, 'detail', c.detail, 'url', c.url,
-            'accessed', c.accessed, 'confidence', c.confidence,
-            'source_title', s.title, 'source_url', s.url,
-            'repository_name', COALESCE(r.name, '')
-          )) FROM citation_events ce
-            JOIN citations c ON c.id = ce.citation_id
-            JOIN sources s ON s.id = c.source_id
-            LEFT JOIN repositories r ON r.id = s.repository_id
-            WHERE ce.event_id = e.id) as citations_json
+          ${citationsSub} as citations_json
          FROM event_participants ep
          JOIN events e ON e.id = ep.event_id
          JOIN people owner ON owner.id = e.person_id
-         WHERE ep.person_id = ? AND e.person_id != ?
+         WHERE ep.person_id = ? AND e.person_id IS NOT NULL AND e.person_id != ?
          ORDER BY COALESCE(e.sort_date, 9999999999999)`,
         [id, id]
       );
@@ -154,8 +168,9 @@ export function createHandlers(h, opts = {}) {
         ev.citations = JSON.parse(ev.citations_json || '[]');
         delete ev.citations_json;
       }
+
       const family = handlers.getFamily(id);
-      return { person, events, participatingEvents, ...family };
+      return { person, events: ownedEvents, sharedEvents, participatingEvents, ...family };
     },
 
     // ── Relationships ────────────────────────────────────────────────────────
@@ -220,6 +235,10 @@ export function createHandlers(h, opts = {}) {
       return get('SELECT * FROM events WHERE id = ?', [id]);
     },
 
+    getEvent(id) {
+      return get('SELECT * FROM events WHERE id = ?', [id]);
+    },
+
     updateEvent(id, fields) {
       const allowed = ['type', 'date', 'place', 'place_id', 'notes', 'sort_date'];
       const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
@@ -260,10 +279,12 @@ export function createHandlers(h, opts = {}) {
 
     getEventsForParticipant(personId) {
       return all(
-        `SELECT e.*, ep.role, p.given_name || ' ' || p.surname AS owner_name, p.id AS owner_id
+        `SELECT e.*, ep.role,
+          COALESCE(p.given_name || ' ' || p.surname, '') AS owner_name,
+          e.person_id AS owner_id
          FROM event_participants ep
          JOIN events e ON e.id = ep.event_id
-         JOIN people p ON p.id = e.person_id
+         LEFT JOIN people p ON p.id = e.person_id
          WHERE ep.person_id = ?
          ORDER BY COALESCE(e.sort_date, 9999999999999)`,
         [personId]
@@ -463,11 +484,14 @@ export function createHandlers(h, opts = {}) {
          LEFT JOIN citation_events ce ON ce.citation_id = c.id
          LEFT JOIN events e ON e.id = ce.event_id
          LEFT JOIN people p ON p.id = e.person_id
+         LEFT JOIN event_participants ep2 ON ep2.event_id = e.id
+         LEFT JOIN people p2 ON p2.id = ep2.person_id
          WHERE s.title LIKE ? OR c.detail LIKE ? OR c.url LIKE ?
             OR p.given_name LIKE ? OR p.surname LIKE ?
+            OR p2.given_name LIKE ? OR p2.surname LIKE ?
          ORDER BY c.created_at DESC
          LIMIT 20`,
-        [q, q, q, q, q]
+        [q, q, q, q, q, q, q]
       );
     },
 
@@ -488,11 +512,11 @@ export function createHandlers(h, opts = {}) {
     listCitationsForSource(sourceId) {
       return all(
         `SELECT c.*, e.type AS event_type, e.date AS event_date, e.place AS event_place,
-                e.person_id, p.given_name, p.surname
+                e.person_id, COALESCE(p.given_name, '') AS given_name, COALESCE(p.surname, '') AS surname
          FROM citations c
          JOIN citation_events ce ON ce.citation_id = c.id
          JOIN events e ON e.id = ce.event_id
-         JOIN people p ON p.id = e.person_id
+         LEFT JOIN people p ON p.id = e.person_id
          WHERE c.source_id = ?
          ORDER BY c.created_at`,
         [sourceId]
@@ -583,18 +607,21 @@ export function createHandlers(h, opts = {}) {
     getPeopleByPlace(placeIdOrName) {
       return all(
         `SELECT DISTINCT p.id, p.given_name, p.surname FROM people p
-         JOIN events e ON e.person_id = p.id
-         WHERE e.place_id = ? OR e.place LIKE ?
+         WHERE p.id IN (
+           SELECT e.person_id FROM events e WHERE (e.place_id = ? OR e.place LIKE ?) AND e.person_id IS NOT NULL
+           UNION
+           SELECT ep.person_id FROM event_participants ep JOIN events e ON e.id = ep.event_id WHERE e.place_id = ? OR e.place LIKE ?
+         )
          ORDER BY p.surname, p.given_name LIMIT 10`,
-        [placeIdOrName, `%${placeIdOrName}%`]
+        [placeIdOrName, `%${placeIdOrName}%`, placeIdOrName, `%${placeIdOrName}%`]
       );
     },
 
     getEventsByPlace(placeId) {
       return all(
-        `SELECT e.*, p.given_name, p.surname, p.id AS person_id
+        `SELECT e.*, COALESCE(p.given_name, '') AS given_name, COALESCE(p.surname, '') AS surname, e.person_id
          FROM events e
-         JOIN people p ON p.id = e.person_id
+         LEFT JOIN people p ON p.id = e.person_id
          WHERE e.place_id = ?
          ORDER BY COALESCE(e.sort_date, 9999999999999)`,
         [placeId]
@@ -616,12 +643,12 @@ export function createHandlers(h, opts = {}) {
       const hi = targetMs + windowMs;
 
       let sql = `SELECT e.*, p.given_name, p.surname, p.gender, ABS(e.sort_date - ?) AS distance_ms
-                 FROM events e JOIN people p ON p.id = e.person_id
+                 FROM events e LEFT JOIN people p ON p.id = e.person_id
                  WHERE e.sort_date BETWEEN ? AND ?`;
       const params = [targetMs, lo, hi];
 
       if (excludePersonId) {
-        sql += ' AND e.person_id != ?';
+        sql += ' AND (e.person_id IS NULL OR e.person_id != ?)';
         params.push(excludePersonId);
       }
       if (personIds && personIds.length > 0) {

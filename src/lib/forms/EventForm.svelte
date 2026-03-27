@@ -1,5 +1,5 @@
 <script>
-  import { events, citations, places } from '../../db/db.js';
+  import { events, citations, places, relationships } from '../../db/db.js';
   import { emit, DATA_CHANGED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
   import { openPlaceForm, openPersonForm, openSourceForm } from '../shared/open.js';
@@ -47,16 +47,27 @@
   // Participants
   let participantEntries = $state([]);
 
+  // Marriage-specific
+  let isMarriage = $derived(type === 'marriage');
+  let spouse = $state(null); // { id, given_name, surname }
+  let knownPartners = $state([]);
+
   // Citations
   let citationEntries = $state([]);
 
   $effect(() => {
+    // Load known partners for marriage spouse suggestion
+    if (personId) {
+      relationships.getFamily(personId).then(fam => {
+        knownPartners = fam.partners || [];
+      });
+    }
+
     if (eventId) {
       isEdit = true;
       title = 'Edit Event';
       (async () => {
-        const eventList = await events.list(personId);
-        const existing = eventList.find(e => e.id === eventId);
+        const existing = await events.get(eventId);
         if (!existing) { onclose?.(); return; }
         type = existing.type || 'birth';
         date = existing.date || '';
@@ -74,7 +85,7 @@
           accessed: c.accessed || '',
           confidence: c.confidence || '',
           deleted: false,
-          existing: false, // loaded from this event — treat as owned, not linked
+          existing: false,
         }));
 
         const existingParticipants = await events.getParticipants(eventId);
@@ -86,6 +97,14 @@
           isNew: false,
           removed: false,
         }));
+
+        // For marriage: set spouse from existing participants
+        if (existing.type === 'marriage') {
+          const spouseEntry = existingParticipants.find(p => p.role === 'spouse' && p.person_id !== personId);
+          if (spouseEntry) {
+            spouse = { id: spouseEntry.person_id, given_name: spouseEntry.given_name, surname: spouseEntry.surname };
+          }
+        }
       })();
     }
   });
@@ -152,6 +171,21 @@
     participantEntries = participantEntries.map((p, i) =>
       i === idx ? { ...p, role } : p
     );
+  }
+
+  // Marriage spouse
+  function selectSpouse(person) {
+    spouse = { id: person.id, given_name: person.given_name, surname: person.surname };
+  }
+
+  function clearSpouse() {
+    spouse = null;
+  }
+
+  function createSpouse() {
+    openPersonForm(null, (newPerson) => {
+      selectSpouse(newPerson);
+    });
   }
 
   // Citations
@@ -252,7 +286,18 @@
         emit(DATA_CHANGED);
         showToast('Event updated');
       } else {
-        const created = await events.create(personId, data);
+        // Marriage: shared event (no owner), both spouses as participants
+        const ownerPersonId = isMarriage ? null : personId;
+        const created = await events.create(ownerPersonId, data);
+
+        if (isMarriage) {
+          // Add current person and spouse as participants
+          await events.addParticipant(created.id, personId, 'spouse');
+          if (spouse) {
+            await events.addParticipant(created.id, spouse.id, 'spouse');
+          }
+        }
+
         for (const c of citationEntries) {
           if (c.deleted) continue;
           if (c.existing && c.id) {
@@ -261,11 +306,15 @@
             await citations.create({ source_id: c.source_id, event_id: created.id, detail: c.detail, url: c.url, accessed: c.accessed, confidence: c.confidence });
           }
         }
-        for (const p of participantEntries) {
-          if (!p.removed) {
-            await events.addParticipant(created.id, p.person_id, p.role);
+
+        if (!isMarriage) {
+          for (const p of participantEntries) {
+            if (!p.removed) {
+              await events.addParticipant(created.id, p.person_id, p.role);
+            }
           }
         }
+
         onclose?.();
         emit(DATA_CHANGED);
         showToast('Event created');
@@ -319,33 +368,61 @@
       <textarea id="ef-notes" rows="2" bind:value={eventNotes}></textarea>
     </div>
 
-    <!-- Participants -->
-    <div class="form-group">
-      <label>Participants</label>
-      <div>
-        {#each participantEntries as entry, idx}
-          {#if !entry.removed}
-            <div class="participant-row">
-              <span class="participant-name">{[entry.given_name, entry.surname].filter(Boolean).join(' ') || 'Unnamed'}</span>
-              <select class="participant-role" value={entry.role} onchange={(e) => updateParticipantRole(idx, e.target.value)}>
-                {#each PARTICIPANT_ROLES as r}
-                  <option value={r}>{capitalize(r)}</option>
-                {/each}
-              </select>
-              <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={() => removeParticipant(idx)}>Remove</button>
+    {#if isMarriage}
+      <!-- Spouse picker for marriage events -->
+      <div class="form-group">
+        <label>Spouse</label>
+        {#if spouse}
+          <div class="participant-row">
+            <span class="participant-name">{[spouse.given_name, spouse.surname].filter(Boolean).join(' ') || 'Unnamed'}</span>
+            <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={clearSpouse}>change</button>
+          </div>
+        {:else}
+          {#if knownPartners.length > 0 && !spouse}
+            <div class="spouse-suggestions">
+              {#each knownPartners as p}
+                <button type="button" class="btn btn-sm" onclick={() => selectSpouse(p)}>
+                  {[p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed'}
+                </button>
+              {/each}
             </div>
           {/if}
-        {/each}
-        {#if participantEntries.filter(e => !e.removed).length === 0}
-          <div class="section-empty" style="margin:4px 0">No participants</div>
+          <PersonPicker
+            onselect={selectSpouse}
+            excludeIds={[personId]}
+            oncreate={createSpouse}
+          />
         {/if}
       </div>
-      <PersonPicker
-        onselect={handleParticipantSelect}
-        excludeIds={[personId]}
-        oncreate={handleParticipantCreate}
-      />
-    </div>
+    {:else}
+      <!-- Participants -->
+      <div class="form-group">
+        <label>Participants</label>
+        <div>
+          {#each participantEntries as entry, idx}
+            {#if !entry.removed}
+              <div class="participant-row">
+                <span class="participant-name">{[entry.given_name, entry.surname].filter(Boolean).join(' ') || 'Unnamed'}</span>
+                <select class="participant-role" value={entry.role} onchange={(e) => updateParticipantRole(idx, e.target.value)}>
+                  {#each PARTICIPANT_ROLES as r}
+                    <option value={r}>{capitalize(r)}</option>
+                  {/each}
+                </select>
+                <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={() => removeParticipant(idx)}>Remove</button>
+              </div>
+            {/if}
+          {/each}
+          {#if participantEntries.filter(e => !e.removed).length === 0}
+            <div class="section-empty" style="margin:4px 0">No participants</div>
+          {/if}
+        </div>
+        <PersonPicker
+          onselect={handleParticipantSelect}
+          excludeIds={[personId]}
+          oncreate={handleParticipantCreate}
+        />
+      </div>
+    {/if}
 
     <!-- Citations -->
     <div class="form-group">

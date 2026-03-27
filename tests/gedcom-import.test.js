@@ -65,7 +65,7 @@ describe('parseGEDCOM', () => {
     expect(parentChild).toHaveLength(2);
   });
 
-  it('parses marriage as one event with spouse participant', () => {
+  it('parses marriage as shared event with both spouses as participants', () => {
     const ged = `0 HEAD
 0 @I1@ INDI
 1 NAME John /Smith/
@@ -83,10 +83,11 @@ describe('parseGEDCOM', () => {
     const { data } = parseGEDCOM(ged);
     const marriages = data.events.filter(e => e.type === 'marriage');
     expect(marriages).toHaveLength(1);
+    expect(marriages[0].person_id).toBeNull();
     expect(marriages[0].date).toBe('5 JUN 1920');
     const marrParticipants = data.participants.filter(p => p.event_id === marriages[0].id);
-    expect(marrParticipants).toHaveLength(1);
-    expect(marrParticipants[0].role).toBe('spouse');
+    expect(marrParticipants).toHaveLength(2);
+    expect(marrParticipants.every(p => p.role === 'spouse')).toBe(true);
   });
 
   it('parses inline sources and creates citations', () => {

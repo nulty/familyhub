@@ -101,6 +101,9 @@ export const events = {
     const sort_date = parseSortDate(data.date);
     return call('createEvent', { id: ulid(), person_id: personId, sort_date, ...data });
   },
+  get(id) {
+    return call('getEvent', id);
+  },
   update(id, fields) {
     if (fields.date !== undefined) {
       fields.sort_date = parseSortDate(fields.date);

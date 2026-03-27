@@ -110,6 +110,24 @@ export function applyMigrationV4(helpers) {
   helpers.run("UPDATE meta SET value = '4' WHERE key = 'schema_version'");
 }
 
+/**
+ * Creates a test DB with the v4 schema (citation_events junction, person_id NOT NULL on events).
+ */
+export function setupV4TestDB() {
+  const { db, helpers } = setupV3TestDB();
+  applyMigrationV4(helpers);
+  return { db, helpers };
+}
+
+/**
+ * Run migration v5 against a DB — delegates to shared migrations module.
+ */
+export function applyMigrationV5(helpers) {
+  const v5 = migrations.find(m => m.version === 5);
+  v5.up(helpers);
+  helpers.run("UPDATE meta SET value = '5' WHERE key = 'schema_version'");
+}
+
 function createBetterSqliteHelpers(db) {
   function all(sql, params = []) {
     return db.prepare(sql).all(...params);

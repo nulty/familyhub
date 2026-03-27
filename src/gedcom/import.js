@@ -333,25 +333,25 @@ export function parseGEDCOM(text) {
       }
     }
 
-    // Marriage event — one shared event, second spouse as participant
+    // Marriage event — shared event (no owner), both spouses as participants
     for (const ev of rec.events) {
       if (ev.tag !== 'MARR' || (!ev.date && !ev.place)) continue;
       if (parents.length === 0) continue;
       const eid = ulid();
       outEvents.push({
         id: eid,
-        person_id: getId(parents[0]),
+        person_id: null,
         type: 'marriage',
         date: ev.date,
         place: ev.place,
         notes: ev.notes.trim(),
         sort_date: parseSortDate(ev.date),
       });
-      if (parents.length > 1) {
+      for (const xref of parents) {
         outParticipants.push({
           id: ulid(),
           event_id: eid,
-          person_id: getId(parents[1]),
+          person_id: getId(xref),
           role: 'spouse',
         });
       }
