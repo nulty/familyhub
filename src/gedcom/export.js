@@ -18,7 +18,7 @@ const EVENT_TYPE_TO_TAG = {
   other:          'EVEN',
 };
 
-export function exportGEDCOM({ people, relationships, events, sources, citations, citation_events, participants }) {
+export function exportGEDCOM({ people, relationships, events, sources, citations, citation_events, participants, person_names }) {
   const lines = [];
 
   const now = new Date();
@@ -156,11 +156,28 @@ export function exportGEDCOM({ people, relationships, events, sources, citations
   const personById = {};
   for (const p of people) personById[p.id] = p;
 
+  const namesByPerson = {};
+  for (const n of (person_names || [])) {
+    if (!namesByPerson[n.person_id]) namesByPerson[n.person_id] = [];
+    namesByPerson[n.person_id].push(n);
+  }
+
+  const GEDCOM_NAME_TYPE = { birth: 'birth', married: 'married', nickname: 'aka', legal: 'immigrant', aka: 'aka' };
+
   for (const p of people) {
     lines.push(`0 @${p.id}@ INDI`);
     lines.push(`1 NAME ${p.given_name} /${p.surname}/`);
     if (p.given_name) lines.push(`2 GIVN ${p.given_name}`);
     if (p.surname)    lines.push(`2 SURN ${p.surname}`);
+
+    // Additional names
+    for (const n of (namesByPerson[p.id] || [])) {
+      lines.push(`1 NAME ${n.given_name} /${n.surname}/`);
+      if (n.given_name) lines.push(`2 GIVN ${n.given_name}`);
+      if (n.surname)    lines.push(`2 SURN ${n.surname}`);
+      if (n.type) lines.push(`2 TYPE ${GEDCOM_NAME_TYPE[n.type] || n.type}`);
+    }
+
     if (p.gender !== 'U') lines.push(`1 SEX ${p.gender}`);
 
     // Events

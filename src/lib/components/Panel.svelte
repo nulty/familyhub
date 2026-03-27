@@ -9,6 +9,7 @@
   let { personId } = $props();
 
   let person = $state(null);
+  let names = $state([]);
   let events = $state([]);
   let sharedEvents = $state([]);
   let participatingEvents = $state([]);
@@ -53,6 +54,7 @@
     const result = await people.getWithEvents(id);
     if (!result) { person = null; return; }
     person = result.person;
+    names = result.names || [];
     events = result.events;
     sharedEvents = result.sharedEvents || [];
     participatingEvents = result.participatingEvents;
@@ -123,6 +125,18 @@
     <div class="panel-vitals">
       {#if birth}<div>Born: <span>{birth.date || ''}{birth.place ? ' — ' + birth.place : ''}</span></div>{/if}
       {#if death}<div>Died: <span>{death.date || ''}{death.place ? ' — ' + death.place : ''}</span></div>{/if}
+    </div>
+  {/if}
+
+  {#if names.length > 0}
+    <div class="panel-names">
+      {#each names as n}
+        <div class="name-entry">
+          <span class="name-type">{n.type || 'name'}</span>
+          <span class="name-value">{[n.given_name, n.surname].filter(Boolean).join(' ')}</span>
+          {#if n.date}<span class="name-date">{n.date}</span>{/if}
+        </div>
+      {/each}
     </div>
   {/if}
 

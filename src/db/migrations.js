@@ -310,6 +310,25 @@ export const migrations = [
       }
     },
   },
+  {
+    version: 6,
+    description: 'Add person_names table for multiple names per person',
+    up(helpers) {
+      const { run } = helpers;
+      run(`CREATE TABLE IF NOT EXISTS person_names (
+        id TEXT PRIMARY KEY,
+        person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        given_name TEXT NOT NULL DEFAULT '',
+        surname TEXT NOT NULL DEFAULT '',
+        type TEXT NOT NULL DEFAULT '' CHECK(type IN ('','birth','married','nickname','legal','aka')),
+        date TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`);
+      run('CREATE INDEX IF NOT EXISTS idx_person_names_person ON person_names(person_id)');
+    },
+  },
 ];
 
 /**

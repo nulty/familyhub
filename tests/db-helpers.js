@@ -128,6 +128,15 @@ export function applyMigrationV5(helpers) {
   helpers.run("UPDATE meta SET value = '5' WHERE key = 'schema_version'");
 }
 
+/**
+ * Run migration v6 against a DB — delegates to shared migrations module.
+ */
+export function applyMigrationV6(helpers) {
+  const v6 = migrations.find(m => m.version === 6);
+  v6.up(helpers);
+  helpers.run("UPDATE meta SET value = '6' WHERE key = 'schema_version'");
+}
+
 function createBetterSqliteHelpers(db) {
   function all(sql, params = []) {
     return db.prepare(sql).all(...params);

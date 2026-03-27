@@ -140,3 +140,18 @@ CREATE TABLE IF NOT EXISTS places (
 CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id);
 CREATE INDEX IF NOT EXISTS idx_places_name   ON places(name);
 CREATE INDEX IF NOT EXISTS idx_places_type   ON places(type);
+
+CREATE TABLE IF NOT EXISTS person_names (
+  id          TEXT PRIMARY KEY,
+  person_id   TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  given_name  TEXT NOT NULL DEFAULT '',
+  surname     TEXT NOT NULL DEFAULT '',
+  type        TEXT NOT NULL DEFAULT ''
+    CHECK(type IN ('','birth','married','nickname','legal','aka')),
+  date        TEXT NOT NULL DEFAULT '',   -- when name was adopted (e.g. marriage date)
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_person_names_person ON person_names(person_id);

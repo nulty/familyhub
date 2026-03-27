@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setupV2TestDB, applyMigrationV3, applyMigrationV4 } from './db-helpers.js';
+import { setupV2TestDB, applyMigrationV3, applyMigrationV4, applyMigrationV5, applyMigrationV6 } from './db-helpers.js';
 import { createHandlers } from '../src/db/handlers.js';
 
 function insertOldSource(helpers, { id, event_id, title = '', url = '', accessed = '', notes = '' }) {
@@ -186,6 +186,8 @@ describe('Migration v3', () => {
 
     applyMigrationV3(helpers);
     applyMigrationV4(helpers);
+    applyMigrationV5(helpers);
+    applyMigrationV6(helpers);
 
     const handlers = createHandlers(helpers);
 

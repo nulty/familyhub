@@ -77,6 +77,23 @@ export const people = {
   },
 };
 
+// ─── Person Names ─────────────────────────────────────────────────────────────
+
+export const personNames = {
+  create(data) {
+    return call('createPersonName', { id: ulid(), ...data });
+  },
+  update(id, fields) {
+    return call('updatePersonName', id, fields);
+  },
+  delete(id) {
+    return call('deletePersonName', id);
+  },
+  list(personId) {
+    return call('listPersonNames', personId);
+  },
+};
+
 // ─── Relationships ────────────────────────────────────────────────────────────
 
 export const relationships = {

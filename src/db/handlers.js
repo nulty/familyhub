@@ -101,6 +101,38 @@ export function createHandlers(h, opts = {}) {
       );
     },
 
+    // ── Person Names ──────────────────────────────────────────────────────
+
+    createPersonName({ id, person_id, given_name = '', surname = '', type = '', date = '', sort_order = 0 }) {
+      const now = Date.now();
+      run(
+        `INSERT INTO person_names (id, person_id, given_name, surname, type, date, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, person_id, given_name, surname, type, date, sort_order, now, now]
+      );
+      return get('SELECT * FROM person_names WHERE id = ?', [id]);
+    },
+
+    updatePersonName(id, fields) {
+      const allowed = ['given_name', 'surname', 'type', 'date', 'sort_order'];
+      const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
+      if (updates.length === 0) return get('SELECT * FROM person_names WHERE id = ?', [id]);
+      const now = Date.now();
+      const setClauses = [...updates.map(([k]) => `${k} = ?`), 'updated_at = ?'].join(', ');
+      const values = [...updates.map(([, v]) => v), now, id];
+      run(`UPDATE person_names SET ${setClauses} WHERE id = ?`, values);
+      return get('SELECT * FROM person_names WHERE id = ?', [id]);
+    },
+
+    deletePersonName(id) {
+      run('DELETE FROM person_names WHERE id = ?', [id]);
+      return { ok: true };
+    },
+
+    listPersonNames(personId) {
+      return all('SELECT * FROM person_names WHERE person_id = ? ORDER BY sort_order, created_at', [personId]);
+    },
+
     getPersonWithEvents(id) {
       const person = get('SELECT * FROM people WHERE id = ?', [id]);
       if (!person) return null;
@@ -169,8 +201,9 @@ export function createHandlers(h, opts = {}) {
         delete ev.citations_json;
       }
 
+      const names = handlers.listPersonNames(id);
       const family = handlers.getFamily(id);
-      return { person, events: ownedEvents, sharedEvents, participatingEvents, ...family };
+      return { person, names, events: ownedEvents, sharedEvents, participatingEvents, ...family };
     },
 
     // ── Relationships ────────────────────────────────────────────────────────
@@ -729,9 +762,9 @@ export function createHandlers(h, opts = {}) {
 
     // ── Bulk import (for GEDCOM) ─────────────────────────────────────────────
 
-    bulkImport({ people, relationships, events, sources, repositories, citations, citation_events, participants, places }) {
+    bulkImport({ people, relationships, events, sources, repositories, citations, citation_events, participants, places, person_names }) {
       return transaction(() => {
-        let counts = { people: 0, relationships: 0, events: 0, repositories: 0, sources: 0, citations: 0, participants: 0, places: 0 };
+        let counts = { people: 0, relationships: 0, events: 0, repositories: 0, sources: 0, citations: 0, participants: 0, places: 0, person_names: 0 };
         const now = Date.now();
 
         for (const p of (people || [])) {
@@ -817,6 +850,15 @@ export function createHandlers(h, opts = {}) {
           counts.participants++;
         }
 
+        for (const n of (person_names || [])) {
+          run(
+            `INSERT OR REPLACE INTO person_names (id, person_id, given_name, surname, type, date, sort_order, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [n.id, n.person_id, n.given_name||'', n.surname||'', n.type||'', n.date||'', n.sort_order||0, now, now]
+          );
+          counts.person_names++;
+        }
+
         return counts;
       });
     },
@@ -834,12 +876,14 @@ export function createHandlers(h, opts = {}) {
         citation_events: all('SELECT * FROM citation_events ORDER BY citation_id'),
         participants:    all('SELECT * FROM event_participants ORDER BY event_id'),
         places:        all('SELECT * FROM places ORDER BY name'),
+        person_names:  all('SELECT * FROM person_names ORDER BY person_id, sort_order'),
       };
     },
 
     // ── Reset ────────────────────────────────────────────────────────────────
 
     resetDatabase() {
+      run('DROP TABLE IF EXISTS person_names');
       run('DROP TABLE IF EXISTS citation_events');
       run('DROP TABLE IF EXISTS citations');
       run('DROP TABLE IF EXISTS sources');

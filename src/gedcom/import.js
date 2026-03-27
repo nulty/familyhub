@@ -49,6 +49,7 @@ export function parseGEDCOM(text) {
           current = {
             _type: 'INDI', id: xref,
             name: '', given: '', surname: '', gender: 'U',
+            names: [], // { given, surname, type }
             notes: [], events: []
           };
           records[xref] = current;
@@ -76,16 +77,25 @@ export function parseGEDCOM(text) {
 
       if (current._type === 'INDI') {
         if (tag === 'NAME') {
-          current.name = val.replace(/\//g, '').trim();
+          let given = '', surn = '';
           const parts = val.match(/^([^/]*)\s*\/([^/]*)\//);
           if (parts) {
-            current.given   = parts[1].trim();
-            current.surname = parts[2].trim();
+            given = parts[1].trim();
+            surn = parts[2].trim();
           } else {
-            const words = current.name.split(' ');
-            current.surname = words.pop() || '';
-            current.given   = words.join(' ');
+            const nameStr = val.replace(/\//g, '').trim();
+            const words = nameStr.split(' ');
+            surn = words.pop() || '';
+            given = words.join(' ');
           }
+          // First NAME becomes the primary display name
+          if (!current.given && !current.surname) {
+            current.given = given;
+            current.surname = surn;
+            current.name = val.replace(/\//g, '').trim();
+          }
+          // All NAMEs collected — type parsed at level 2
+          current.names.push({ given, surname: surn, type: '' });
         } else if (tag === 'SEX') {
           current.gender = val === 'M' ? 'M' : val === 'F' ? 'F' : 'U';
         } else if (tag === 'NOTE') {
@@ -118,6 +128,19 @@ export function parseGEDCOM(text) {
           }
         } else if (currentEventBuf) {
           currentEventBuf.notes += (tag === 'CONT' ? '\n' : '') + val;
+        }
+      } else if (currentLevel1Tag === 'NAME' && current?._type === 'INDI' && current.names.length > 0) {
+        const lastNameRec = current.names[current.names.length - 1];
+        if (tag === 'TYPE') {
+          const typeMap = { birth: 'birth', married: 'married', immigrant: 'legal', maiden: 'birth', aka: 'aka' };
+          lastNameRec.type = typeMap[val.toLowerCase()] || val.toLowerCase();
+        } else if (tag === 'NICK') {
+          // Add nickname as a separate name entry
+          current.names.push({ given: val, surname: '', type: 'nickname' });
+        } else if (tag === 'GIVN') {
+          lastNameRec.given = val;
+        } else if (tag === 'SURN') {
+          lastNameRec.surname = val;
         }
       } else if (currentEventBuf) {
         if (tag === 'DATE') currentEventBuf.date = val;
@@ -177,6 +200,7 @@ export function parseGEDCOM(text) {
   // ── Build output ────────────────────────────────────────────────────────
 
   const outPeople = [];
+  const outPersonNames = [];
   const outRelationships = [];
   const outEvents = [];
   const outRepositories = [];
@@ -265,6 +289,34 @@ export function parseGEDCOM(text) {
       gender: rec.gender,
       notes: rec.notes.join('\n').trim(),
     });
+
+    // Additional names (skip the first one which is the primary display name)
+    for (let i = 1; i < rec.names.length; i++) {
+      const n = rec.names[i];
+      if (n.given || n.surname) {
+        outPersonNames.push({
+          id: ulid(),
+          person_id: pid,
+          given_name: n.given || '',
+          surname: n.surname || '',
+          type: n.type || '',
+          date: '',
+          sort_order: i,
+        });
+      }
+    }
+    // If the first name has a type, store it too (e.g. birth name when there are married names)
+    if (rec.names.length > 1 && rec.names[0].type) {
+      outPersonNames.unshift({
+        id: ulid(),
+        person_id: pid,
+        given_name: rec.names[0].given || '',
+        surname: rec.names[0].surname || '',
+        type: rec.names[0].type,
+        date: '',
+        sort_order: 0,
+      });
+    }
 
     for (const ev of rec.events) {
       if (!ev.date && !ev.place) continue;
@@ -393,6 +445,7 @@ export function parseGEDCOM(text) {
   return {
     data: {
       people: outPeople,
+      person_names: outPersonNames,
       relationships: outRelationships,
       events: outEvents,
       repositories: outRepositories,
@@ -404,6 +457,7 @@ export function parseGEDCOM(text) {
     warnings,
     stats: {
       people: outPeople.length,
+      person_names: outPersonNames.length,
       relationships: outRelationships.length,
       events: outEvents.length,
       repositories: outRepositories.length,

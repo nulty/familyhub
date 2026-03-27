@@ -78,6 +78,7 @@ async function initDB() {
   };
 
   handlers.nukeDatabase = async () => {
+    helpers.run('DROP TABLE IF EXISTS person_names');
     helpers.run('DROP TABLE IF EXISTS citation_events');
     helpers.run('DROP TABLE IF EXISTS citations');
     helpers.run('DROP TABLE IF EXISTS sources');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setupV4TestDB, applyMigrationV5 } from './db-helpers.js';
+import { setupV4TestDB, applyMigrationV5, applyMigrationV6 } from './db-helpers.js';
 import { createHandlers } from '../src/db/handlers.js';
 
 function insertPerson(helpers, id, name = 'Test') {
@@ -104,6 +104,7 @@ describe('Migration v5', () => {
     insertParticipant(helpers, 'EP1', 'E1', 'P2', 'spouse');
 
     applyMigrationV5(helpers);
+    applyMigrationV6(helpers);
     const h = createHandlers(helpers);
 
     // Both people should see the shared event
