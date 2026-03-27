@@ -11,6 +11,7 @@
   import { getStack } from '../shared/modal-stack.svelte.js';
   import Search from './Search.svelte';
   import Panel from './Panel.svelte';
+  import Wizard from './Wizard.svelte';
   import Toast from '../shared/Toast.svelte';
 
   let hasData = $state(false);
@@ -18,6 +19,7 @@
   let dataVersion = $state(0);
   let menuOpen = $state(false);
   let uploadStatus = $state(null);
+  let wizardMode = $state(false);
   let migrationPrompt = $state(null);
   let migrationFromUpload = $state(false);
 
@@ -145,6 +147,19 @@
     input.click();
   }
 
+  function startWizard() {
+    wizardMode = true;
+    // Ensure panel is open so wizard is visible
+    if (!selectedPersonId) {
+      const rootId = getConfig('rootPerson') || getConfig('lastFocusedPerson');
+      if (rootId) selectedPersonId = rootId;
+    }
+  }
+
+  function closeWizard() {
+    wizardMode = false;
+  }
+
   function menuAction(fn) {
     fn();
     menuOpen = false;
@@ -186,6 +201,7 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div class="menu-backdrop" onclick={() => menuOpen = false} onkeydown={handleMenuKeydown}></div>
           <div class="menu-dropdown">
+            <button class="menu-item" onclick={() => menuAction(startWizard)}>Data Entry Wizard</button>
             <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
             <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
             <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
@@ -203,7 +219,7 @@
     </div>
   </header>
 
-  <div id="main" class:has-panel={selectedPersonId}>
+  <div id="main" class:has-panel={selectedPersonId || wizardMode}>
     {#if hasData}
       <div id="chart-container">
         <div id="FamilyChart" class="f3"></div>
@@ -222,7 +238,9 @@
 
     <aside id="panel">
       <div id="panel-content">
-        {#if selectedPersonId}
+        {#if wizardMode}
+          <Wizard startPersonId={selectedPersonId || getConfig('rootPerson')} onclose={closeWizard} />
+        {:else if selectedPersonId}
           {#key `${selectedPersonId}-${dataVersion}`}
             <Panel personId={selectedPersonId} />
           {/key}

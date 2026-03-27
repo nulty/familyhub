@@ -569,6 +569,56 @@ a:hover { text-decoration: underline; }
 .name-row select { width: auto; }
 .name-row input { flex: 1; min-width: 80px; }
 
+/* ─── Wizard ──────────────────────────────────────────────────────────── */
+
+.wizard-panel {
+  padding: 16px;
+}
+.wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.wizard-header h3 { margin: 0; font-size: 16px; }
+.wizard-progress {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.wizard-total { font-size: 11px; }
+.wizard-person h4 { margin: 0 0 12px; }
+.wizard-issues { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.wizard-issue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #f9f9f9;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.wizard-issue-icon { font-size: 14px; color: var(--text-muted); }
+.wizard-issue-label { flex: 1; }
+.wizard-issue-done { color: var(--accent); }
+.wizard-issue-done .wizard-issue-icon { color: var(--accent); }
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wizard-loading, .wizard-complete {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+.wizard-complete h4 { color: var(--text); margin-bottom: 8px; }
+.wizard-stats { font-size: 12px; margin-bottom: 12px; }
+
 .spouse-suggestions {
   display: flex;
   gap: 6px;
