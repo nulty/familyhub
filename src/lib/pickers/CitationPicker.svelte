@@ -44,7 +44,8 @@
     const parts = [];
     if (c.source_title) parts.push(c.source_title);
     if (c.detail) parts.push(c.detail);
-    if (c.url && !c.source_title?.includes(c.url)) parts.push(c.url);
+    if (c.event_summary) parts.push(c.event_summary);
+    else if (c.url && !c.source_title?.includes(c.url)) parts.push(c.url);
     return parts.join(' — ') || '(untitled citation)';
   }
 </script>

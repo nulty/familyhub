@@ -180,9 +180,11 @@ export function exportGEDCOM({ people, relationships, events, sources, citations
 
     if (p.gender !== 'U') lines.push(`1 SEX ${p.gender}`);
 
-    // Events
-    const personEvents = (eventsByPerson[p.id] || [])
-      .filter(e => e.type !== 'marriage'); // marriages go on FAM records
+    // Events — owned events (excluding marriages, which go on FAM records)
+    // Plus shared non-marriage events (census etc.) where this person is a participant
+    const ownedEvents = (eventsByPerson[p.id] || []).filter(e => e.type !== 'marriage');
+    const sharedNonMarriage = (sharedEventsByPerson[p.id] || []).filter(e => e.type !== 'marriage');
+    const personEvents = [...ownedEvents, ...sharedNonMarriage];
 
     for (const ev of personEvents) {
       const tag = EVENT_TYPE_TO_TAG[ev.type] || 'EVEN';

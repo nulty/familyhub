@@ -71,7 +71,7 @@
     <div class="picker-results" style="display: block">
       {#each results as p}
         <div class="picker-result" onclick={() => select(p)}>
-          {[p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed'}
+          {[p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed'}{p.birth_year ? ` (b. ${p.birth_year})` : ''}
         </div>
       {/each}
       <div class="picker-create" onclick={handleCreate}>+ Create new person...</div>

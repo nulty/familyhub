@@ -16,7 +16,8 @@
 
   const PARTICIPANT_ROLES = [
     'father', 'mother', 'witness', 'godfather', 'godmother',
-    'informant', 'spouse', 'other',
+    'informant', 'spouse', 'head', 'wife', 'son', 'daughter',
+    'boarder', 'servant', 'visitor', 'resident', 'other',
   ];
 
   const CONFIDENCE_OPTIONS = [
@@ -47,7 +48,9 @@
   // Participants
   let participantEntries = $state([]);
 
-  // Marriage-specific
+  // Shared event types (no single owner, all people are participants)
+  const SHARED_EVENT_TYPES = ['marriage', 'census'];
+  let isShared = $derived(SHARED_EVENT_TYPES.includes(type));
   let isMarriage = $derived(type === 'marriage');
   let spouse = $state(null); // { id, given_name, surname }
   let knownPartners = $state([]);
@@ -257,6 +260,15 @@
 
     try {
       if (isEdit) {
+        // If type changed to/from shared, update person_id accordingly
+        if (isShared) {
+          data.person_id = null;
+          // Ensure current person is a participant
+          const existingAsParticipant = participantEntries.some(p => p.person_id === personId && !p.removed);
+          if (personId && !existingAsParticipant) {
+            await events.addParticipant(eventId, personId, isMarriage ? 'spouse' : 'resident');
+          }
+        }
         await events.update(eventId, data);
         for (const c of citationEntries) {
           if (c.deleted && c.id && c.existing) {
@@ -286,15 +298,21 @@
         emit(DATA_CHANGED);
         showToast('Event updated');
       } else {
-        // Marriage: shared event (no owner), both spouses as participants
-        const ownerPersonId = isMarriage ? null : personId;
+        // Shared events (marriage, census): no owner, all people are participants
+        const ownerPersonId = isShared ? null : personId;
         const created = await events.create(ownerPersonId, data);
 
-        if (isMarriage) {
-          // Add current person and spouse as participants
-          await events.addParticipant(created.id, personId, 'spouse');
-          if (spouse) {
+        if (isShared) {
+          // Add current person as participant
+          await events.addParticipant(created.id, personId, isMarriage ? 'spouse' : 'resident');
+          if (isMarriage && spouse) {
             await events.addParticipant(created.id, spouse.id, 'spouse');
+          }
+          // Add generic participants (for census household members etc.)
+          for (const p of participantEntries) {
+            if (!p.removed) {
+              await events.addParticipant(created.id, p.person_id, p.role);
+            }
           }
         }
 
@@ -307,7 +325,7 @@
           }
         }
 
-        if (!isMarriage) {
+        if (!isShared) {
           for (const p of participantEntries) {
             if (!p.removed) {
               await events.addParticipant(created.id, p.person_id, p.role);
@@ -394,35 +412,35 @@
           />
         {/if}
       </div>
-    {:else}
-      <!-- Participants -->
-      <div class="form-group">
-        <label>Participants</label>
-        <div>
-          {#each participantEntries as entry, idx}
-            {#if !entry.removed}
-              <div class="participant-row">
-                <span class="participant-name">{[entry.given_name, entry.surname].filter(Boolean).join(' ') || 'Unnamed'}</span>
-                <select class="participant-role" value={entry.role} onchange={(e) => updateParticipantRole(idx, e.target.value)}>
-                  {#each PARTICIPANT_ROLES as r}
-                    <option value={r}>{capitalize(r)}</option>
-                  {/each}
-                </select>
-                <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={() => removeParticipant(idx)}>Remove</button>
-              </div>
-            {/if}
-          {/each}
-          {#if participantEntries.filter(e => !e.removed).length === 0}
-            <div class="section-empty" style="margin:4px 0">No participants</div>
-          {/if}
-        </div>
-        <PersonPicker
-          onselect={handleParticipantSelect}
-          excludeIds={[personId]}
-          oncreate={handleParticipantCreate}
-        />
-      </div>
     {/if}
+
+    <!-- Participants (shown for all event types) -->
+    <div class="form-group">
+      <label>{isMarriage ? 'Other Participants' : isShared ? 'Household Members' : 'Participants'}</label>
+      <div>
+        {#each participantEntries as entry, idx}
+          {#if !entry.removed}
+            <div class="participant-row">
+              <span class="participant-name">{[entry.given_name, entry.surname].filter(Boolean).join(' ') || 'Unnamed'}</span>
+              <select class="participant-role" value={entry.role} onchange={(e) => updateParticipantRole(idx, e.target.value)}>
+                {#each PARTICIPANT_ROLES as r}
+                  <option value={r}>{capitalize(r)}</option>
+                {/each}
+              </select>
+              <button type="button" class="btn-link btn-sm" style="color:var(--danger)" onclick={() => removeParticipant(idx)}>Remove</button>
+            </div>
+          {/if}
+        {/each}
+        {#if participantEntries.filter(e => !e.removed).length === 0}
+          <div class="section-empty" style="margin:4px 0">{isShared ? 'No household members added' : 'No participants'}</div>
+        {/if}
+      </div>
+      <PersonPicker
+        onselect={handleParticipantSelect}
+        excludeIds={[personId, ...(spouse ? [spouse.id] : [])]}
+        oncreate={handleParticipantCreate}
+      />
+    </div>
 
     <!-- Citations -->
     <div class="form-group">

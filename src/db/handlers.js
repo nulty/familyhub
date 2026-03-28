@@ -89,14 +89,15 @@ export function createHandlers(h, opts = {}) {
     },
 
     searchPeople(query) {
+      const birthYearSub = `(SELECT SUBSTR(e.date, -4) FROM events e WHERE e.person_id = p.id AND e.type = 'birth' LIMIT 1)`;
       if (!query || query.trim() === '') {
-        return all('SELECT * FROM people ORDER BY surname, given_name LIMIT 100');
+        return all(`SELECT p.*, ${birthYearSub} AS birth_year FROM people p ORDER BY p.surname, p.given_name LIMIT 100`);
       }
       const q = `%${query}%`;
       return all(
-        `SELECT * FROM people
-         WHERE given_name LIKE ? OR surname LIKE ? OR (given_name || ' ' || surname) LIKE ?
-         ORDER BY surname, given_name LIMIT 50`,
+        `SELECT p.*, ${birthYearSub} AS birth_year FROM people p
+         WHERE p.given_name LIKE ? OR p.surname LIKE ? OR (p.given_name || ' ' || p.surname) LIKE ?
+         ORDER BY p.surname, p.given_name LIMIT 50`,
         [q, q, q]
       );
     },
@@ -273,7 +274,7 @@ export function createHandlers(h, opts = {}) {
     },
 
     updateEvent(id, fields) {
-      const allowed = ['type', 'date', 'place', 'place_id', 'notes', 'sort_date'];
+      const allowed = ['type', 'date', 'place', 'place_id', 'notes', 'sort_date', 'person_id'];
       const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
       if (updates.length === 0) return get('SELECT * FROM events WHERE id = ?', [id]);
       const now = Date.now();
@@ -510,7 +511,16 @@ export function createHandlers(h, opts = {}) {
       const q = `%${query.trim()}%`;
       return all(
         `SELECT DISTINCT c.*, s.title AS source_title, s.url AS source_url,
-                r.name AS repository_name
+                r.name AS repository_name,
+                (SELECT GROUP_CONCAT(
+                  e2.type || CASE WHEN e2.date != '' THEN ' (' || e2.date || ')' ELSE '' END
+                  || CASE WHEN p3.given_name IS NOT NULL THEN ' — ' || p3.given_name || ' ' || p3.surname ELSE '' END
+                , '; ')
+                 FROM citation_events ce2
+                 JOIN events e2 ON e2.id = ce2.event_id
+                 LEFT JOIN people p3 ON p3.id = e2.person_id
+                 WHERE ce2.citation_id = c.id
+                ) AS event_summary
          FROM citations c
          JOIN sources s ON s.id = c.source_id
          LEFT JOIN repositories r ON r.id = s.repository_id
