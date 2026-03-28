@@ -192,6 +192,7 @@
                     {:else}
                       {c.source_title}{c.detail ? `, ${c.detail}` : ''}
                     {/if}
+                    {#if ev.type === 'occupation' && ev.place}<span class="citation-place">{ev.place}</span>{/if}
                     {#if c.repository_name}<span class="citation-repo">({c.repository_name})</span>{/if}
                   </div>
                 {/each}

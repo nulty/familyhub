@@ -472,7 +472,10 @@
                 <div class="citation-details-row">
                   <input type="text" placeholder="Detail (page, entry, volume...)" value={c.detail} oninput={(e) => updateCitation(idx, 'detail', e.target.value)}>
                   <input type="text" placeholder="Direct URL to record" value={c.url} oninput={(e) => updateCitation(idx, 'url', e.target.value)}>
-                  <input type="text" placeholder="Date accessed" value={c.accessed} oninput={(e) => updateCitation(idx, 'accessed', e.target.value)}>
+                  <div class="accessed-field">
+                    <input type="text" placeholder="Date accessed" value={c.accessed} oninput={(e) => updateCitation(idx, 'accessed', e.target.value)}>
+                    <button type="button" class="btn btn-sm" onclick={() => updateCitation(idx, 'accessed', new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}>Today</button>
+                  </div>
                   <select value={c.confidence} onchange={(e) => updateCitation(idx, 'confidence', e.target.value)}>
                     {#each CONFIDENCE_OPTIONS as o}
                       <option value={o.value}>{o.label}</option>

@@ -135,7 +135,10 @@
     </div>
     <div class="form-group">
       <label for="cf-accessed">Date Accessed</label>
-      <input id="cf-accessed" type="text" bind:value={accessed} placeholder="e.g. 2025-03-25" autocomplete="off">
+      <div class="accessed-field">
+        <input id="cf-accessed" type="text" bind:value={accessed} placeholder="e.g. 2025-03-25" autocomplete="off">
+        <button type="button" class="btn btn-sm" onclick={() => accessed = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}>Today</button>
+      </div>
     </div>
     <div class="form-group">
       <label for="cf-confidence">Confidence</label>

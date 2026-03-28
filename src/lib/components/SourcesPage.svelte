@@ -54,8 +54,9 @@
     onclose?.();
   }
 
-  function formatName(p) {
-    return [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed';
+  function formatName(c) {
+    if (c.participant_names) return c.participant_names;
+    return [c.given_name, c.surname].filter(Boolean).join(' ') || 'Unnamed';
   }
 </script>
 

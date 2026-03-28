@@ -1143,6 +1143,13 @@ a:hover { text-decoration: underline; }
 
 .citation-details-row select { width: auto; }
 
+.accessed-field {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.accessed-field input { flex: 1; }
+
 .citation-details-actions {
   display: flex;
   justify-content: flex-end;
@@ -1164,6 +1171,11 @@ a:hover { text-decoration: underline; }
   gap: 8px;
 }
 
+.citation-place {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 4px;
+}
 .citation-repo {
   color: var(--text-muted);
   font-size: 11px;

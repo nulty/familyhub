@@ -510,10 +510,11 @@ export function createHandlers(h, opts = {}) {
       if (!query || !query.trim()) return [];
       const q = `%${query.trim()}%`;
       return all(
-        `SELECT DISTINCT c.*, s.title AS source_title, s.url AS source_url,
+        `SELECT c.*, s.title AS source_title, s.url AS source_url,
                 r.name AS repository_name,
                 (SELECT GROUP_CONCAT(
                   e2.type || CASE WHEN e2.date != '' THEN ' (' || e2.date || ')' ELSE '' END
+                  || CASE WHEN e2.place != '' THEN ' ' || e2.place ELSE '' END
                   || CASE WHEN p3.given_name IS NOT NULL THEN ' — ' || p3.given_name || ' ' || p3.surname ELSE '' END
                 , '; ')
                  FROM citation_events ce2
@@ -524,17 +525,29 @@ export function createHandlers(h, opts = {}) {
          FROM citations c
          JOIN sources s ON s.id = c.source_id
          LEFT JOIN repositories r ON r.id = s.repository_id
-         LEFT JOIN citation_events ce ON ce.citation_id = c.id
-         LEFT JOIN events e ON e.id = ce.event_id
-         LEFT JOIN people p ON p.id = e.person_id
-         LEFT JOIN event_participants ep2 ON ep2.event_id = e.id
-         LEFT JOIN people p2 ON p2.id = ep2.person_id
-         WHERE s.title LIKE ? OR c.detail LIKE ? OR c.url LIKE ?
-            OR p.given_name LIKE ? OR p.surname LIKE ?
-            OR p2.given_name LIKE ? OR p2.surname LIKE ?
+         WHERE c.id IN (
+           SELECT c2.id FROM citations c2
+           JOIN sources s2 ON s2.id = c2.source_id
+           WHERE s2.title LIKE ? OR c2.detail LIKE ? OR c2.url LIKE ?
+           UNION
+           SELECT ce3.citation_id FROM citation_events ce3
+           JOIN events e3 ON e3.id = ce3.event_id
+           WHERE e3.place LIKE ?
+           UNION
+           SELECT ce4.citation_id FROM citation_events ce4
+           JOIN events e4 ON e4.id = ce4.event_id
+           LEFT JOIN people p4 ON p4.id = e4.person_id
+           WHERE p4.given_name LIKE ? OR p4.surname LIKE ?
+           UNION
+           SELECT ce5.citation_id FROM citation_events ce5
+           JOIN events e5 ON e5.id = ce5.event_id
+           JOIN event_participants ep5 ON ep5.event_id = e5.id
+           JOIN people p5 ON p5.id = ep5.person_id
+           WHERE p5.given_name LIKE ? OR p5.surname LIKE ?
+         )
          ORDER BY c.created_at DESC
          LIMIT 20`,
-        [q, q, q, q, q, q, q]
+        [q, q, q, q, q, q, q, q]
       );
     },
 
@@ -555,10 +568,18 @@ export function createHandlers(h, opts = {}) {
     listCitationsForSource(sourceId) {
       return all(
         `SELECT c.*, e.type AS event_type, e.date AS event_date, e.place AS event_place,
-                e.person_id, COALESCE(p.given_name, '') AS given_name, COALESCE(p.surname, '') AS surname
+                e.person_id,
+                CASE WHEN e.person_id IS NOT NULL THEN COALESCE(p.given_name, '') ELSE '' END AS given_name,
+                CASE WHEN e.person_id IS NOT NULL THEN COALESCE(p.surname, '') ELSE '' END AS surname,
+                CASE WHEN e.person_id IS NULL THEN
+                  (SELECT GROUP_CONCAT(p2.given_name || ' ' || p2.surname, ', ')
+                   FROM event_participants ep2
+                   JOIN people p2 ON p2.id = ep2.person_id
+                   WHERE ep2.event_id = e.id)
+                ELSE NULL END AS participant_names
          FROM citations c
-         JOIN citation_events ce ON ce.citation_id = c.id
-         JOIN events e ON e.id = ce.event_id
+         LEFT JOIN citation_events ce ON ce.citation_id = c.id
+         LEFT JOIN events e ON e.id = ce.event_id
          LEFT JOIN people p ON p.id = e.person_id
          WHERE c.source_id = ?
          ORDER BY c.created_at`,
