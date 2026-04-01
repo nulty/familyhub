@@ -132,6 +132,21 @@ describe('Relationships', () => {
     expect(parentFamily.children).toHaveLength(1);
     expect(parentFamily.partners).toHaveLength(1);
   });
+
+  it('getFamily returns birth_year, death_year, and other_parent_id for children', () => {
+    h.addPartner('R1', 'P1', 'P2');
+    h.addParentChild('R2', 'P1', 'P3');
+    h.addParentChild('R3', 'P2', 'P3');
+    h.createEvent({ id: 'E1', person_id: 'P2', type: 'birth', date: '1895' });
+    h.createEvent({ id: 'E2', person_id: 'P2', type: 'death', date: '1960' });
+    h.createEvent({ id: 'E3', person_id: 'P3', type: 'birth', date: '1921' });
+
+    const family = h.getFamily('P1');
+    expect(family.partners[0].birth_year).toBe('1895');
+    expect(family.partners[0].death_year).toBe('1960');
+    expect(family.children[0].birth_year).toBe('1921');
+    expect(family.children[0].other_parent_id).toBe('P2');
+  });
 });
 
 // ─── Events ───────────────────────────────────────────────────────────────────

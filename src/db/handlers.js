@@ -258,20 +258,29 @@ export function createHandlers(h, opts = {}) {
     },
 
     getFamily(personId) {
+      const birthYearSub = `(SELECT SUBSTR(e.date, -4) FROM events e WHERE e.person_id = p.id AND e.type = 'birth' LIMIT 1)`;
+      const deathYearSub = `(SELECT SUBSTR(e.date, -4) FROM events e WHERE e.person_id = p.id AND e.type = 'death' LIMIT 1)`;
+
       const parents = all(
-        `SELECT p.*, r.id as rel_id FROM people p
+        `SELECT p.*, r.id as rel_id, ${birthYearSub} AS birth_year, ${deathYearSub} AS death_year
+         FROM people p
          JOIN relationships r ON r.person_a_id = p.id
          WHERE r.person_b_id = ? AND r.type = 'parent_child'`,
         [personId]
       );
       const children = all(
-        `SELECT p.*, r.id as rel_id FROM people p
+        `SELECT p.*, r.id as rel_id, ${birthYearSub} AS birth_year, ${deathYearSub} AS death_year,
+          (SELECT r2.person_a_id FROM relationships r2
+           WHERE r2.person_b_id = p.id AND r2.type = 'parent_child' AND r2.person_a_id != ?
+           LIMIT 1) AS other_parent_id
+         FROM people p
          JOIN relationships r ON r.person_b_id = p.id
          WHERE r.person_a_id = ? AND r.type = 'parent_child'`,
-        [personId]
+        [personId, personId]
       );
       const partners = all(
-        `SELECT p.*, r.id as rel_id FROM people p
+        `SELECT p.*, r.id as rel_id, ${birthYearSub} AS birth_year, ${deathYearSub} AS death_year
+         FROM people p
          JOIN relationships r ON (r.person_a_id = ? AND r.person_b_id = p.id)
                               OR (r.person_b_id = ? AND r.person_a_id = p.id)
          WHERE r.type = 'partner'`,
