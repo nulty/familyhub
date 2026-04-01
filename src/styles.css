@@ -1143,6 +1143,15 @@ a:hover { text-decoration: underline; }
 
 .citation-details-row select { width: auto; }
 
+.selected-place-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.selected-place-name {
+  font-size: 14px;
+}
+
 .accessed-field {
   display: flex;
   gap: 4px;

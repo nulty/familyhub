@@ -5,6 +5,7 @@
   import { openPlaceForm, openPersonForm, openSourceForm } from '../shared/open.js';
   import Modal from './Modal.svelte';
   import PersonPicker from '../pickers/PersonPicker.svelte';
+  import PlacePicker from '../pickers/PlacePicker.svelte';
   import SourcePicker from '../pickers/SourcePicker.svelte';
   import CitationPicker from '../pickers/CitationPicker.svelte';
 
@@ -37,13 +38,9 @@
   let date = $state('');
   let placeText = $state('');
   let selectedPlaceId = $state(null);
-  let placeSuggestions = $state([]);
-  let placeOpen = $state(false);
   let eventNotes = $state('');
   let isEdit = $state(false);
   let title = $state('New Event');
-  let placeTimer = null;
-  let placeInputEl;
 
   // Participants
   let participantEntries = $state([]);
@@ -112,37 +109,23 @@
     }
   });
 
-  // Place autocomplete
-  function handlePlaceInput(e) {
-    placeText = e.target.value;
-    selectedPlaceId = null;
-    clearTimeout(placeTimer);
-    if (!placeText.trim()) { placeSuggestions = []; placeOpen = false; return; }
-    placeTimer = setTimeout(async () => {
-      placeSuggestions = await places.search(placeText.trim());
-      placeOpen = true;
-    }, 200);
-  }
-
+  // Place picker
   function selectPlace(p) {
     placeText = p.full_name || p.name;
     selectedPlaceId = p.id;
-    placeOpen = false;
+  }
+
+  function clearPlace() {
+    placeText = '';
+    selectedPlaceId = null;
   }
 
   function handleNewPlace() {
     openPlaceForm(null, async (newPlace) => {
-      placeText = newPlace.name;
       selectedPlaceId = newPlace.id;
       const h = await places.hierarchy(newPlace.id);
-      if (h.length > 0) placeText = h.map(p => p.name).reverse().join(', ');
+      placeText = h.length > 0 ? h.map(p => p.name).reverse().join(', ') : newPlace.name;
     });
-  }
-
-  function handlePlaceClickOutside(e) {
-    if (placeInputEl && !placeInputEl.parentElement.contains(e.target)) {
-      placeOpen = false;
-    }
   }
 
   // Participants
@@ -343,7 +326,6 @@
   }
 </script>
 
-<svelte:document onclick={handlePlaceClickOutside} />
 
 <Modal {title} onclose={onclose}>
   <form onsubmit={handleSubmit}>
@@ -360,26 +342,19 @@
       <input id="ef-date" type="text" bind:value={date} placeholder="e.g. 3 SEP 1913, ABT 1890" autocomplete="off">
       <span class="form-hint">Free text — e.g. "1901", "BET 1889 AND 1890", "ABT MAR 1920"</span>
     </div>
-    <div class="form-group" style="position:relative">
-      <label for="ef-place">Place</label>
-      <input
-        bind:this={placeInputEl}
-        id="ef-place"
-        type="text"
-        value={placeText}
-        oninput={handlePlaceInput}
-        autocomplete="off"
-      >
-      {#if placeOpen && placeSuggestions.length > 0}
-        <div class="place-suggestions" style="display:block">
-          {#each placeSuggestions as p}
-            <div class="place-suggestion" onclick={() => selectPlace(p)}>
-              {(p.full_name || p.name) + (p.type ? ` (${p.type})` : '')}
-            </div>
-          {/each}
+    <div class="form-group">
+      <label>Place</label>
+      {#if selectedPlaceId}
+        <div class="selected-place-row">
+          <span class="selected-place-name">{placeText}</span>
+          <button type="button" class="btn-link btn-sm" onclick={clearPlace}>change</button>
         </div>
+      {:else}
+        <PlacePicker
+          onselect={selectPlace}
+          oncreate={handleNewPlace}
+        />
       {/if}
-      <button type="button" class="btn btn-sm btn-link" onclick={handleNewPlace}>+ New place</button>
     </div>
     <div class="form-group">
       <label for="ef-notes">Notes</label>

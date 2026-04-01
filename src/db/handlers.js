@@ -48,6 +48,25 @@ export function createWasmHelpers(db) {
 export function createHandlers(h, opts = {}) {
   const { all, get, run, transaction } = h;
 
+  // Resolve place_id to full hierarchical name, falling back to raw place text
+  function resolvePlaceName(ev) {
+    if (!ev.place_id) return ev.place || '';
+    const parts = [];
+    let current = get('SELECT * FROM places WHERE id = ?', [ev.place_id]);
+    while (current) {
+      parts.push(current.name);
+      current = current.parent_id ? get('SELECT * FROM places WHERE id = ?', [current.parent_id]) : null;
+    }
+    return parts.join(', ') || ev.place || '';
+  }
+
+  function enrichEventPlaces(events) {
+    for (const ev of events) {
+      ev.place = resolvePlaceName(ev);
+    }
+    return events;
+  }
+
   function extractYear(dateStr) {
     if (!dateStr) return '';
     const m = dateStr.match(/\b(\d{4})\b/);
@@ -202,6 +221,10 @@ export function createHandlers(h, opts = {}) {
         delete ev.citations_json;
       }
 
+      enrichEventPlaces(ownedEvents);
+      enrichEventPlaces(sharedEvents);
+      enrichEventPlaces(participatingEvents);
+
       const names = handlers.listPersonNames(id);
       const family = handlers.getFamily(id);
       return { person, names, events: ownedEvents, sharedEvents, participatingEvents, ...family };
@@ -290,10 +313,10 @@ export function createHandlers(h, opts = {}) {
     },
 
     listEvents(personId) {
-      return all(
+      return enrichEventPlaces(all(
         'SELECT * FROM events WHERE person_id = ? ORDER BY COALESCE(sort_date, 9999999999999)',
         [personId]
-      );
+      ));
     },
 
     addParticipant({ id, event_id, person_id, role = 'witness' }) {
@@ -312,7 +335,7 @@ export function createHandlers(h, opts = {}) {
     },
 
     getEventsForParticipant(personId) {
-      return all(
+      return enrichEventPlaces(all(
         `SELECT e.*, ep.role,
           COALESCE(p.given_name || ' ' || p.surname, '') AS owner_name,
           e.person_id AS owner_id
@@ -322,7 +345,7 @@ export function createHandlers(h, opts = {}) {
          WHERE ep.person_id = ?
          ORDER BY COALESCE(e.sort_date, 9999999999999)`,
         [personId]
-      );
+      ));
     },
 
     getParticipantsForEvent(eventId) {
@@ -566,8 +589,8 @@ export function createHandlers(h, opts = {}) {
     },
 
     listCitationsForSource(sourceId) {
-      return all(
-        `SELECT c.*, e.type AS event_type, e.date AS event_date, e.place AS event_place,
+      const rows = all(
+        `SELECT c.*, e.type AS event_type, e.date AS event_date, e.place AS event_place, e.place_id AS event_place_id,
                 e.person_id,
                 CASE WHEN e.person_id IS NOT NULL THEN COALESCE(p.given_name, '') ELSE '' END AS given_name,
                 CASE WHEN e.person_id IS NOT NULL THEN COALESCE(p.surname, '') ELSE '' END AS surname,
@@ -585,6 +608,10 @@ export function createHandlers(h, opts = {}) {
          ORDER BY c.created_at`,
         [sourceId]
       );
+      for (const r of rows) {
+        if (r.event_place_id) r.event_place = resolvePlaceName({ place_id: r.event_place_id, place: r.event_place });
+      }
+      return rows;
     },
 
     // ── Places ──────────────────────────────────────────────────────────────
@@ -682,14 +709,14 @@ export function createHandlers(h, opts = {}) {
     },
 
     getEventsByPlace(placeId) {
-      return all(
+      return enrichEventPlaces(all(
         `SELECT e.*, COALESCE(p.given_name, '') AS given_name, COALESCE(p.surname, '') AS surname, e.person_id
          FROM events e
          LEFT JOIN people p ON p.id = e.person_id
          WHERE e.place_id = ?
          ORDER BY COALESCE(e.sort_date, 9999999999999)`,
         [placeId]
-      );
+      ));
     },
 
     getPlaceChildren(parentId) {
@@ -744,10 +771,16 @@ export function createHandlers(h, opts = {}) {
     getGraphData() {
       const people = all(`SELECT p.*,
           (SELECT e.date FROM events e WHERE e.person_id = p.id AND e.type = 'birth' LIMIT 1) AS birth_date,
+          (SELECT e.place_id FROM events e WHERE e.person_id = p.id AND e.type = 'birth' LIMIT 1) AS birth_place_id,
           (SELECT e.place FROM events e WHERE e.person_id = p.id AND e.type = 'birth' LIMIT 1) AS birth_place,
           (SELECT e.date FROM events e WHERE e.person_id = p.id AND e.type = 'death' LIMIT 1) AS death_date,
+          (SELECT e.place_id FROM events e WHERE e.person_id = p.id AND e.type = 'death' LIMIT 1) AS death_place_id,
           (SELECT e.place FROM events e WHERE e.person_id = p.id AND e.type = 'death' LIMIT 1) AS death_place
         FROM people p ORDER BY p.surname, p.given_name`);
+      for (const p of people) {
+        if (p.birth_place_id) p.birth_place = resolvePlaceName({ place_id: p.birth_place_id, place: p.birth_place });
+        if (p.death_place_id) p.death_place = resolvePlaceName({ place_id: p.death_place_id, place: p.death_place });
+      }
       const relationships = all('SELECT * FROM relationships');
 
       const nodeMap = {};
