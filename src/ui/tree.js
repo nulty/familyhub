@@ -122,6 +122,11 @@ export async function initTree(initialFocusId) {
 
   applyCardDisplay(cfg);
   chart.setTransitionTime(1000);
+
+  // Set zoom limits
+  const svg = cont.querySelector('.main_svg');
+  const listener = svg?.__zoomObj ? svg : svg?.parentNode;
+  if (listener?.__zoomObj) listener.__zoomObj.scaleExtent([0.05, 5]);
 }
 
 /**
