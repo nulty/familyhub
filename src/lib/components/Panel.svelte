@@ -163,6 +163,12 @@
     </div>
   </div>
 
+  {#if editing}
+    <div style="padding: 4px 20px 0">
+      <button class="btn btn-sm btn-link" onclick={() => openPersonForm(person.id)}>Edit Person</button>
+    </div>
+  {/if}
+
   {#if names.length > 0 || editing}
     <div class="panel-alt-names">
       {#each names as n}
@@ -314,9 +320,6 @@
         <div style="white-space:pre-wrap">{@html linkify(person.notes)}</div>
       {:else}
         <div class="section-empty">No notes</div>
-      {/if}
-      {#if editing}
-        <button class="btn btn-sm btn-link section-add-btn" onclick={() => openPersonForm(person.id)}>Edit Person</button>
       {/if}
     </div>
   {/if}
