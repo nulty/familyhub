@@ -216,20 +216,21 @@
             </div>
           {/if}
           {#if editing}
-            {#if !hasCitations(ev)}
-              <div class="ev-card-gap" onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>+ add citation</div>
+            {#if !ev.date}
+              <div class="ev-card-gap" onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>+ add date</div>
             {/if}
             {#if !ev.place}
               <div class="ev-card-gap" onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>+ add place</div>
             {/if}
+            {#if !hasCitations(ev)}
+              <div class="ev-card-gap" onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>+ add citation</div>
+            {/if}
+            <div class="ev-card-actions">
+              <button onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>edit</button>
+              <button class="danger" onclick={() => deleteEvent(ev.id)}>delete</button>
+            </div>
           {/if}
         </div>
-        {#if editing}
-          <div class="ev-card-actions">
-            <button onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>edit</button>
-            <button class="danger" onclick={() => deleteEvent(ev.id)}>delete</button>
-          </div>
-        {/if}
       </div>
     {/each}
     {#if editing}

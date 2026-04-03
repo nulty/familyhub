@@ -425,7 +425,7 @@ a:hover { text-decoration: underline; }
   line-height: 1.2;
 }
 .panel-life-dates {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-muted);
   margin-top: 2px;
 }
@@ -505,7 +505,7 @@ a:hover { text-decoration: underline; }
 /* ─── Panel: Section ─────────────────────────────────────────────────── */
 
 .panel-section-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -531,7 +531,6 @@ a:hover { text-decoration: underline; }
   background: #f9fafb;
   border-radius: 8px;
   border-left: 3px solid #e5e7eb;
-  position: relative;
 }
 .ev-card.birth { border-left-color: #22c55e; }
 .ev-card.death { border-left-color: #6b7280; }
@@ -570,21 +569,21 @@ a:hover { text-decoration: underline; }
   align-items: baseline;
 }
 .ev-card-type {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
   text-transform: capitalize;
 }
-.ev-card-date { font-size: 11px; color: var(--text-muted); }
+.ev-card-date { font-size: 13px; color: var(--text-muted); }
 
-.ev-card-place { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
-.ev-card-detail { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
-.ev-card-participants { font-size: 11px; color: #3b82f6; margin-top: 2px; }
+.ev-card-place { font-size: 13px; color: var(--text-muted); margin-top: 1px; }
+.ev-card-detail { font-size: 13px; color: var(--text-muted); margin-top: 1px; }
+.ev-card-participants { font-size: 12px; color: #3b82f6; margin-top: 2px; }
 .ev-card-participants span { cursor: pointer; }
 .ev-card-participants span:hover { text-decoration: underline; }
 
 .ev-card-citation {
-  font-size: 10px;
+  font-size: 11px;
   color: #9ca3af;
   margin-top: 3px;
   font-style: italic;
@@ -593,11 +592,10 @@ a:hover { text-decoration: underline; }
 .ev-card-citation a:hover { color: var(--accent); }
 
 .ev-card-actions {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 .ev-card-actions button {
   background: none;
@@ -646,10 +644,10 @@ a:hover { text-decoration: underline; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 5px 10px;
   background: #f9fafb;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   color: #3b82f6;
   cursor: pointer;
   margin: 2px 4px 2px 0;
@@ -657,7 +655,7 @@ a:hover { text-decoration: underline; }
 }
 .family-chip:hover { background: #eff6ff; }
 .family-chip-dates {
-  font-size: 10px;
+  font-size: 11px;
   color: #9ca3af;
 }
 .family-chip-remove {
@@ -679,7 +677,7 @@ a:hover { text-decoration: underline; }
 
 .panel-notes {
   padding: 8px 20px 20px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -692,7 +690,7 @@ a:hover { text-decoration: underline; }
 }
 .participating-item {
   padding: 4px 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   border-bottom: 1px solid #f5f5f5;
 }

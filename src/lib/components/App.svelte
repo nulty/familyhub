@@ -20,6 +20,7 @@
   let menuOpen = $state(false);
   let uploadStatus = $state(null);
   let wizardMode = $state(false);
+  let panelEditing = $state(false);
   let migrationPrompt = $state(null);
   let migrationFromUpload = $state(false);
 
@@ -35,6 +36,7 @@
     });
 
     on(PERSON_SELECTED, (id) => {
+      if (panelEditing) return;
       appState.selectedPersonId = id;
       selectedPersonId = id;
       setConfig('lastFocusedPerson', id);
@@ -242,7 +244,7 @@
           <Wizard startPersonId={selectedPersonId || getConfig('rootPerson')} onclose={closeWizard} />
         {:else if selectedPersonId}
           {#key `${selectedPersonId}-${dataVersion}`}
-            <Panel personId={selectedPersonId} />
+            <Panel personId={selectedPersonId} onEditChange={(v) => panelEditing = v} />
           {/key}
         {/if}
       </div>

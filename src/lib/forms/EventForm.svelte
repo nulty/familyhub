@@ -290,6 +290,8 @@
           await events.addParticipant(created.id, personId, isMarriage ? 'spouse' : 'resident');
           if (isMarriage && spouse) {
             await events.addParticipant(created.id, spouse.id, 'spouse');
+            // Auto-create partner relationship if one doesn't exist
+            await relationships.addPartner(personId, spouse.id);
           }
           // Add generic participants (for census household members etc.)
           for (const p of participantEntries) {
