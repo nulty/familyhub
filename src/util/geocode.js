@@ -35,6 +35,7 @@ export async function geocodePlaces({ getPlaces, getHierarchy, updatePlace, onPr
     const place = eligible[i];
     try {
       const chain = await getHierarchy(place.id);
+      // chain is root-first; reverse to most-specific-first for Nominatim
       const query = chain.map((p) => p.name).reverse().join(', ');
       const url = `${NOMINATIM_URL}?${new URLSearchParams({ q: query, format: 'json', limit: '1' })}`;
       const res = await fetch(url, {
