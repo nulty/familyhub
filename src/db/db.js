@@ -320,8 +320,23 @@ export function resetDatabase() {
   return call('resetDatabase');
 }
 
-export function nukeDatabase() {
-  return call('nukeDatabase');
+export async function nukeDatabase() {
+  // Terminate the worker to release OPFS file locks, then clear OPFS directly
+  if (worker) {
+    worker.terminate();
+    worker = null;
+    pending.clear();
+    readyPromise = null;
+  }
+
+  // Clear all OPFS files
+  const root = await navigator.storage.getDirectory();
+  for await (const [name] of root.entries()) {
+    await root.removeEntry(name, { recursive: true });
+  }
+
+  // Restart the worker with a fresh database
+  await initDB();
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────

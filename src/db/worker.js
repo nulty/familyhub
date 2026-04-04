@@ -88,7 +88,7 @@ async function initDB() {
     helpers.run('DROP TABLE IF EXISTS relationships');
     helpers.run('DROP TABLE IF EXISTS people');
     helpers.run('DROP TABLE IF EXISTS places');
-    helpers.run("UPDATE meta SET value = '1' WHERE key = 'schema_version'");
+    helpers.run("DELETE FROM meta");
 
     // Re-apply schema (includes all columns and sets version to latest)
     const schemaResponse = await fetch(schemaBaseUrl + 'schema.sql');
