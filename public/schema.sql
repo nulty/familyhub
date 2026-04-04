@@ -1,4 +1,4 @@
--- Family Tree Schema v6
+-- Family Tree Schema v7
 -- All IDs are ULIDs (text, sortable, unique)
 
 PRAGMA journal_mode=WAL;
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS meta (
   value TEXT
 );
 
-INSERT OR IGNORE INTO meta VALUES ('schema_version', '6');
+INSERT OR IGNORE INTO meta VALUES ('schema_version', '7');
 INSERT OR IGNORE INTO meta VALUES ('created_at', CAST(unixepoch('now','subsec') * 1000 AS INTEGER));
 
 CREATE TABLE IF NOT EXISTS people (
@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS places (
   type       TEXT NOT NULL DEFAULT ''
     CHECK(type IN ('','country','province','county','barony','civil_parish','church_parish','parish','townland','city','town','suburb','village','street','address','cemetery')),
   parent_id  TEXT REFERENCES places(id) ON DELETE SET NULL,
+  latitude   REAL,
+  longitude  REAL,
   notes      TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL

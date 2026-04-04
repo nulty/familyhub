@@ -625,12 +625,12 @@ export function createHandlers(h, opts = {}) {
 
     // ── Places ──────────────────────────────────────────────────────────────
 
-    createPlace({ id, name, type = '', parent_id = null, notes = '' }) {
+    createPlace({ id, name, type = '', parent_id = null, latitude = null, longitude = null, notes = '' }) {
       const now = Date.now();
       run(
-        `INSERT INTO places (id, name, type, parent_id, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, name, type, parent_id, notes, now, now]
+        `INSERT INTO places (id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, name, type, parent_id, latitude, longitude, notes, now, now]
       );
       return get('SELECT * FROM places WHERE id = ?', [id]);
     },
@@ -640,7 +640,7 @@ export function createHandlers(h, opts = {}) {
     },
 
     updatePlace(id, fields) {
-      const allowed = ['name', 'type', 'parent_id', 'notes'];
+      const allowed = ['name', 'type', 'parent_id', 'latitude', 'longitude', 'notes'];
       const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
       if (updates.length === 0) return get('SELECT * FROM places WHERE id = ?', [id]);
       const now = Date.now();
@@ -873,9 +873,9 @@ export function createHandlers(h, opts = {}) {
         // Places must be inserted before events (events reference place_id)
         for (const pl of (places || [])) {
           run(
-            `INSERT OR IGNORE INTO places (id, name, type, parent_id, notes, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [pl.id, pl.name||'', pl.type||'', pl.parent_id||null, pl.notes||'', now, now]
+            `INSERT OR IGNORE INTO places (id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [pl.id, pl.name||'', pl.type||'', pl.parent_id||null, pl.latitude||null, pl.longitude||null, pl.notes||'', now, now]
           );
           counts.places++;
         }

@@ -14,6 +14,8 @@
   let name = $state('');
   let type = $state('');
   let selectedParentId = $state(null);
+  let latitude = $state('');
+  let longitude = $state('');
   let notes = $state('');
   let isEdit = $state(false);
   let title = $state('New Place');
@@ -28,6 +30,8 @@
         name = p.name || '';
         type = p.type || '';
         selectedParentId = p.parent_id || null;
+        latitude = p.latitude != null ? String(p.latitude) : '';
+        longitude = p.longitude != null ? String(p.longitude) : '';
         notes = p.notes || '';
         title = `Edit ${p.name}`;
         if (selectedParentId) {
@@ -55,6 +59,8 @@
       name: name.trim(),
       type,
       parent_id: selectedParentId,
+      latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
+      longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
       notes: notes.trim(),
     };
 
@@ -105,6 +111,16 @@
         excludeIds={placeId ? [placeId] : []}
         oncreate={handleParentCreate}
       />
+    </div>
+    <div class="form-group" style="display:flex;gap:0.5rem">
+      <div style="flex:1">
+        <label for="plf-lat">Latitude</label>
+        <input id="plf-lat" type="number" step="any" min="-90" max="90" bind:value={latitude} placeholder="e.g. 53.3498">
+      </div>
+      <div style="flex:1">
+        <label for="plf-lng">Longitude</label>
+        <input id="plf-lng" type="number" step="any" min="-180" max="180" bind:value={longitude} placeholder="e.g. -6.2603">
+      </div>
     </div>
     <div class="form-group">
       <label for="plf-notes">Notes</label>

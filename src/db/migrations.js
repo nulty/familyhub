@@ -8,7 +8,19 @@
  * SQLite DDL like ALTER TABLE RENAME is not transactional.
  */
 
-export const migrations = [];
+export const migrations = [
+  {
+    version: 7,
+    description: 'Add latitude and longitude to places',
+    up({ get, run }) {
+      const cols = get("SELECT sql FROM sqlite_master WHERE type='table' AND name='places'");
+      if (cols && !cols.sql.includes('latitude')) {
+        run('ALTER TABLE places ADD COLUMN latitude REAL');
+        run('ALTER TABLE places ADD COLUMN longitude REAL');
+      }
+    },
+  },
+];
 
 /**
  * Return pending migrations without applying them.
