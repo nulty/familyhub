@@ -7,7 +7,7 @@
 
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import { createHandlers } from './handlers.js';
-import { applyMigrations, getPendingMigrations, migrations } from './migrations.js';
+import { applyMigrations, getPendingMigrations } from './migrations.js';
 
 let db = null;
 let sqlite3Api = null;
@@ -90,20 +90,10 @@ async function initDB() {
     helpers.run('DROP TABLE IF EXISTS places');
     helpers.run("UPDATE meta SET value = '1' WHERE key = 'schema_version'");
 
-    // Re-apply schema
+    // Re-apply schema (includes all columns and sets version to latest)
     const schemaResponse = await fetch(schemaBaseUrl + 'schema.sql');
     const schemaText = await schemaResponse.text();
     db.exec(schemaText);
-
-    // Add columns that only exist via migrations
-    const evCols = helpers.all("PRAGMA table_info(events)");
-    if (!evCols.some(c => c.name === 'place_id')) {
-      helpers.run('ALTER TABLE events ADD COLUMN place_id TEXT REFERENCES places(id) ON DELETE SET NULL');
-    }
-
-    // Set schema version to latest so migrations don't re-run
-    const latest = Math.max(...migrations.map(m => m.version));
-    helpers.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [String(latest)]);
 
     return { ok: true };
   };
