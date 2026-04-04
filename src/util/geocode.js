@@ -2,6 +2,9 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'FamilyHub/0.2.0';
 const DELAY_MS = 1100;
 
+// Type-specific query formatting to help Nominatim disambiguate
+const TYPE_PREFIX = { county: 'County' };
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -36,7 +39,10 @@ export async function geocodePlaces({ getPlaces, getHierarchy, updatePlace, onPr
     try {
       const chain = await getHierarchy(place.id);
       // chain is root-first; reverse to most-specific-first for Nominatim
-      const query = chain.map((p) => p.name).reverse().join(', ');
+      const query = chain.map((p) => {
+        const prefix = TYPE_PREFIX[p.type];
+        return prefix ? `${prefix} ${p.name}` : p.name;
+      }).reverse().join(', ');
       const url = `${NOMINATIM_URL}?${new URLSearchParams({ q: query, format: 'json', limit: '1' })}`;
       const res = await fetch(url, {
         headers: { 'User-Agent': USER_AGENT },
