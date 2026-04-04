@@ -1,7 +1,8 @@
 <script>
   import { places } from '../../db/db.js';
   import { emit, PERSON_SELECTED, DATA_CHANGED } from '../../state.js';
-  import { showToast } from '../shared/toast-store.js';
+  import { showToast, updateToast, dismissToast } from '../shared/toast-store.js';
+  import { geocodePlaces } from '../../util/geocode.js';
   import { openPlaceForm } from '../shared/open.js';
   import { openOrganizeWizard } from '../../ui/places-organize.js';
   import { focusPerson } from '../../ui/tree.js';
@@ -13,6 +14,8 @@
   let byParent = $state({});
   let expandedEvents = $state({});
   let collapsed = $state({});
+  let geocoding = $state(false);
+  let abortController = null;
 
   $effect(() => { loadData(); });
 
@@ -116,6 +119,49 @@
     input.click();
   }
 
+  async function handleGeocode() {
+    if (geocoding) {
+      abortController?.abort();
+      return;
+    }
+
+    geocoding = true;
+    abortController = new AbortController();
+    const toastId = showToast('Starting geocoding...', 0);
+
+    try {
+      const result = await geocodePlaces({
+        getPlaces: () => places.list(),
+        getHierarchy: (id) => places.hierarchy(id),
+        updatePlace: (id, fields) => places.update(id, fields),
+        onProgress: (current, total) => {
+          updateToast(toastId, `Geocoding ${current}/${total}...`);
+        },
+        signal: abortController.signal,
+      });
+
+      dismissToast(toastId);
+
+      if (result.total === 0) {
+        showToast('All places already geocoded');
+      } else {
+        const parts = [`Geocoded ${result.geocoded}/${result.total} places`];
+        if (result.notFound > 0) parts.push(`${result.notFound} not found`);
+        showToast(parts.join(', '));
+      }
+
+      await loadData();
+    } catch (err) {
+      dismissToast(toastId);
+      if (err.name !== 'AbortError') {
+        showToast('Geocoding error: ' + err.message);
+      }
+    } finally {
+      geocoding = false;
+      abortController = null;
+    }
+  }
+
   function formatName(ev) {
     if (ev.person_id) return [ev.given_name, ev.surname].filter(Boolean).join(' ') || 'Unnamed';
     if (ev.participants?.length) return ev.participants.map(p => [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed').join(' & ');
@@ -130,6 +176,9 @@
       <button class="btn btn-sm" onclick={() => openOrganizeWizard(() => loadData())}>Organize</button>
       <button class="btn btn-sm" onclick={handleExport}>Export</button>
       <button class="btn btn-sm" onclick={handleImport}>Import</button>
+      <button class="btn btn-sm" onclick={handleGeocode}>
+        {geocoding ? 'Stop Geocoding' : 'Geocode'}
+      </button>
     </div>
 
     {#if allPlaces.length === 0}
