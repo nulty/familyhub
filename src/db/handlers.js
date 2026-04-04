@@ -718,7 +718,7 @@ export function createHandlers(h, opts = {}) {
     },
 
     getEventsByPlace(placeId) {
-      return enrichEventPlaces(all(
+      const rows = enrichEventPlaces(all(
         `SELECT e.*, COALESCE(p.given_name, '') AS given_name, COALESCE(p.surname, '') AS surname, e.person_id
          FROM events e
          LEFT JOIN people p ON p.id = e.person_id
@@ -726,6 +726,18 @@ export function createHandlers(h, opts = {}) {
          ORDER BY COALESCE(e.sort_date, 9999999999999)`,
         [placeId]
       ));
+      for (const row of rows) {
+        if (!row.person_id) {
+          row.participants = all(
+            `SELECT ep.person_id, COALESCE(p.given_name, '') AS given_name, COALESCE(p.surname, '') AS surname
+             FROM event_participants ep
+             JOIN people p ON p.id = ep.person_id
+             WHERE ep.event_id = ?`,
+            [row.id]
+          );
+        }
+      }
+      return rows;
     },
 
     getPlaceChildren(parentId) {

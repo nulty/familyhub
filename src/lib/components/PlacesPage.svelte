@@ -116,8 +116,10 @@
     input.click();
   }
 
-  function formatName(p) {
-    return [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed';
+  function formatName(ev) {
+    if (ev.person_id) return [ev.given_name, ev.surname].filter(Boolean).join(' ') || 'Unnamed';
+    if (ev.participants?.length) return ev.participants.map(p => [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed').join(' & ');
+    return 'Unnamed';
   }
 </script>
 
@@ -162,7 +164,7 @@
                       <div class="place-event-row">
                         <span class="place-event-type">{ev.type}</span>
                         {#if ev.date}<span class="place-event-date">{ev.date}</span>{/if}
-                        <a href="#" class="place-event-person" onclick={(e) => { e.preventDefault(); navigateToPerson(ev.person_id); }}>{formatName(ev)}</a>
+                        <a href="#" class="place-event-person" onclick={(e) => { e.preventDefault(); navigateToPerson(ev.person_id || ev.participants?.[0]?.person_id); }}>{formatName(ev)}</a>
                       </div>
                     {/each}
                   {/if}
