@@ -16,6 +16,22 @@
   let collapsed = $state({});
   let geocoding = $state(false);
   let abortController = null;
+  let filterText = $state('');
+  let matchingIds = $derived.by(() => {
+    const q = filterText.trim().toLowerCase();
+    if (!q) return null;
+    const directMatches = new Set(allPlaces.filter(p => p.name.toLowerCase().includes(q)).map(p => p.id));
+    const allIds = new Set(directMatches);
+    const placeMap = new Map(allPlaces.map(p => [p.id, p]));
+    for (const id of directMatches) {
+      let p = placeMap.get(id);
+      while (p?.parent_id) {
+        allIds.add(p.parent_id);
+        p = placeMap.get(p.parent_id);
+      }
+    }
+    return allIds;
+  });
 
   $effect(() => { loadData(); });
 
@@ -31,7 +47,9 @@
   }
 
   function getChildren(parentKey) {
-    return byParent[parentKey] || [];
+    const children = byParent[parentKey] || [];
+    if (!matchingIds) return children;
+    return children.filter(p => matchingIds.has(p.id));
   }
 
   function hasChildren(placeId) {
@@ -181,6 +199,10 @@
       </button>
     </div>
 
+    <div class="form-group" style="margin-bottom:12px">
+      <input type="text" placeholder="Filter places…" bind:value={filterText}>
+    </div>
+
     {#if allPlaces.length === 0}
       <p class="section-empty">No places yet. Add one or import a GEDCOM file.</p>
     {:else}
@@ -201,6 +223,7 @@
                 {#if place.type}<span class="place-type-badge">{place.type}</span>{/if}
                 <button class="btn-link btn-sm place-events-toggle" onclick={(e) => { e.stopPropagation(); toggleEvents(place.id); }}>events</button>
                 <span class="place-tree-actions">
+                  <button class="btn-link btn-sm" onclick={(e) => { e.stopPropagation(); openPlaceForm(null, () => loadData(), { parent_id: place.id }); }}>+ add</button>
                   <button class="btn-link btn-sm" onclick={(e) => { e.stopPropagation(); openPlaceForm(place.id, () => loadData()); }}>edit</button>
                   <button class="btn-link btn-sm" style="color:var(--danger)" onclick={(e) => { e.stopPropagation(); deletePlace(place); }}>delete</button>
                 </span>

@@ -23,6 +23,11 @@
   let pickerRef;
 
   $effect(() => {
+    if (!placeId && prefill?.parent_id) {
+      places.get(prefill.parent_id).then((parent) => {
+        if (parent && pickerRef) pickerRef.setValue(parent.name);
+      });
+    }
     if (placeId) {
       isEdit = true;
       places.get(placeId).then(async (p) => {
@@ -46,6 +51,10 @@
       });
     }
   });
+
+  function focusOnMount(node) {
+    requestAnimationFrame(() => node.focus());
+  }
 
   function handleParentSelect(p) {
     selectedParentId = p.id;
@@ -107,7 +116,7 @@
   <form onsubmit={handleSubmit}>
     <div class="form-group">
       <label for="plf-name">Name</label>
-      <input id="plf-name" type="text" bind:value={name} autocomplete="off">
+      <input id="plf-name" type="text" bind:value={name} autocomplete="off" use:focusOnMount>
     </div>
     <div class="form-group">
       <label for="plf-type">Type</label>
