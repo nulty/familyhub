@@ -109,14 +109,6 @@
 
   async function addPersonWithTag(personId) {
     if (selected[personId]) { fitBounds(); return; }
-    if (!tomSelect) return;
-    const data = await people.search('');
-    const p = data.find(d => d.id === personId);
-    if (p) {
-      const label = [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed';
-      tomSelect.addOption({ id: p.id, label });
-      tomSelect.addItem(p.id, true);
-    }
     await addPerson(personId);
     fitBounds();
   }
@@ -135,6 +127,7 @@
       labelField: 'label',
       searchField: ['label'],
       placeholder: 'Add person...',
+      maxItems: 1,
       load(query, callback) {
         people.search(query).then(results => {
           callback(results.map(p => ({
@@ -145,20 +138,9 @@
       },
       onItemAdd(value) {
         addPerson(value);
-        // Clear the input after selection
+        // Clear immediately — selected people are shown in the list below
         tomSelect.clear(true);
-      },
-      render: {
-        option(data, escape) {
-          return `<div>${escape(data.label)}</div>`;
-        },
-        item(data, escape) {
-          const bg = getColor(data.id);
-          return `<div style="background:${bg};color:#fff;border-radius:3px;padding:2px 8px;font-size:12px">${escape(data.label)}</div>`;
-        },
-      },
-      onItemRemove(value) {
-        removePerson(value);
+        tomSelect.clearOptions();
       },
     });
 
@@ -180,7 +162,7 @@
 
 <div class="map-panel">
   <div class="map-panel-picker">
-    <select bind:this={selectEl} multiple></select>
+    <select bind:this={selectEl}></select>
   </div>
 
   <div class="map-panel-list">
@@ -190,6 +172,7 @@
           <div class="map-person-dot" style:background={entry.color}></div>
           <span class="map-person-name">{formatName(entry.person)}</span>
           {#if entry.years}<span class="map-person-years">{entry.years}</span>{/if}
+          <button class="btn-link btn-sm map-person-remove" onclick={() => removePerson(personId)}>&times;</button>
         </div>
         {#if entry.events.length === 0}
           <div class="map-no-events">No mapped events</div>
