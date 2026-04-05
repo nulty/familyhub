@@ -26,9 +26,27 @@ A browser-based family tree application. All data is stored locally in your brow
 - Each event can have a date (free text — supports formats like "3 SEP 1913", "ABT 1890", "BET 1889 AND 1890"), place, and notes
 - Events are sorted chronologically in the detail panel
 
-### Sources
-- Attach sources to any event with a title and URL
-- Sources display as clickable links in the detail panel
+### Places
+- Hierarchical place management (e.g. Ireland → Leinster → Dublin → Rathmines)
+- Organize imported GEDCOM places into a structured hierarchy
+- Geocode places via Nominatim (OpenStreetMap) — batch or manual
+- Pick coordinates by clicking on the map
+- Pin icon shows which places have been geocoded
+
+### Map View
+- Toggle between tree and map views from the header
+- Search and add people to plot their life events on an OpenStreetMap map
+- Color-coded markers per person with a legend in the side panel
+- Click events in the panel to zoom to their location
+- Click markers for popup details (event type, date, person name)
+- "Show on map" button in the person panel to quickly plot someone's events
+
+### Sources & Citations
+- Three-tier model: Repositories → Sources → Citations
+- Repositories represent organisations holding original records
+- Sources are collections or publications linked to a repository
+- Citations link specific record references to events (page, URL, access date, confidence)
+- Attach multiple citations to any event
 
 ### GEDCOM
 - Import GEDCOM 5.5.1 files — preview stats before importing
@@ -92,12 +110,15 @@ OPFS requires a secure context (HTTPS or localhost). On unsupported browsers, da
 
 - [API Reference](docs/api.md) — database API for developers
 - [Database Schema](docs/schema.md) — table definitions and relationships
+- [Schema Migrations](docs/migrations.md) — how schema changes are managed
 - [Storage & Cross-Origin Isolation](docs/storage.md) — how data persistence and COOP/COEP headers work
 
 ## Tech Stack
 
-- Vanilla JavaScript ES Modules — no framework
+- [Svelte 5](https://svelte.dev) with runes for the UI layer
 - [SQLite WASM](https://sqlite.org/wasm) with OPFS for persistent client-side storage
 - [family-chart](https://github.com/donatso/family-chart) (D3-based) for tree visualization
+- [Leaflet](https://leafletjs.com) with OpenStreetMap tiles for map visualization
+- [TomSelect](https://tom-select.js.org) for searchable person picker in map panel
 - [Vite](https://vite.dev) for dev server and builds
 - [Vitest](https://vitest.dev) with better-sqlite3 for testing
