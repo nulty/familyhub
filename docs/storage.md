@@ -21,7 +21,7 @@ SharedArrayBuffer (required by OPFS) needs these HTTP headers:
 
 ```
 Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Embedder-Policy: credentialless
 ```
 
 - **Dev server:** `vite-plugin-cross-origin-isolation` injects the headers automatically

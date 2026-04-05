@@ -1,6 +1,6 @@
 # Database Schema
 
-SQLite database stored in the browser's Origin Private File System (OPFS) via the SAH pool VFS. Schema defined in `public/schema.sql` (version 6).
+SQLite database stored in the browser's Origin Private File System (OPFS) via the SAH pool VFS. Schema defined in `public/schema.sql` (version 7).
 
 See [migrations.md](migrations.md) for how schema changes are managed.
 
@@ -143,6 +143,8 @@ Composite primary key on `(citation_id, event_id)`.
 | name      | TEXT    | Default `''`                                |
 | type      | TEXT    | See place types below                       |
 | parent_id | TEXT FK | Self-referential, ON DELETE SET NULL         |
+| latitude  | REAL    | Nullable, WGS84 decimal degrees             |
+| longitude | REAL    | Nullable, WGS84 decimal degrees             |
 | notes     | TEXT    | Default `''`                                |
 | created_at| INTEGER | Unix ms                                     |
 | updated_at| INTEGER | Unix ms                                     |
@@ -154,4 +156,4 @@ Composite primary key on `(citation_id, event_id)`.
 | Column | Type    | Notes                         |
 |--------|---------|-------------------------------|
 | key    | TEXT PK | e.g. `schema_version`         |
-| value  | TEXT    | e.g. `6`                      |
+| value  | TEXT    | e.g. `7`                      |

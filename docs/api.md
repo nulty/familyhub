@@ -137,8 +137,8 @@ const forSource = await citations.listForSource(sourceId);
 ## Places
 
 ```js
-const place = await places.create({ name: 'Dublin', type: 'city', parent_id: leinsterPlaceId });
-await places.update(place.id, { type: 'county' });
+const place = await places.create({ name: 'Dublin', type: 'city', parent_id: leinsterPlaceId, latitude: 53.3498, longitude: -6.2603 });
+await places.update(place.id, { type: 'county', latitude: 53.35, longitude: -6.26 });
 await places.delete(place.id);
 const place = await places.get(placeId);
 const all = await places.list();
