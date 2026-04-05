@@ -197,6 +197,7 @@
                   <span class="place-toggle-spacer"></span>
                 {/if}
                 <span class="place-tree-name">{place.name}</span>
+                {#if place.latitude != null}<span class="place-geocoded" title="Geocoded">&#x1F4CD;</span>{/if}
                 {#if place.type}<span class="place-type-badge">{place.type}</span>{/if}
                 <button class="btn-link btn-sm place-events-toggle" onclick={(e) => { e.stopPropagation(); toggleEvents(place.id); }}>events</button>
                 <span class="place-tree-actions">

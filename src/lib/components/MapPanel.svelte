@@ -3,7 +3,10 @@
   import TomSelect from 'tom-select';
   import 'tom-select/dist/css/tom-select.css';
   import { people, places } from '../../db/db.js';
+  import { on, SHOW_ON_MAP } from '../../state.js';
   import { addMarkers, removeMarkers, zoomToMarker, fitBounds } from '../../ui/map.js';
+
+  let { initialPersonId = null, onconsumed } = $props();
 
   const COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#e84393'];
 
@@ -104,6 +107,28 @@
   let selectedEntries = $derived(Object.entries(selected));
   let totalMarkers = $derived(selectedEntries.reduce((sum, [, v]) => sum + v.events.length, 0));
 
+  async function addPersonWithTag(personId) {
+    if (selected[personId]) { fitBounds(); return; }
+    if (!tomSelect) return;
+    const data = await people.search('');
+    const p = data.find(d => d.id === personId);
+    if (p) {
+      const label = [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed';
+      tomSelect.addOption({ id: p.id, label });
+      tomSelect.addItem(p.id, true);
+    }
+    await addPerson(personId);
+    fitBounds();
+  }
+
+  // Watch for initialPersonId changes (when already mounted in map view)
+  $effect(() => {
+    if (initialPersonId && tomSelect) {
+      addPersonWithTag(initialPersonId);
+      onconsumed?.();
+    }
+  });
+
   onMount(() => {
     tomSelect = new TomSelect(selectEl, {
       valueField: 'id',
@@ -137,7 +162,17 @@
       },
     });
 
+    // Handle "Show on map" from the person panel
+    const offShowOnMap = on(SHOW_ON_MAP, (personId) => addPersonWithTag(personId));
+
+    // Handle initial person passed as prop
+    if (initialPersonId) {
+      addPersonWithTag(initialPersonId);
+      onconsumed?.();
+    }
+
     return () => {
+      offShowOnMap();
       tomSelect?.destroy();
     };
   });

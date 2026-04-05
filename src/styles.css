@@ -614,6 +614,8 @@ a:hover { text-decoration: underline; }
 /* ─── Panel: Section ─────────────────────────────────────────────────── */
 
 .panel-section-title {
+  display: flex;
+  align-items: center;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -1120,6 +1122,11 @@ a:hover { text-decoration: underline; }
 .place-toggle-spacer { width: 14px; flex-shrink: 0; }
 
 .place-tree-name { flex: 1; min-width: 0; }
+
+.place-geocoded {
+  font-size: 10px;
+  opacity: 0.5;
+}
 
 .place-type-badge {
   font-size: 10px;

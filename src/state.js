@@ -22,6 +22,8 @@ export const PERSON_SELECTED = 'PERSON_SELECTED';
 export const PERSON_DESELECTED = 'PERSON_DESELECTED';
 export const DATA_CHANGED = 'DATA_CHANGED';
 export const DB_POPULATED = 'DB_POPULATED';
+export const PICK_LOCATION = 'PICK_LOCATION';
+export const SHOW_ON_MAP = 'SHOW_ON_MAP';
 
 export const state = {
   selectedPersonId: null,

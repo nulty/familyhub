@@ -1,6 +1,6 @@
 <script>
   import { people, relationships, events as eventsApi, personNames } from '../../db/db.js';
-  import { emit, PERSON_DESELECTED, PERSON_SELECTED, DATA_CHANGED } from '../../state.js';
+  import { emit, PERSON_DESELECTED, PERSON_SELECTED, DATA_CHANGED, SHOW_ON_MAP } from '../../state.js';
   import { openPersonForm, openEventForm, openRelationshipForm, openCitationForm } from '../shared/open.js';
   import { focusPerson } from '../../ui/tree.js';
   import { showToast } from '../shared/toast-store.js';
@@ -184,7 +184,10 @@
     </div>
   {/if}
 
-  <div class="panel-section-title">Events{#if allEvents.length > 0} ({allEvents.length}){/if}</div>
+  <div class="panel-section-title">
+    Events{#if allEvents.length > 0} ({allEvents.length}){/if}
+    <button class="btn-link btn-sm" style="margin-left:auto" onclick={() => emit(SHOW_ON_MAP, personId)}>Show on map</button>
+  </div>
   <div class="panel-events-list">
     {#if allEvents.length === 0}
       <div class="section-empty">No events recorded</div>

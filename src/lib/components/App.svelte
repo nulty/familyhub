@@ -1,13 +1,13 @@
 <script>
   import { onMount } from 'svelte';
   import { initDB, getStats, nukeDatabase, bulk, runMigrations } from '../../db/db.js';
-  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED } from '../../state.js';
+  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP } from '../../state.js';
   import { initTree, refreshTree } from '../../ui/tree.js';
-  import { initMap, invalidateSize, clearAllMarkers } from '../../ui/map.js';
+  import { initMap, invalidateSize, clearAllMarkers, startPicking, stopPicking } from '../../ui/map.js';
   import MapPanel from './MapPanel.svelte';
   import { getConfig, setConfig } from '../../config.js';
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
-  import { openPersonForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
+  import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
   import { triggerImport, triggerExport } from '../../gedcom/gedcom.js';
   import { showToast } from '../shared/toast-store.js';
   import { getStack } from '../shared/modal-stack.svelte.js';
@@ -27,6 +27,7 @@
   let migrationFromUpload = $state(false);
   let viewMode = $state('tree'); // 'tree' | 'map'
   let mapInitialized = false;
+  let pendingMapPerson = $state(null);
 
   const modalStack = getStack;
 
@@ -68,6 +69,31 @@
 
     on(DB_POPULATED, async () => {
       await initTree();
+    });
+
+    on(PICK_LOCATION, ({ placeId, formState, oncomplete }) => {
+      const prevMode = viewMode;
+      // Hide all modals while picking
+      const modalRoot = document.getElementById('modal-root');
+      if (modalRoot) modalRoot.style.display = 'none';
+      setViewMode('map');
+      setTimeout(() => {
+        startPicking(({ lat, lng }) => {
+          setViewMode(prevMode);
+          if (modalRoot) modalRoot.style.display = '';
+          const prefill = {
+            ...formState,
+            latitude: String(lat.toFixed(6)),
+            longitude: String(lng.toFixed(6)),
+          };
+          openPlaceForm(placeId, oncomplete, prefill);
+        });
+      }, 100);
+    });
+
+    on(SHOW_ON_MAP, (personId) => {
+      pendingMapPerson = personId;
+      setViewMode('map');
     });
   });
 
@@ -268,7 +294,7 @@
     <aside id="panel">
       <div id="panel-content">
         {#if viewMode === 'map'}
-          <MapPanel />
+          <MapPanel initialPersonId={pendingMapPerson} onconsumed={() => pendingMapPerson = null} />
         {:else if wizardMode}
           <Wizard startPersonId={selectedPersonId || getConfig('rootPerson')} onclose={closeWizard} />
         {:else if selectedPersonId}

@@ -26,8 +26,8 @@ export function openRelationshipForm(person, type) {
   pushModal(RelationshipForm, { person, type });
 }
 
-export function openPlaceForm(placeId, onComplete) {
-  pushModal(PlaceForm, { placeId, oncomplete: onComplete });
+export function openPlaceForm(placeId, onComplete, prefill) {
+  pushModal(PlaceForm, { placeId, oncomplete: onComplete, prefill });
 }
 
 export function openRepositoryForm(repoId, onComplete) {

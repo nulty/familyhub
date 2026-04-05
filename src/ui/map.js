@@ -44,7 +44,7 @@ export function addMarkers(personId, color, events) {
     }).addTo(map);
 
     const popupHtml = `<div style="font-size:13px;line-height:1.4">
-      <div style="font-weight:600">${ev.type}</div>
+      <div style="font-weight:600;text-transform:capitalize">${ev.type}</div>
       ${ev.date ? `<div>${ev.date}</div>` : ''}
       <div style="color:#666">${ev.personName}</div>
     </div>`;
@@ -109,6 +109,37 @@ export function fitBounds() {
     return;
   }
   map.fitBounds(L.latLngBounds(allLatLngs), { padding: [40, 40] });
+}
+
+// ── Pick mode ────────────────────────────────────────────────────────────────
+
+let pickCallback = null;
+
+function onPickClick(e) {
+  if (!pickCallback) return;
+  const cb = pickCallback;
+  stopPicking();
+  cb({ lat: e.latlng.lat, lng: e.latlng.lng });
+}
+
+/**
+ * Enter pick mode — next click on the map calls callback with {lat, lng}.
+ */
+export function startPicking(callback) {
+  stopPicking();
+  pickCallback = callback;
+  map.getContainer().style.cursor = 'crosshair';
+  map.on('click', onPickClick);
+}
+
+/**
+ * Exit pick mode without firing the callback.
+ */
+export function stopPicking() {
+  if (!map) return;
+  pickCallback = null;
+  map.getContainer().style.cursor = '';
+  map.off('click', onPickClick);
 }
 
 /**

@@ -1,24 +1,24 @@
 <script>
   import { places } from '../../db/db.js';
-  import { emit, DATA_CHANGED } from '../../state.js';
+  import { emit, DATA_CHANGED, PICK_LOCATION } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
   import Modal from './Modal.svelte';
   import PlacePicker from '../pickers/PlacePicker.svelte';
   import { openPlaceForm } from '../shared/open.js';
   import { PLACE_TYPES, formatPlaceType } from '../../util/place-types.js';
 
-  let { placeId = null, onclose, oncomplete } = $props();
+  let { placeId = null, prefill = null, onclose, oncomplete } = $props();
 
   const sortedTypes = [...PLACE_TYPES].sort((a, b) => !a ? 1 : !b ? -1 : formatPlaceType(a).localeCompare(formatPlaceType(b)));
 
-  let name = $state('');
-  let type = $state('');
-  let selectedParentId = $state(null);
-  let latitude = $state('');
-  let longitude = $state('');
-  let notes = $state('');
+  let name = $state(prefill?.name || '');
+  let type = $state(prefill?.type || '');
+  let selectedParentId = $state(prefill?.parent_id || null);
+  let latitude = $state(prefill?.latitude || '');
+  let longitude = $state(prefill?.longitude || '');
+  let notes = $state(prefill?.notes || '');
   let isEdit = $state(false);
-  let title = $state('New Place');
+  let title = $state(prefill?.title || 'New Place');
   let parentName = $state('');
   let pickerRef;
 
@@ -27,15 +27,20 @@
       isEdit = true;
       places.get(placeId).then(async (p) => {
         if (!p) { onclose?.(); return; }
-        name = p.name || '';
-        type = p.type || '';
-        selectedParentId = p.parent_id || null;
-        latitude = p.latitude != null ? String(p.latitude) : '';
-        longitude = p.longitude != null ? String(p.longitude) : '';
-        notes = p.notes || '';
-        title = `Edit ${p.name}`;
-        if (selectedParentId) {
-          const parent = await places.get(selectedParentId);
+        // Only set fields that weren't provided via prefill
+        if (!prefill) {
+          name = p.name || '';
+          type = p.type || '';
+          selectedParentId = p.parent_id || null;
+          latitude = p.latitude != null ? String(p.latitude) : '';
+          longitude = p.longitude != null ? String(p.longitude) : '';
+          notes = p.notes || '';
+        }
+        title = prefill?.title || `Edit ${p.name}`;
+        const pid = prefill?.parent_id ?? p.parent_id;
+        if (pid) {
+          selectedParentId = pid;
+          const parent = await places.get(pid);
           if (parent && pickerRef) pickerRef.setValue(parent.name);
         }
       });
@@ -51,6 +56,15 @@
       selectedParentId = newPlace.id;
       if (pickerRef) pickerRef.setValue(newPlace.name);
     });
+  }
+
+  function handlePickOnMap() {
+    const formState = {
+      name, type, parent_id: selectedParentId, latitude, longitude, notes,
+      title: isEdit ? title : undefined,
+    };
+    emit(PICK_LOCATION, { placeId, formState, oncomplete });
+    onclose?.();
   }
 
   async function handleSubmit(e) {
@@ -112,14 +126,14 @@
         oncreate={handleParentCreate}
       />
     </div>
-    <div class="form-group" style="display:flex;gap:0.5rem">
-      <div style="flex:1">
-        <label for="plf-lat">Latitude</label>
-        <input id="plf-lat" type="number" step="any" min="-90" max="90" bind:value={latitude} placeholder="e.g. 53.3498">
+    <div class="form-group">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <label>Coordinates</label>
+        <button type="button" class="btn-link btn-sm" onclick={handlePickOnMap}>Pick on map</button>
       </div>
-      <div style="flex:1">
-        <label for="plf-lng">Longitude</label>
-        <input id="plf-lng" type="number" step="any" min="-180" max="180" bind:value={longitude} placeholder="e.g. -6.2603">
+      <div style="display:flex;gap:0.5rem">
+        <input id="plf-lat" type="number" step="any" min="-90" max="90" bind:value={latitude} placeholder="Latitude">
+        <input id="plf-lng" type="number" step="any" min="-180" max="180" bind:value={longitude} placeholder="Longitude">
       </div>
     </div>
     <div class="form-group">
