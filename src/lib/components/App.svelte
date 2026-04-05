@@ -3,6 +3,8 @@
   import { initDB, getStats, nukeDatabase, bulk, runMigrations } from '../../db/db.js';
   import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED } from '../../state.js';
   import { initTree, refreshTree } from '../../ui/tree.js';
+  import { initMap, invalidateSize, clearAllMarkers } from '../../ui/map.js';
+  import MapPanel from './MapPanel.svelte';
   import { getConfig, setConfig } from '../../config.js';
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
   import { openPersonForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
@@ -23,6 +25,8 @@
   let panelEditing = $state(false);
   let migrationPrompt = $state(null);
   let migrationFromUpload = $state(false);
+  let viewMode = $state('tree'); // 'tree' | 'map'
+  let mapInitialized = false;
 
   const modalStack = getStack;
 
@@ -183,6 +187,22 @@
   function handleMenuKeydown(e) {
     if (e.key === 'Escape') menuOpen = false;
   }
+
+  function setViewMode(mode) {
+    viewMode = mode;
+    if (mode === 'map' && !mapInitialized) {
+      // Defer init to next tick so the container is visible
+      setTimeout(() => {
+        const container = document.getElementById('map-container');
+        if (container) {
+          initMap(container);
+          mapInitialized = true;
+        }
+      }, 0);
+    } else if (mode === 'map') {
+      setTimeout(() => invalidateSize(), 0);
+    }
+  }
 </script>
 
 <div id="app">
@@ -192,6 +212,12 @@
     <Search />
 
     <div class="header-actions">
+      {#if hasData}
+        <div class="view-toggle">
+          <button class:active={viewMode === 'tree'} onclick={() => setViewMode('tree')}>Tree</button>
+          <button class:active={viewMode === 'map'} onclick={() => setViewMode('map')}>Map</button>
+        </div>
+      {/if}
       <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Person</button>
       <div class="menu-wrapper">
         <button class="btn menu-toggle" onclick={() => menuOpen = !menuOpen} aria-label="Menu">
@@ -221,12 +247,13 @@
     </div>
   </header>
 
-  <div id="main" class:has-panel={selectedPersonId || wizardMode}>
+  <div id="main" class:has-panel={selectedPersonId || wizardMode || viewMode === 'map'} class:map-active={viewMode === 'map'}>
     {#if hasData}
       <div id="chart-container">
         <div id="FamilyChart" class="f3"></div>
         <div id="tree-config"></div>
       </div>
+      <div id="map-container"></div>
     {:else}
       <div id="empty-state">
         <h2>No people yet</h2>
@@ -240,7 +267,9 @@
 
     <aside id="panel">
       <div id="panel-content">
-        {#if wizardMode}
+        {#if viewMode === 'map'}
+          <MapPanel />
+        {:else if wizardMode}
           <Wizard startPersonId={selectedPersonId || getConfig('rootPerson')} onclose={closeWizard} />
         {:else if selectedPersonId}
           {#key `${selectedPersonId}-${dataVersion}`}
