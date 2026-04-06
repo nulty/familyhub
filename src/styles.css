@@ -698,8 +698,10 @@ a:hover { text-decoration: underline; }
   text-transform: capitalize;
 }
 .ev-card-date { font-size: 13px; color: var(--text-muted); }
+.ev-card-age { font-size: 12px; color: var(--text-muted); opacity: 0.7; }
 
 .ev-card-place { font-size: 13px; color: var(--text-muted); margin-top: 1px; }
+.ev-no-geocode { color: #e67e22; font-size: 9px; vertical-align: middle; margin-left: 3px; cursor: help; }
 .ev-card-detail { font-size: 13px; color: var(--text-muted); margin-top: 1px; }
 .ev-card-participants { font-size: 12px; color: #3b82f6; margin-top: 2px; }
 .ev-card-participants span { cursor: pointer; }
@@ -780,6 +782,11 @@ a:hover { text-decoration: underline; }
 .family-chip-dates {
   font-size: 11px;
   color: #9ca3af;
+}
+.family-chip-age {
+  font-size: 11px;
+  color: #9ca3af;
+  opacity: 0.7;
 }
 .family-chip-remove {
   background: none;

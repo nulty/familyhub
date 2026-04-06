@@ -63,6 +63,12 @@ export function createHandlers(h, opts = {}) {
   function enrichEventPlaces(events) {
     for (const ev of events) {
       ev.place = resolvePlaceName(ev);
+      if (ev.place_id) {
+        const p = get('SELECT latitude, longitude FROM places WHERE id = ?', [ev.place_id]);
+        ev.place_geocoded = !!(p && p.latitude != null && p.longitude != null);
+      } else {
+        ev.place_geocoded = false;
+      }
     }
     return events;
   }

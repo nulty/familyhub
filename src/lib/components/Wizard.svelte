@@ -96,6 +96,8 @@
       found.push({ type: 'missing_event', eventType: 'marriage', label: 'No marriage event' });
 
     for (const ev of allEvents) {
+      if (!ev.place_id)
+        found.push({ type: 'no_place', eventId: ev.id, eventType: ev.type, label: `${capitalize(ev.type)} has no place` });
       if (!ev.citations || ev.citations.filter(c => c.source_title || c.url).length === 0)
         found.push({ type: 'uncited_event', eventId: ev.id, eventType: ev.type, label: `${capitalize(ev.type)} has no citation` });
     }
@@ -139,7 +141,7 @@
   function handleAction(issue) {
     if (issue.type === 'missing_event') {
       openEventForm(currentPerson.id, null);
-    } else if (issue.type === 'uncited_event') {
+    } else if (issue.type === 'uncited_event' || issue.type === 'no_place') {
       openEventForm(currentData?.person?.id || currentPerson.id, issue.eventId);
     }
   }
