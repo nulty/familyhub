@@ -21,6 +21,9 @@
   let title = $state(prefill?.title || 'New Place');
   let parentName = $state('');
   let pickerRef;
+  let geocodeQuery = $state('');
+  let geocodeOpen = $state(false);
+  let geocodeLoading = $state(false);
 
   $effect(() => {
     if (!placeId && prefill?.parent_id) {
@@ -65,6 +68,45 @@
       selectedParentId = newPlace.id;
       if (pickerRef) pickerRef.setValue(newPlace.name);
     });
+  }
+
+  async function openGeocode() {
+    if (geocodeOpen) { geocodeOpen = false; return; }
+    const id = isEdit ? placeId : null;
+    if (id) {
+      const chain = await places.hierarchy(id);
+      const TYPE_PREFIX = { county: 'County' };
+      geocodeQuery = chain.map(p => {
+        const prefix = TYPE_PREFIX[p.type];
+        return prefix ? `${prefix} ${p.name}` : p.name;
+      }).reverse().join(', ');
+    } else {
+      geocodeQuery = name;
+    }
+    geocodeOpen = true;
+  }
+
+  async function runGeocode() {
+    if (!geocodeQuery.trim()) return;
+    geocodeLoading = true;
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: geocodeQuery.trim(), format: 'json', limit: '1' })}`;
+      const res = await fetch(url, { headers: { 'User-Agent': 'FamilyHub/0.2.0' } });
+      if (!res.ok) { showToast('Geocode request failed'); return; }
+      const data = await res.json();
+      if (data.length > 0) {
+        latitude = String(parseFloat(data[0].lat));
+        longitude = String(parseFloat(data[0].lon));
+        geocodeOpen = false;
+        showToast('Coordinates found');
+      } else {
+        showToast('No results — try editing the query');
+      }
+    } catch (err) {
+      showToast('Geocode error: ' + err.message);
+    } finally {
+      geocodeLoading = false;
+    }
   }
 
   function handlePickOnMap() {
@@ -138,8 +180,19 @@
     <div class="form-group">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <label>Coordinates</label>
-        <button type="button" class="btn-link btn-sm" onclick={handlePickOnMap}>Pick on map</button>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn-link btn-sm" onclick={openGeocode}>Geocode</button>
+          <button type="button" class="btn-link btn-sm" onclick={handlePickOnMap}>Pick on map</button>
+        </div>
       </div>
+      {#if geocodeOpen}
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+          <input type="text" bind:value={geocodeQuery} placeholder="Search query…" style="flex:1" onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runGeocode(); } }}>
+          <button type="button" class="btn btn-primary btn-sm" onclick={runGeocode} disabled={geocodeLoading}>
+            {geocodeLoading ? 'Searching…' : 'Search'}
+          </button>
+        </div>
+      {/if}
       <div style="display:flex;gap:0.5rem">
         <input id="plf-lat" type="number" step="any" min="-90" max="90" bind:value={latitude} placeholder="Latitude">
         <input id="plf-lng" type="number" step="any" min="-180" max="180" bind:value={longitude} placeholder="Longitude">
