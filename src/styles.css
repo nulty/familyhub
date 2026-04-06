@@ -500,6 +500,7 @@ a:hover { text-decoration: underline; }
 .map-event-row:hover {
   color: var(--accent);
 }
+.map-event-owner { font-weight: normal; opacity: 0.7; }
 
 .map-panel-footer {
   padding: 8px 12px;

@@ -57,9 +57,9 @@
 
     // Gather all events (owned + shared + participating)
     const allEvents = [
-      ...(data.events || []),
-      ...(data.sharedEvents || []),
-      ...(data.participatingEvents || []),
+      ...(data.events || []).map(e => ({ ...e, _kind: 'owned' })),
+      ...(data.sharedEvents || []).map(e => ({ ...e, _kind: 'shared' })),
+      ...(data.participatingEvents || []).map(e => ({ ...e, _kind: 'participating' })),
     ];
 
     // Resolve place coordinates for events with place_id
@@ -68,6 +68,16 @@
       if (!ev.place_id) continue;
       const place = await getPlace(ev.place_id);
       if (!place || place.latitude == null || place.longitude == null) continue;
+
+      // For participating events, show the owner's name; for shared, show other participants
+      let ownerName = '';
+      if (ev._kind === 'participating') {
+        ownerName = ev.owner_name?.trim() || '';
+      } else if (ev._kind === 'shared' && ev.participants?.length > 0) {
+        const others = ev.participants.filter(p => p.person_id !== personId).map(p => p.name?.trim()).filter(Boolean);
+        ownerName = others.join(', ');
+      }
+
       mappedEvents.push({
         eventId: ev.id,
         lat: place.latitude,
@@ -76,6 +86,7 @@
         date: ev.date || '',
         place: ev.place || place.name || '',
         personName,
+        ownerName,
       });
     }
 
@@ -180,7 +191,7 @@
           {#each entry.events as ev}
             <div class="map-event-row" onclick={() => handleEventClick(personId, ev.eventId)}>
               <span>&#x1F4CD;</span>
-              <span>{ev.type}</span>
+              <span>{ev.type}{#if ev.ownerName} <span class="map-event-owner">— {ev.ownerName}</span>{/if}</span>
               {#if ev.date}<span>&middot; {ev.date}</span>{/if}
               {#if ev.place}<span>&middot; {ev.place}</span>{/if}
             </div>

@@ -44,7 +44,7 @@ export function addMarkers(personId, color, events) {
     }).addTo(map);
 
     const popupHtml = `<div style="font-size:13px;line-height:1.4">
-      <div style="font-weight:600;text-transform:capitalize">${ev.type}</div>
+      <div style="font-weight:600;text-transform:capitalize">${ev.type}${ev.ownerName ? ` <span style="font-weight:400;color:#666">— ${ev.ownerName}</span>` : ''}</div>
       ${ev.date ? `<div>${ev.date}</div>` : ''}
       <div style="color:#666">${ev.personName}</div>
     </div>`;
