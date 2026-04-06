@@ -44,8 +44,8 @@ export function runMigrations() {
 }
 
 async function call(method, ...args) {
-  // Wait for DB to be ready before any call (except init itself)
-  if (method !== 'init' && readyPromise) await readyPromise;
+  // closeAndClear bypasses the ready check since it's used during teardown
+  if (method !== 'init' && method !== 'closeAndClear' && readyPromise) await readyPromise;
   if (!worker) throw new Error('Database not initialized — call initDB() first');
   return new Promise((resolve, reject) => {
     const id = ++msgId;
@@ -317,12 +317,17 @@ export const bulk = {
 // ─── Reset ───────────────────────────────────────────────────────────────────
 
 export function resetDatabase() {
-  return call('resetDatabase');
+  return call('nukeDatabase');
 }
 
 export async function nukeDatabase() {
-  // Terminate the worker to release OPFS file locks, then clear OPFS directly
+  // Ask the worker to close the DB and release SAH pool handles
   if (worker) {
+    try {
+      await call('closeAndClear');
+    } catch {
+      // Worker may be unresponsive
+    }
     worker.terminate();
     worker = null;
     pending.clear();
@@ -334,9 +339,6 @@ export async function nukeDatabase() {
   for await (const [name] of root.entries()) {
     await root.removeEntry(name, { recursive: true });
   }
-
-  // Restart the worker with a fresh database
-  await initDB();
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────

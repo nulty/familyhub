@@ -199,15 +199,9 @@
 
   async function nukeDB() {
     if (!confirm('Delete ALL data? This cannot be undone.')) return;
-    try {
-      uploadStatus = 'Deleting all data\u2026';
-      await nukeDatabase();
-      emit(PERSON_DESELECTED);
-      emit(DATA_CHANGED);
-      showToast('Database wiped');
-    } finally {
-      uploadStatus = null;
-    }
+    uploadStatus = 'Deleting all data\u2026';
+    await nukeDatabase();
+    window.location.reload();
   }
 
   function handleMenuKeydown(e) {

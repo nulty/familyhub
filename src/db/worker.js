@@ -14,6 +14,7 @@ let sqlite3Api = null;
 let handlers = null;
 let helpers = null;
 let schemaBaseUrl = '';
+let sahPoolUtil = null;
 
 async function initDB() {
   const sqlite3 = await sqlite3InitModule({
@@ -26,11 +27,23 @@ async function initDB() {
   let vfsName = null;
   if (sqlite3.installOpfsSAHPoolVfs) {
     try {
-      const poolUtil = await sqlite3.installOpfsSAHPoolVfs({ name: 'opfs-sahpool' });
-      vfsName = poolUtil.vfsName;
+      sahPoolUtil = await sqlite3.installOpfsSAHPoolVfs({ name: 'opfs-sahpool' });
+      vfsName = sahPoolUtil.vfsName;
       console.log('[worker] OPFS SAH pool VFS ready:', vfsName);
     } catch (e) {
-      console.warn('[worker] OPFS SAH pool not available:', e.message);
+      console.warn('[worker] OPFS SAH pool failed, clearing and retrying:', e.message);
+      // SAH pool files may be orphaned — clear the OPFS directory and retry
+      try {
+        const root = await navigator.storage.getDirectory();
+        for await (const [name] of root.entries()) {
+          try { await root.removeEntry(name, { recursive: true }); } catch {}
+        }
+        sahPoolUtil = await sqlite3.installOpfsSAHPoolVfs({ name: 'opfs-sahpool' });
+        vfsName = sahPoolUtil.vfsName;
+        console.log('[worker] OPFS SAH pool VFS ready after cleanup:', vfsName);
+      } catch (e2) {
+        console.warn('[worker] OPFS SAH pool not available:', e2.message);
+      }
     }
   }
 
@@ -253,6 +266,17 @@ self.onmessage = async (e) => {
     }
     if (method === 'runMigrations') {
       applyMigrations(helpers);
+      self.postMessage({ id, result: { ok: true } });
+      return;
+    }
+    if (method === 'closeAndClear') {
+      if (db) { db.close(); db = null; }
+      if (sahPoolUtil) {
+        await sahPoolUtil.removeVfs();
+        sahPoolUtil = null;
+      }
+      handlers = null;
+      helpers = null;
       self.postMessage({ id, result: { ok: true } });
       return;
     }

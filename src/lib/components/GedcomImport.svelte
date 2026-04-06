@@ -1,5 +1,5 @@
 <script>
-  import { bulk, nukeDatabase } from '../../db/db.js';
+  import { bulk, resetDatabase } from '../../db/db.js';
   import { setConfig } from '../../config.js';
   import { emit, DATA_CHANGED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
@@ -11,7 +11,7 @@
     try {
       if (reset) {
         if (!confirm('This will delete ALL existing data and recreate the database. Continue?')) return;
-        await nukeDatabase();
+        await resetDatabase();
         setConfig('resolvedPlaceSegments', {});
         setConfig('skippedPlaceSegments', []);
       }
