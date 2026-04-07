@@ -4,7 +4,7 @@ import crossOriginIsolation from 'vite-plugin-cross-origin-isolation';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/familyhub/' : '/',
+  base: '/',
   plugins: [
     svelte(),
     basicSsl(),               // self-signed cert for HTTPS (needed for OPFS over LAN)
