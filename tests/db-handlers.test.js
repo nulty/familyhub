@@ -634,6 +634,116 @@ describe('Places', () => {
     h.createPlace({ id: 'PL1', name: 'Dublin' });
     expect(h.getStats().places).toBe(1);
   });
+
+  it('createPlace stores latitude and longitude', () => {
+    const pl = h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city', latitude: 53.3498, longitude: -6.2603 });
+    expect(pl.latitude).toBeCloseTo(53.3498, 4);
+    expect(pl.longitude).toBeCloseTo(-6.2603, 4);
+  });
+
+  it('createPlace defaults latitude and longitude to null', () => {
+    const pl = h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    expect(pl.latitude).toBeNull();
+    expect(pl.longitude).toBeNull();
+  });
+
+  it('updatePlace can set latitude and longitude', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    const updated = h.updatePlace('PL1', { latitude: 53.35, longitude: -6.26 });
+    expect(updated.latitude).toBeCloseTo(53.35, 2);
+    expect(updated.longitude).toBeCloseTo(-6.26, 2);
+  });
+
+  it('updatePlace can clear latitude and longitude', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city', latitude: 53.35, longitude: -6.26 });
+    const updated = h.updatePlace('PL1', { latitude: null, longitude: null });
+    expect(updated.latitude).toBeNull();
+    expect(updated.longitude).toBeNull();
+  });
+
+  it('bulkImport preserves place latitude and longitude', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.bulkImport({
+      people: [], relationships: [], sources: [], citations: [], repositories: [], participants: [],
+      places: [{ id: 'PL1', name: 'Dublin', type: 'city', latitude: 53.35, longitude: -6.26 }],
+      events: [],
+    });
+    const pl = h.getPlace('PL1');
+    expect(pl.latitude).toBeCloseTo(53.35, 2);
+    expect(pl.longitude).toBeCloseTo(-6.26, 2);
+  });
+
+  it('getPlaceTree returns all places', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
+    h.createPlace({ id: 'PL2', name: 'Dublin', type: 'city', parent_id: 'PL1' });
+    const tree = h.getPlaceTree();
+    expect(tree).toHaveLength(2);
+    expect(tree[0].name).toBe('Dublin'); // sorted by name
+    expect(tree[1].name).toBe('Ireland');
+  });
+
+  it('findPlaceByNameTypeParent finds matching place', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
+    h.createPlace({ id: 'PL2', name: 'Dublin', type: 'county', parent_id: 'PL1' });
+    const found = h.findPlaceByNameTypeParent('Dublin', 'county', 'PL1');
+    expect(found).not.toBeNull();
+    expect(found.id).toBe('PL2');
+  });
+
+  it('findPlaceByNameTypeParent finds root place', () => {
+    h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
+    const found = h.findPlaceByNameTypeParent('Ireland', 'country', null);
+    expect(found).not.toBeNull();
+    expect(found.id).toBe('PL1');
+  });
+
+  it('findPlaceByNameTypeParent returns null when not found', () => {
+    expect(h.findPlaceByNameTypeParent('Atlantis', 'city', null)).toBeNull();
+  });
+
+  it('getPeopleByPlace finds people with events at a place', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    h.createPerson({ id: 'P1', given_name: 'John', surname: 'Smith' });
+    h.createPerson({ id: 'P2', given_name: 'Mary', surname: 'Jones' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', place_id: 'PL1' });
+    const people = h.getPeopleByPlace('PL1');
+    expect(people).toHaveLength(1);
+    expect(people[0].given_name).toBe('John');
+  });
+
+  it('getPeopleByPlace finds participants too', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createPerson({ id: 'P2', given_name: 'Mary' });
+    h.createEvent({ id: 'E1', person_id: null, type: 'marriage', place_id: 'PL1' });
+    h.addParticipant({ id: 'EP1', event_id: 'E1', person_id: 'P1' });
+    h.addParticipant({ id: 'EP2', event_id: 'E1', person_id: 'P2' });
+    const people = h.getPeopleByPlace('PL1');
+    expect(people).toHaveLength(2);
+  });
+
+  it('getEventsByPlace returns events at a place with person info', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    h.createPerson({ id: 'P1', given_name: 'John', surname: 'Smith' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', date: '1900', place_id: 'PL1', sort_date: -2208988800000 });
+    h.createEvent({ id: 'E2', person_id: 'P1', type: 'death', date: '1970', place_id: 'PL1', sort_date: 0 });
+    const events = h.getEventsByPlace('PL1');
+    expect(events).toHaveLength(2);
+    expect(events[0].given_name).toBe('John');
+    expect(events[0].type).toBe('birth'); // sorted by sort_date
+  });
+
+  it('getEventsByPlace includes participants for shared events', () => {
+    h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createPerson({ id: 'P2', given_name: 'Mary' });
+    h.createEvent({ id: 'E1', person_id: null, type: 'marriage', place_id: 'PL1' });
+    h.addParticipant({ id: 'EP1', event_id: 'E1', person_id: 'P1' });
+    h.addParticipant({ id: 'EP2', event_id: 'E1', person_id: 'P2' });
+    const events = h.getEventsByPlace('PL1');
+    expect(events).toHaveLength(1);
+    expect(events[0].participants).toHaveLength(2);
+  });
 });
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
