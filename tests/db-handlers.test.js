@@ -863,3 +863,172 @@ describe('getPersonWithEvents', () => {
     expect(result.partners).toHaveLength(1);
   });
 });
+
+// ─── Temporal Queries ────────────────────────────────────────────────────────
+
+describe('Temporal queries', () => {
+  it('findEventsNearDate returns events within window', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', date: '1900', sort_date: -2208988800000 });
+    h.createEvent({ id: 'E2', person_id: 'P1', type: 'death', date: '1970', sort_date: 0 });
+    h.createEvent({ id: 'E3', person_id: 'P1', type: 'residence', date: '1901', sort_date: -2177452800000 });
+
+    const results = h.findEventsNearDate(-2208988800000, 365 * 24 * 60 * 60 * 1000); // within 1 year of 1900
+    expect(results.length).toBeGreaterThanOrEqual(2); // birth and residence
+    expect(results.some(e => e.id === 'E1')).toBe(true);
+    expect(results.some(e => e.id === 'E3')).toBe(true);
+  });
+
+  it('findEventsNearDate excludes events outside window', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', date: '1900', sort_date: -2208988800000 });
+    h.createEvent({ id: 'E2', person_id: 'P1', type: 'death', date: '1970', sort_date: 0 });
+
+    const results = h.findEventsNearDate(-2208988800000, 1000); // tiny window
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('E1');
+  });
+
+  it('findEventsNearDate respects excludePersonId', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createPerson({ id: 'P2', given_name: 'Mary' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', sort_date: 1000 });
+    h.createEvent({ id: 'E2', person_id: 'P2', type: 'birth', sort_date: 1500 });
+
+    const results = h.findEventsNearDate(1000, 10000, { excludePersonId: 'P1' });
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('E2');
+  });
+
+  it('findEventsNearDate filters by personIds', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createPerson({ id: 'P2', given_name: 'Mary' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', sort_date: 1000 });
+    h.createEvent({ id: 'E2', person_id: 'P2', type: 'birth', sort_date: 1500 });
+
+    const results = h.findEventsNearDate(1000, 10000, { personIds: ['P2'] });
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('E2');
+  });
+
+  it('findEventsNearDate filters by eventTypes', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', sort_date: 1000 });
+    h.createEvent({ id: 'E2', person_id: 'P1', type: 'death', sort_date: 1500 });
+
+    const results = h.findEventsNearDate(1000, 10000, { eventTypes: ['death'] });
+    expect(results).toHaveLength(1);
+    expect(results[0].type).toBe('death');
+  });
+
+  it('findEventsNearDate respects limit', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', sort_date: 1000 });
+    h.createEvent({ id: 'E2', person_id: 'P1', type: 'residence', sort_date: 1001 });
+    h.createEvent({ id: 'E3', person_id: 'P1', type: 'death', sort_date: 1002 });
+
+    const results = h.findEventsNearDate(1000, 10000, { limit: 2 });
+    expect(results).toHaveLength(2);
+  });
+
+  it('findEventsNearDate sorts by distance', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', sort_date: 1000 });
+    h.createEvent({ id: 'E2', person_id: 'P1', type: 'residence', sort_date: 5000 });
+    h.createEvent({ id: 'E3', person_id: 'P1', type: 'death', sort_date: 2000 });
+
+    const results = h.findEventsNearDate(1000, 100000);
+    // E1 (distance 0) should come first, then E3 (distance 1000), then E2 (distance 4000)
+    expect(results[0].id).toBe('E1');
+    expect(results[1].id).toBe('E3');
+    expect(results[2].id).toBe('E2');
+  });
+
+  it('findEventsNearEvent finds events near another event', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createPerson({ id: 'P2', given_name: 'Mary' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', sort_date: 1000 });
+    h.createEvent({ id: 'E2', person_id: 'P2', type: 'birth', sort_date: 2000 });
+
+    const results = h.findEventsNearEvent('E1', 10000);
+    // Should find E2 but not E1 (excludes same person)
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('E2');
+  });
+
+  it('findEventsNearEvent returns empty for missing event', () => {
+    expect(h.findEventsNearEvent('MISSING', 10000)).toEqual([]);
+  });
+
+  it('findEventsNearEvent returns empty for event without sort_date', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth' }); // no sort_date
+    expect(h.findEventsNearEvent('E1', 10000)).toEqual([]);
+  });
+});
+
+// ─── Search Citations ────────────────────────────────────────────────────────
+
+describe('searchCitations', () => {
+  it('returns empty for null or empty query', () => {
+    expect(h.searchCitations(null)).toEqual([]);
+    expect(h.searchCitations('')).toEqual([]);
+    expect(h.searchCitations('   ')).toEqual([]);
+  });
+
+  it('finds citations by source title', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth' });
+    h.createSource({ id: 'S1', title: 'Census of Ireland 1901' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'p. 5' });
+
+    const results = h.searchCitations('Census');
+    expect(results).toHaveLength(1);
+    expect(results[0].source_title).toBe('Census of Ireland 1901');
+  });
+
+  it('finds citations by citation detail', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth' });
+    h.createSource({ id: 'S1', title: 'Records' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1', detail: 'Volume 12 Page 45' });
+
+    const results = h.searchCitations('Volume 12');
+    expect(results).toHaveLength(1);
+    expect(results[0].detail).toBe('Volume 12 Page 45');
+  });
+
+  it('finds citations by event place', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', place: 'Dublin' });
+    h.createSource({ id: 'S1', title: 'Records' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+
+    const results = h.searchCitations('Dublin');
+    expect(results).toHaveLength(1);
+  });
+
+  it('includes repository_name in results', () => {
+    h.createPerson({ id: 'P1', given_name: 'John' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth' });
+    h.createRepository({ id: 'R1', name: 'National Archives' });
+    h.createSource({ id: 'S1', repository_id: 'R1', title: 'Census' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+
+    const results = h.searchCitations('Census');
+    expect(results[0].repository_name).toBe('National Archives');
+  });
+
+  it('includes event_summary in results', () => {
+    h.createPerson({ id: 'P1', given_name: 'John', surname: 'Smith' });
+    h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', date: '1900', place: 'Dublin' });
+    h.createSource({ id: 'S1', title: 'Census' });
+    h.createCitation({ id: 'C1', source_id: 'S1', event_id: 'E1' });
+
+    const results = h.searchCitations('Census');
+    expect(results[0].event_summary).toContain('birth');
+    expect(results[0].event_summary).toContain('1900');
+    expect(results[0].event_summary).toContain('Dublin');
+    expect(results[0].event_summary).toContain('John Smith');
+  });
+});
