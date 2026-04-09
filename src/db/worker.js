@@ -281,12 +281,45 @@ self.onmessage = async (e) => {
       self.postMessage({ id, result: { ok: true } });
       return;
     }
+    if (method === 'switchDB') {
+      // Switch to a different database file, reusing the existing SAH pool VFS
+      const newDbName = args?.[0] || 'familytree-local.db';
+      if (db) { db.close(); db = null; }
+
+      // Reuse existing VFS — don't reinstall
+      const vfsName = sahPoolUtil ? sahPoolUtil.vfsName : null;
+      if (vfsName) {
+        db = new sqlite3Api.oo1.DB('/' + newDbName, 'cw', vfsName);
+      } else if (sqlite3Api.capi.sqlite3_vfs_find('opfs')) {
+        db = new sqlite3Api.oo1.OpfsDb('/' + newDbName);
+      } else {
+        db = new sqlite3Api.oo1.DB(':memory:');
+      }
+
+      // Apply schema + rebuild helpers/handlers
+      const schemaResponse = await fetch(schemaBaseUrl + 'schema.sql');
+      const schema = await schemaResponse.text();
+      db.exec(schema);
+      helpers = createWasmHelpers(db);
+      handlers = createHandlers(helpers);
+
+      // Re-add worker-only handlers
+      handlers.syncImport = async (data) => {
+        helpers.run('PRAGMA foreign_keys=OFF');
+        try { await handlers.bulkImport(data); } finally { helpers.run('PRAGMA foreign_keys=ON'); }
+        return { ok: true };
+      };
+
+      const migrationInfo = getPendingMigrations(helpers);
+      self.postMessage({ id, result: { ok: true, pendingMigrations: migrationInfo.pending } });
+      return;
+    }
     if (method === 'closeAndClear') {
       if (db) { db.close(); db = null; }
-      if (sahPoolUtil) {
-        await sahPoolUtil.removeVfs();
-        sahPoolUtil = null;
-      }
+      // Don't removeVfs here — just close the DB.
+      // removeVfs releases the SAH pool which causes conflicts
+      // when a new worker immediately reinitializes.
+      // The pool will be cleaned up when the worker is terminated.
       handlers = null;
       helpers = null;
       self.postMessage({ id, result: { ok: true } });

@@ -428,11 +428,8 @@ export async function syncDown() {
  */
 export async function switchDatabase(dbName) {
   if (worker) {
-    try { await workerCall('closeAndClear'); } catch {}
-    worker.terminate();
-    worker = null;
-    pending.clear();
-    readyPromise = null;
+    // Reuse the existing worker — just switch the database file
+    return workerCall('switchDB', dbName);
   }
   return initDB(dbName);
 }
