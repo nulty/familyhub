@@ -396,12 +396,14 @@
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
-            <hr class="menu-divider" />
-            <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
-            <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
-            <hr class="menu-divider" />
-            <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
-            <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
+            {#if collabMode === 'local'}
+              <hr class="menu-divider" />
+              <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
+              <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
+              <hr class="menu-divider" />
+              <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
+              <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
+            {/if}
             <hr class="menu-divider" />
             <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
               {collabMode === 'collab' ? 'Clear Local Cache' : 'Delete All Data'}
