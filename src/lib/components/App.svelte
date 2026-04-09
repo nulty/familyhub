@@ -1,16 +1,19 @@
 <script>
   import { onMount } from 'svelte';
-  import { initDB, getStats, nukeDatabase, bulk, runMigrations } from '../../db/db.js';
-  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP } from '../../state.js';
+  import { initDB, getStats, nukeDatabase, clearDatabase, bulk, runMigrations, syncDown, switchDatabase } from '../../db/db.js';
+  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP, COLLAB_MODE_CHANGED, COLLAB_SYNC_STATUS } from '../../state.js';
   import { initTree, refreshTree } from '../../ui/tree.js';
   import { initMap, invalidateSize, clearAllMarkers, startPicking, stopPicking } from '../../ui/map.js';
   import MapPanel from './MapPanel.svelte';
-  import { getConfig, setConfig } from '../../config.js';
+  import { getConfig, setConfig, getMode, getCollabState } from '../../config.js';
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
   import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
   import { triggerImport, triggerExport } from '../../gedcom/gedcom.js';
+  import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
+  import { shareTree, joinTree, forkToLocal, switchToLocal, switchToCollab, collabSignOut } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
-  import { getStack } from '../shared/modal-stack.svelte.js';
+  import { getStack, pushModal } from '../shared/modal-stack.svelte.js';
+  import CollabMenu from './CollabMenu.svelte';
   import Search from './Search.svelte';
   import Panel from './Panel.svelte';
   import Wizard from './Wizard.svelte';
@@ -28,16 +31,48 @@
   let viewMode = $state('tree'); // 'tree' | 'map'
   let mapInitialized = false;
   let pendingMapPerson = $state(null);
+  let collabMode = $state(getMode());
+  let authenticated = $state(isAuthenticated());
+  let currentUser = $state(getCurrentUser());
+  let syncStatus = $state('online');
 
   const modalStack = getStack;
 
-  onMount(() => {
-    initDB().then(async (result) => {
+  onMount(async () => {
+    // Handle OAuth callback
+    const url = new URL(window.location.href);
+    const authCode = url.searchParams.get('code');
+    if (authCode) {
+      url.searchParams.delete('code');
+      url.searchParams.delete('scope');
+      url.searchParams.delete('authuser');
+      url.searchParams.delete('prompt');
+      window.history.replaceState({}, '', url.pathname);
+      try {
+        await handleAuthCallback(authCode);
+        showToast('Signed in successfully');
+      } catch (e) {
+        showToast('Sign-in failed: ' + e.message);
+      }
+    }
+
+    const collabState = getCollabState();
+    const dbName = collabState?.mode === 'collab' && collabState?.treeId
+      ? `familytree-collab-${collabState.treeId}.db`
+      : 'familytree-local.db';
+
+    initDB(dbName).then(async (result) => {
       if (result.pendingMigrations?.length > 0) {
         migrationPrompt = result.pendingMigrations;
-        return; // wait for user to dismiss prompt before booting
+        return;
       }
-      boot();
+      await boot();
+
+      // If collab mode, sync down after boot
+      if (collabState?.mode === 'collab') {
+        await syncDown();
+        emit(DATA_CHANGED);
+      }
     });
 
     on(PERSON_SELECTED, (id) => {
@@ -95,6 +130,24 @@
       pendingMapPerson = personId;
       setViewMode('map');
     });
+
+    on(COLLAB_MODE_CHANGED, (mode) => {
+      collabMode = mode;
+      authenticated = isAuthenticated();
+      currentUser = getCurrentUser();
+    });
+
+    on(COLLAB_SYNC_STATUS, (status) => {
+      syncStatus = status;
+    });
+
+    // Monitor online/offline for collab mode
+    window.addEventListener('online', () => {
+      if (getMode() === 'collab') syncDown().then(() => emit(DATA_CHANGED));
+    });
+    window.addEventListener('offline', () => {
+      if (getMode() === 'collab') emit(COLLAB_SYNC_STATUS, 'offline');
+    });
   });
 
   async function boot() {
@@ -107,6 +160,15 @@
       const treeCfg = getTreeConfig();
       applyTreeColors(treeCfg);
       applyCardDisplay(treeCfg);
+    }
+
+    // Periodic sync for collab mode
+    if (getMode() === 'collab') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && getMode() === 'collab') {
+          syncDown().then(() => emit(DATA_CHANGED));
+        }
+      });
     }
   }
 
@@ -198,14 +260,64 @@
   }
 
   async function nukeDB() {
-    if (!confirm('Delete ALL data? This cannot be undone.')) return;
-    uploadStatus = 'Deleting all data\u2026';
-    await nukeDatabase();
-    window.location.reload();
+    const mode = getMode();
+    if (mode === 'collab') {
+      if (!confirm('Clear the local cache? This does not affect the shared tree.')) return;
+      uploadStatus = 'Clearing cache\u2026';
+      const state = getCollabState();
+      await clearDatabase(`familytree-collab-${state.treeId}.db`);
+      window.location.reload();
+    } else {
+      if (!confirm('Delete ALL data? This cannot be undone.')) return;
+      uploadStatus = 'Deleting all data\u2026';
+      await nukeDatabase();
+      window.location.reload();
+    }
   }
 
   function handleMenuKeydown(e) {
     if (e.key === 'Escape') menuOpen = false;
+  }
+
+  async function handleShareTree() {
+    const name = prompt('Name for your shared tree:');
+    if (!name) return;
+    uploadStatus = 'Sharing tree\u2026';
+    try {
+      await shareTree(name);
+      showToast('Tree shared! You can now invite others.');
+    } catch (e) {
+      showToast('Failed to share: ' + e.message);
+    } finally {
+      uploadStatus = null;
+    }
+  }
+
+  function handleJoinTree() {
+    const code = prompt('Enter invite code:');
+    if (!code) return;
+    uploadStatus = 'Joining tree\u2026';
+    joinTree(code.trim())
+      .then((tree) => {
+        showToast('Joined "' + tree.name + '"');
+        uploadStatus = null;
+      })
+      .catch((e) => {
+        showToast('Failed to join: ' + e.message);
+        uploadStatus = null;
+      });
+  }
+
+  function handleSignOut() {
+    collabSignOut();
+    authenticated = false;
+    currentUser = null;
+    collabMode = 'local';
+    showToast('Signed out');
+  }
+
+  function openCollabMenu() {
+    pushModal(CollabMenu, {});
   }
 
   function setViewMode(mode) {
@@ -239,6 +351,18 @@
         </div>
       {/if}
       <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Person</button>
+      {#if authenticated}
+        <span class="user-badge" title={currentUser?.email}>
+          {currentUser?.name || currentUser?.email}
+        </span>
+        {#if collabMode === 'collab'}
+          <span class="connection-dot" class:online={syncStatus === 'online'} class:syncing={syncStatus === 'syncing'} class:offline={syncStatus === 'offline'}
+            title={syncStatus === 'online' ? 'Connected' : syncStatus === 'syncing' ? 'Syncing...' : 'Offline (read-only)'}>
+          </span>
+        {/if}
+      {:else}
+        <button class="btn btn-outline" onclick={startGoogleSignIn}>Sign In</button>
+      {/if}
       <div class="menu-wrapper">
         <button class="btn menu-toggle" onclick={() => menuOpen = !menuOpen} aria-label="Menu">
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -252,6 +376,23 @@
             <button class="menu-item" onclick={() => menuAction(startWizard)}>Data Entry Wizard</button>
             <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
             <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
+            {#if authenticated && collabMode === 'local'}
+              <button class="menu-item" onclick={() => menuAction(handleShareTree)}>Share This Tree</button>
+              <button class="menu-item" onclick={() => menuAction(handleJoinTree)}>Join a Tree</button>
+            {/if}
+            {#if authenticated && collabMode === 'collab'}
+              <button class="menu-item" onclick={() => menuAction(openCollabMenu)}>Collaboration</button>
+            {/if}
+            {#if authenticated && getCollabState()?.hasLocalTree && collabMode === 'collab'}
+              <button class="menu-item" onclick={() => menuAction(switchToLocal)}>Switch to Local Tree</button>
+            {/if}
+            {#if authenticated && getCollabState()?.treeId && collabMode === 'local'}
+              <button class="menu-item" onclick={() => menuAction(switchToCollab)}>Switch to Shared Tree</button>
+            {/if}
+            {#if authenticated}
+              <button class="menu-item" onclick={() => menuAction(handleSignOut)}>Sign Out</button>
+            {/if}
+            <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
             <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
@@ -260,7 +401,9 @@
             <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
             <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
             <hr class="menu-divider" />
-            <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>Delete All Data</button>
+            <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
+              {collabMode === 'collab' ? 'Clear Local Cache' : 'Delete All Data'}
+            </button>
           </div>
         {/if}
       </div>
