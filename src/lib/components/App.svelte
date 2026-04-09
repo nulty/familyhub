@@ -50,6 +50,8 @@
       window.history.replaceState({}, '', url.pathname);
       try {
         await handleAuthCallback(authCode);
+        authenticated = true;
+        currentUser = getCurrentUser();
         showToast('Signed in successfully');
       } catch (e) {
         showToast('Sign-in failed: ' + e.message);

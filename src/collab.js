@@ -5,7 +5,7 @@
 
 import { getCollabState, setCollabState, clearCollabState, getMode } from './config.js';
 import { initDB, switchDatabase, syncDown, bulk, nukeDatabase } from './db/db.js';
-import { apiFetch } from './db/remote.js';
+import { apiFetch, remoteCall } from './db/remote.js';
 import { isAuthenticated, signOut as authSignOut, getCurrentUser } from './auth.js';
 import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
 
@@ -15,13 +15,16 @@ import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
 export async function shareTree(name) {
   if (!isAuthenticated()) throw new Error('Not authenticated');
 
+  // Export local data before creating the tree
   const data = await bulk.exportAll();
 
+  // Create empty tree on the API
   const { tree } = await apiFetch('/trees', {
     method: 'POST',
-    body: JSON.stringify({ name, data }),
+    body: JSON.stringify({ name }),
   });
 
+  // Switch to collab mode so remoteCall targets the new tree
   const state = getCollabState();
   setCollabState({
     ...state,
@@ -31,6 +34,12 @@ export async function shareTree(name) {
     hasLocalTree: true,
   });
 
+  // Import data to the remote tree via the query proxy
+  if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
+    await remoteCall('bulkImport', data);
+  }
+
+  // Switch OPFS to collab cache and sync down
   await switchDatabase(`familytree-collab-${tree.id}.db`);
   await syncDown();
 
