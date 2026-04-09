@@ -5,7 +5,8 @@
   import { showToast } from '../shared/toast-store.js';
   import Modal from '../forms/Modal.svelte';
 
-  let { close } = $props();
+  let { onclose } = $props();
+  const close = onclose;
 
   let members = $state([]);
   let activity = $state([]);
