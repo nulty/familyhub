@@ -224,10 +224,10 @@ function createWasmHelpers(db) {
     return db.changes();
   }
 
-  function transaction(fn) {
+  async function transaction(fn) {
     db.exec('BEGIN');
     try {
-      const result = fn();
+      const result = await fn({ all, get, run });
       db.exec('COMMIT');
       return result;
     } catch (e) {
