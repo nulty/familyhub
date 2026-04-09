@@ -8,11 +8,14 @@ import App from './lib/components/App.svelte';
 const LOCK_NAME = 'familyhub-single-tab';
 
 async function start() {
+  // Skip lock check during OAuth callback — the redirect releases and re-acquires the lock
+  const isAuthCallback = new URLSearchParams(window.location.search).has('code');
+
   // Check if another tab already holds the lock
   const locks = await navigator.locks.query();
   const held = locks.held?.some(l => l.name === LOCK_NAME);
 
-  if (held) {
+  if (held && !isAuthCallback) {
     document.body.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;padding:2rem;text-align:center;font-family:system-ui,sans-serif;color:#1a1a1a">
         <div>
