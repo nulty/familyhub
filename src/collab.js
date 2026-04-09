@@ -34,9 +34,12 @@ export async function shareTree(name) {
     hasLocalTree: true,
   });
 
-  // Import data to the remote tree via the query proxy
+  // Import data to the remote tree via the dedicated batch import endpoint
   if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
-    await remoteCall('bulkImport', data);
+    await apiFetch(`/trees/${tree.id}/import`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // Switch OPFS to collab cache and sync down
