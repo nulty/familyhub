@@ -7,13 +7,30 @@
 
 import { ulid } from '../util/ulid.js';
 import { parseSortDate } from '../util/dates.js';
+import { getMode } from '../config.js';
+import { remoteCall } from './remote.js';
+import { emit, COLLAB_SYNC_STATUS } from '../state.js';
+
+const WRITE_METHODS = new Set([
+  'createPerson', 'updatePerson', 'deletePerson',
+  'createPersonName', 'updatePersonName', 'deletePersonName',
+  'addPartner', 'addParentChild', 'removeRelationship',
+  'createEvent', 'updateEvent', 'deleteEvent',
+  'addParticipant', 'removeParticipant', 'updateParticipantRole',
+  'createRepository', 'updateRepository', 'deleteRepository',
+  'createSource', 'updateSource', 'deleteSource',
+  'createCitation', 'updateCitation', 'deleteCitation',
+  'linkCitationEvent', 'unlinkCitationEvent',
+  'createPlace', 'updatePlace', 'deletePlace',
+  'bulkImport', 'resetDatabase',
+]);
 
 let worker = null;
 let pending = new Map();
 let msgId = 0;
 let readyPromise = null;
 
-export async function initDB() {
+export async function initDB(dbName = 'familytree-local.db') {
   // Module worker — Vite bundles imports automatically.
   // schema.sql remains in public/ and is fetched at runtime by the worker.
   const base = import.meta.env.BASE_URL || '/';
@@ -34,7 +51,7 @@ export async function initDB() {
 
   // Pass the base URL so the worker can fetch schema.sql from public/
   const schemaBaseUrl = new URL(base, window.location.origin).href;
-  readyPromise = call('init', schemaBaseUrl);
+  readyPromise = call('init', schemaBaseUrl, dbName);
   const result = await readyPromise;
   return result;
 }
@@ -43,8 +60,7 @@ export function runMigrations() {
   return call('runMigrations');
 }
 
-async function call(method, ...args) {
-  // closeAndClear bypasses the ready check since it's used during teardown
+async function workerCall(method, ...args) {
   if (method !== 'init' && method !== 'closeAndClear' && readyPromise) await readyPromise;
   if (!worker) throw new Error('Database not initialized — call initDB() first');
   return new Promise((resolve, reject) => {
@@ -52,6 +68,34 @@ async function call(method, ...args) {
     pending.set(id, { resolve, reject });
     worker.postMessage({ id, method, args });
   });
+}
+
+async function call(method, ...args) {
+  // Internal worker methods always go to the worker
+  if (method === 'init' || method === 'closeAndClear' || method === 'runMigrations'
+      || method === 'exportDatabase' || method === 'importDatabase') {
+    return workerCall(method, ...args);
+  }
+
+  const mode = getMode();
+
+  if (mode === 'local') {
+    return workerCall(method, ...args);
+  }
+
+  // Collab mode
+  if (WRITE_METHODS.has(method)) {
+    if (!navigator.onLine) {
+      throw new Error("Can't save while offline");
+    }
+    const result = await remoteCall(method, ...args);
+    // Update local cache by replaying the write
+    try { await workerCall(method, ...args); } catch {}
+    return result;
+  }
+
+  // Reads hit local cache
+  return workerCall(method, ...args);
 }
 
 // ─── People ───────────────────────────────────────────────────────────────────
@@ -324,7 +368,7 @@ export async function nukeDatabase() {
   // Ask the worker to close the DB and release SAH pool handles
   if (worker) {
     try {
-      await call('closeAndClear');
+      await workerCall('closeAndClear');
     } catch {
       // Worker may be unresponsive
     }
@@ -339,6 +383,58 @@ export async function nukeDatabase() {
   for await (const [name] of root.entries()) {
     await root.removeEntry(name, { recursive: true });
   }
+}
+
+export async function clearDatabase(dbName) {
+  if (worker) {
+    try { await workerCall('closeAndClear'); } catch {}
+    worker.terminate();
+    worker = null;
+    pending.clear();
+    readyPromise = null;
+  }
+  const root = await navigator.storage.getDirectory();
+  for await (const [name] of root.entries()) {
+    if (name.includes(dbName)) {
+      await root.removeEntry(name, { recursive: true });
+    }
+  }
+}
+
+/**
+ * Full sync-down: download all data from the API and import into local cache.
+ */
+export async function syncDown() {
+  const mode = getMode();
+  if (mode !== 'collab') return;
+
+  emit(COLLAB_SYNC_STATUS, 'syncing');
+
+  try {
+    const data = await remoteCall('exportAll');
+    await workerCall('nukeDatabase');
+    if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
+      await workerCall('bulkImport', data);
+    }
+    emit(COLLAB_SYNC_STATUS, 'online');
+  } catch (e) {
+    console.error('[db] Sync-down failed:', e);
+    emit(COLLAB_SYNC_STATUS, 'offline');
+  }
+}
+
+/**
+ * Switch the database to a different OPFS file.
+ */
+export async function switchDatabase(dbName) {
+  if (worker) {
+    try { await workerCall('closeAndClear'); } catch {}
+    worker.terminate();
+    worker = null;
+    pending.clear();
+    readyPromise = null;
+  }
+  return initDB(dbName);
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────

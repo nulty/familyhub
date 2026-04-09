@@ -16,7 +16,7 @@ let helpers = null;
 let schemaBaseUrl = '';
 let sahPoolUtil = null;
 
-async function initDB() {
+async function initDB(dbName) {
   const sqlite3 = await sqlite3InitModule({
     printErr: console.error,
   });
@@ -48,10 +48,10 @@ async function initDB() {
   }
 
   if (vfsName) {
-    db = new sqlite3.oo1.DB('/familytree.db', 'cw', vfsName);
+    db = new sqlite3.oo1.DB('/' + dbName, 'cw', vfsName);
     console.log('[worker] Opened OPFS database via', vfsName);
   } else if (sqlite3.capi.sqlite3_vfs_find('opfs')) {
-    db = new sqlite3.oo1.OpfsDb('/familytree.db');
+    db = new sqlite3.oo1.OpfsDb('/' + dbName);
     console.log('[worker] Opened OPFS database (legacy VFS)');
   } else {
     db = new sqlite3.oo1.DB(':memory:');
@@ -260,7 +260,8 @@ self.onmessage = async (e) => {
   try {
     if (method === 'init') {
       schemaBaseUrl = args?.[0] || '';
-      const initResult = await initDB();
+      const dbName = args?.[1] || 'familytree-local.db';
+      const initResult = await initDB(dbName);
       self.postMessage({ id, result: { ok: true, ...initResult } });
       return;
     }
