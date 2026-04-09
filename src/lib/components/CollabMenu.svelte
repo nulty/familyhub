@@ -63,7 +63,7 @@
   }
 </script>
 
-<Modal title={collabState?.treeName || 'Collaboration'} {close} wide>
+<Modal title={collabState?.treeName || 'Collaboration'} onclose={close} wide>
   {#if loading}
     <p>Loading...</p>
   {:else}
