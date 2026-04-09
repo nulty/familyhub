@@ -26,18 +26,18 @@ Add an entry to the `migrations` array in `src/db/migrations.js`:
 {
   version: 8,
   description: 'Short description of what this does',
-  up(helpers) {
+  async up(helpers) {
     const { run, all, get } = helpers;
-    // migration logic here
+    // migration logic here — use await on all helper calls
   },
 },
 ```
 
-The `helpers` object provides:
+The `helpers` object provides (all async-compatible for Turso):
 - `run(sql, params)` — execute a statement, returns change count
 - `all(sql, params)` — returns array of row objects
 - `get(sql, params)` — returns first row or null
-- `transaction(fn)` — wraps `fn` in BEGIN/COMMIT/ROLLBACK
+- `transaction(fn)` — wraps `fn` in BEGIN/COMMIT/ROLLBACK (supports async callbacks)
 
 ### 3. Write tests
 
