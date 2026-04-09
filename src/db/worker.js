@@ -16,6 +16,117 @@ let helpers = null;
 let schemaBaseUrl = '';
 let sahPoolUtil = null;
 
+/** Add worker-only handlers that need WASM API access. Called after createHandlers(). */
+function addWorkerHandlers() {
+  handlers.exportDatabase = () => {
+    const tmp = new sqlite3Api.oo1.DB(':memory:');
+    const tables = helpers.all("SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL");
+    const indexes = helpers.all("SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL");
+    for (const t of tables) tmp.exec(t.sql);
+    for (const i of indexes) tmp.exec(i.sql);
+    const tableNames = helpers.all("SELECT name FROM sqlite_master WHERE type='table'");
+    for (const { name } of tableNames) {
+      const rows = helpers.all(`SELECT * FROM "${name}"`);
+      if (rows.length === 0) continue;
+      const cols = Object.keys(rows[0]);
+      const placeholders = cols.map(() => '?').join(',');
+      const insertSql = `INSERT INTO "${name}" (${cols.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`;
+      for (const row of rows) {
+        tmp.exec({ sql: insertSql, bind: cols.map(c => row[c]) });
+      }
+    }
+    const bytes = sqlite3Api.capi.sqlite3_js_db_export(tmp.pointer);
+    tmp.close();
+    return bytes;
+  };
+
+  handlers.syncImport = async (data) => {
+    helpers.run('PRAGMA foreign_keys=OFF');
+    try { await handlers.bulkImport(data); } finally { helpers.run('PRAGMA foreign_keys=ON'); }
+    return { ok: true };
+  };
+
+  handlers.nukeDatabase = async () => {
+    helpers.run('DROP TABLE IF EXISTS person_names');
+    helpers.run('DROP TABLE IF EXISTS citation_events');
+    helpers.run('DROP TABLE IF EXISTS citations');
+    helpers.run('DROP TABLE IF EXISTS sources');
+    helpers.run('DROP TABLE IF EXISTS repositories');
+    helpers.run('DROP TABLE IF EXISTS event_participants');
+    helpers.run('DROP TABLE IF EXISTS events');
+    helpers.run('DROP TABLE IF EXISTS relationships');
+    helpers.run('DROP TABLE IF EXISTS people');
+    helpers.run('DROP TABLE IF EXISTS places');
+    helpers.run("DELETE FROM meta");
+    const schemaResponse = await fetch(schemaBaseUrl + 'schema.sql');
+    const schemaText = await schemaResponse.text();
+    db.exec(schemaText);
+    return { ok: true };
+  };
+
+  handlers.importDatabase = async (bytes) => {
+    const tmp = new sqlite3Api.oo1.DB();
+    const pData = sqlite3Api.wasm.allocFromTypedArray(bytes);
+    const rc = sqlite3Api.capi.sqlite3_deserialize(
+      tmp.pointer, 'main', pData, bytes.byteLength, bytes.byteLength,
+      sqlite3Api.capi.SQLITE_DESERIALIZE_FREEONCLOSE
+    );
+    tmp.checkRc(rc);
+    const tmpTables = [];
+    tmp.exec({
+      sql: "SELECT name FROM sqlite_master WHERE type='table'",
+      rowMode: 'object',
+      callback: (row) => tmpTables.push(row.name),
+    });
+    const required = ['people', 'relationships', 'events', 'meta'];
+    const missing = required.filter((t) => !tmpTables.includes(t));
+    if (missing.length > 0) {
+      tmp.close();
+      throw new Error(`Invalid database: missing tables: ${missing.join(', ')}`);
+    }
+    await handlers.nukeDatabase();
+    helpers.run('PRAGMA foreign_keys=OFF');
+    try {
+      helpers.transaction(({ run: txRun, all: txAll }) => {
+        const tmpTableSet = new Set();
+        tmp.exec({
+          sql: "SELECT name FROM sqlite_master WHERE type='table'",
+          rowMode: 'object',
+          callback: (row) => tmpTableSet.add(row.name),
+        });
+        const currentTables = txAll("SELECT name FROM sqlite_master WHERE type='table'");
+        for (const { name } of currentTables) {
+          if (!tmpTableSet.has(name)) continue;
+          const currentCols = new Set(
+            txAll(`PRAGMA table_info("${name}")`).map((c) => c.name)
+          );
+          const rows = [];
+          tmp.exec({
+            sql: `SELECT * FROM "${name}"`,
+            rowMode: 'object',
+            callback: (row) => rows.push(row),
+          });
+          if (rows.length === 0) continue;
+          const srcCols = Object.keys(rows[0]);
+          const cols = srcCols.filter((c) => currentCols.has(c));
+          if (cols.length === 0) continue;
+          txRun(`DELETE FROM "${name}"`);
+          const placeholders = cols.map(() => '?').join(',');
+          const insertSql = `INSERT OR REPLACE INTO "${name}" (${cols.map((c) => `"${c}"`).join(',')}) VALUES (${placeholders})`;
+          for (const row of rows) {
+            txRun(insertSql, cols.map((c) => row[c]));
+          }
+        }
+      });
+    } finally {
+      helpers.run('PRAGMA foreign_keys=ON');
+    }
+    tmp.close();
+    const migrationInfo = getPendingMigrations(helpers);
+    return { ok: true, pendingMigrations: migrationInfo.pending };
+  };
+}
+
 async function initDB(dbName) {
   const sqlite3 = await sqlite3InitModule({
     printErr: console.error,
@@ -67,60 +178,7 @@ async function initDB(dbName) {
   helpers = createWasmHelpers(db);
   handlers = createHandlers(helpers);
 
-  // Add worker-only handlers that need WASM API access
-  handlers.exportDatabase = () => {
-    const tmp = new sqlite3Api.oo1.DB(':memory:');
-    const tables = helpers.all("SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL");
-    const indexes = helpers.all("SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL");
-    for (const t of tables) tmp.exec(t.sql);
-    for (const i of indexes) tmp.exec(i.sql);
-    const tableNames = helpers.all("SELECT name FROM sqlite_master WHERE type='table'");
-    for (const { name } of tableNames) {
-      const rows = helpers.all(`SELECT * FROM "${name}"`);
-      if (rows.length === 0) continue;
-      const cols = Object.keys(rows[0]);
-      const placeholders = cols.map(() => '?').join(',');
-      const insertSql = `INSERT INTO "${name}" (${cols.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`;
-      for (const row of rows) {
-        tmp.exec({ sql: insertSql, bind: cols.map(c => row[c]) });
-      }
-    }
-    const bytes = sqlite3Api.capi.sqlite3_js_db_export(tmp.pointer);
-    tmp.close();
-    return bytes;
-  };
-
-  // Bulk import with FK checks disabled — used by syncDown
-  handlers.syncImport = async (data) => {
-    helpers.run('PRAGMA foreign_keys=OFF');
-    try {
-      await handlers.bulkImport(data);
-    } finally {
-      helpers.run('PRAGMA foreign_keys=ON');
-    }
-    return { ok: true };
-  };
-
-  handlers.nukeDatabase = async () => {
-    helpers.run('DROP TABLE IF EXISTS person_names');
-    helpers.run('DROP TABLE IF EXISTS citation_events');
-    helpers.run('DROP TABLE IF EXISTS citations');
-    helpers.run('DROP TABLE IF EXISTS sources');
-    helpers.run('DROP TABLE IF EXISTS repositories');
-    helpers.run('DROP TABLE IF EXISTS event_participants');
-    helpers.run('DROP TABLE IF EXISTS events');
-    helpers.run('DROP TABLE IF EXISTS relationships');
-    helpers.run('DROP TABLE IF EXISTS people');
-    helpers.run('DROP TABLE IF EXISTS places');
-    helpers.run("DELETE FROM meta");
-
-    // Re-apply schema (includes all columns and sets version to latest)
-    const schemaResponse = await fetch(schemaBaseUrl + 'schema.sql');
-    const schemaText = await schemaResponse.text();
-    db.exec(schemaText);
-
-    return { ok: true };
-  };
+  addWorkerHandlers();
 
   handlers.importDatabase = async (bytes) => {
     // Open uploaded bytes as temp in-memory DB via sqlite3_deserialize
@@ -304,11 +362,7 @@ self.onmessage = async (e) => {
       handlers = createHandlers(helpers);
 
       // Re-add worker-only handlers
-      handlers.syncImport = async (data) => {
-        helpers.run('PRAGMA foreign_keys=OFF');
-        try { await handlers.bulkImport(data); } finally { helpers.run('PRAGMA foreign_keys=ON'); }
-        return { ok: true };
-      };
+      addWorkerHandlers();
 
       const migrationInfo = getPendingMigrations(helpers);
       self.postMessage({ id, result: { ok: true, pendingMigrations: migrationInfo.pending } });
