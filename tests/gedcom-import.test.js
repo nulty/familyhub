@@ -257,7 +257,7 @@ describe('parseGEDCOM', () => {
 // ─── Database round-trip ─────────────────────────────────────────────────────
 
 describe('GEDCOM → bulkImport round-trip', () => {
-  it('imports parsed GEDCOM data into the database', () => {
+  it('imports parsed GEDCOM data into the database', async () => {
     const ged = `0 HEAD
 0 @I1@ INDI
 1 NAME John /Smith/
@@ -284,7 +284,7 @@ describe('GEDCOM → bulkImport round-trip', () => {
 
     const { data, stats } = parseGEDCOM(ged);
     const { handlers: h } = setupTestDB();
-    const counts = h.bulkImport(data);
+    const counts = await h.bulkImport(data);
 
     expect(counts.people).toBe(3);
     expect(counts.events).toBe(3);
@@ -295,7 +295,7 @@ describe('GEDCOM → bulkImport round-trip', () => {
     expect(counts.places).toBe(1);
 
     // Verify data is queryable
-    const dbStats = h.getStats();
+    const dbStats = await h.getStats();
     expect(dbStats.people).toBe(3);
     expect(dbStats.events).toBe(3);
     expect(dbStats.repositories).toBe(1);
@@ -304,7 +304,7 @@ describe('GEDCOM → bulkImport round-trip', () => {
     expect(dbStats.places).toBe(1);
   });
 
-  it('round-trips through export and re-import', () => {
+  it('round-trips through export and re-import', async () => {
     const ged = `0 HEAD
 0 @I1@ INDI
 1 NAME John /Smith/
@@ -324,19 +324,19 @@ describe('GEDCOM → bulkImport round-trip', () => {
 
     const { data } = parseGEDCOM(ged);
     const { handlers: h1 } = setupTestDB();
-    h1.bulkImport(data);
-    const exported = h1.exportAll();
+    await h1.bulkImport(data);
+    const exported = await h1.exportAll();
 
     // Import into a fresh DB
     const { handlers: h2 } = setupTestDB();
-    const counts = h2.bulkImport(exported);
+    const counts = await h2.bulkImport(exported);
 
     expect(counts.people).toBe(2);
     expect(counts.relationships).toBe(1);
     expect(counts.events).toBe(2); // 1 birth + 1 marriage (shared)
   });
 
-  it('import is idempotent with OR REPLACE/IGNORE', () => {
+  it('import is idempotent with OR REPLACE/IGNORE', async () => {
     const ged = `0 HEAD
 0 @I1@ INDI
 1 NAME John /Smith/
@@ -347,15 +347,15 @@ describe('GEDCOM → bulkImport round-trip', () => {
 
     const { data } = parseGEDCOM(ged);
     const { handlers: h } = setupTestDB();
-    h.bulkImport(data);
+    await h.bulkImport(data);
     // Import same data again — should not fail or duplicate
-    h.bulkImport(data);
+    await h.bulkImport(data);
 
-    expect(h.getStats().people).toBe(1);
-    expect(h.getStats().events).toBe(1);
+    expect((await h.getStats()).people).toBe(1);
+    expect((await h.getStats()).events).toBe(1);
   });
 
-  it('handles empty GEDCOM gracefully', () => {
+  it('handles empty GEDCOM gracefully', async () => {
     const ged = `0 HEAD
 1 CHAR UTF-8
 0 TRLR`;
@@ -363,7 +363,7 @@ describe('GEDCOM → bulkImport round-trip', () => {
     expect(stats.people).toBe(0);
 
     const { handlers: h } = setupTestDB();
-    const counts = h.bulkImport(data);
+    const counts = await h.bulkImport(data);
     expect(counts.people).toBe(0);
   });
 });

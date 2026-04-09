@@ -36,9 +36,16 @@ function createBetterSqliteHelpers(db) {
     return db.prepare(sql).run(...params).changes;
   }
 
-  function transaction(fn) {
-    const tx = db.transaction(fn);
-    return tx();
+  async function transaction(fn) {
+    db.exec('BEGIN');
+    try {
+      const result = await fn({ all, get, run });
+      db.exec('COMMIT');
+      return result;
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
   }
 
   return { all, get, run, transaction };
