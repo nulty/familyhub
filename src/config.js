@@ -20,3 +20,24 @@ export function setConfig(key, value) {
     // localStorage full or unavailable — silently ignore
   }
 }
+
+// ─── Collab state ────────────────────────────────────────────────────────────
+
+export function getCollabState() {
+  return getConfig('collab', null);
+}
+
+export function setCollabState(state) {
+  setConfig('collab', state);
+}
+
+export function clearCollabState() {
+  try {
+    localStorage.removeItem(PREFIX + 'collab');
+  } catch {}
+}
+
+export function getMode() {
+  const collab = getCollabState();
+  return collab?.mode || 'local';
+}

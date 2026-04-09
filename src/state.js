@@ -24,6 +24,8 @@ export const DATA_CHANGED = 'DATA_CHANGED';
 export const DB_POPULATED = 'DB_POPULATED';
 export const PICK_LOCATION = 'PICK_LOCATION';
 export const SHOW_ON_MAP = 'SHOW_ON_MAP';
+export const COLLAB_MODE_CHANGED = 'COLLAB_MODE_CHANGED';
+export const COLLAB_SYNC_STATUS = 'COLLAB_SYNC_STATUS';
 
 export const state = {
   selectedPersonId: null,
