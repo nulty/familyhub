@@ -3,3 +3,5 @@ dist/
 *.local
 backups/
 *.ged
+.env
+.env.local

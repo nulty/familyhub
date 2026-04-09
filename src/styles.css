@@ -1852,3 +1852,44 @@ a:hover { text-decoration: underline; }
   #empty-state h2 { font-size: 18px; }
   #empty-state .empty-actions { flex-direction: column; gap: 8px; }
 }
+
+/* ── Collab UI ──────────────────────────────────────────────────────────────── */
+
+.user-badge {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-outline:hover {
+  background: var(--bg-hover);
+}
+
+.connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: 4px;
+}
+.connection-dot.online { background: #22c55e; }
+.connection-dot.syncing { background: #eab308; animation: pulse 1s infinite; }
+.connection-dot.offline { background: #ef4444; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
