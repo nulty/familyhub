@@ -414,7 +414,7 @@ export async function syncDown() {
     const data = await remoteCall('exportAll');
     await workerCall('nukeDatabase');
     if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
-      await workerCall('bulkImport', data);
+      await workerCall('syncImport', data);
     }
     emit(COLLAB_SYNC_STATUS, 'online');
   } catch (e) {

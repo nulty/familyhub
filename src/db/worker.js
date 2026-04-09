@@ -90,6 +90,17 @@ async function initDB(dbName) {
     return bytes;
   };
 
+  // Bulk import with FK checks disabled — used by syncDown
+  handlers.syncImport = async (data) => {
+    helpers.run('PRAGMA foreign_keys=OFF');
+    try {
+      await handlers.bulkImport(data);
+    } finally {
+      helpers.run('PRAGMA foreign_keys=ON');
+    }
+    return { ok: true };
+  };
+
   handlers.nukeDatabase = async () => {
     helpers.run('DROP TABLE IF EXISTS person_names');
     helpers.run('DROP TABLE IF EXISTS citation_events');
