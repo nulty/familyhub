@@ -24,30 +24,39 @@ export async function shareTree(name) {
     body: JSON.stringify({ name }),
   });
 
-  // Switch to collab mode so remoteCall targets the new tree
   const state = getCollabState();
-  setCollabState({
-    ...state,
-    mode: 'collab',
-    treeId: tree.id,
-    treeName: tree.name,
-    hasLocalTree: true,
-  });
 
-  // Import data to the remote tree via the dedicated batch import endpoint
-  if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
-    await apiFetch(`/trees/${tree.id}/import`, {
-      method: 'POST',
-      body: JSON.stringify(data),
+  try {
+    // Import data to the remote tree via the dedicated batch import endpoint
+    if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
+      await apiFetch(`/trees/${tree.id}/import`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    }
+
+    // Switch to collab mode
+    setCollabState({
+      ...state,
+      mode: 'collab',
+      treeId: tree.id,
+      treeName: tree.name,
+      hasLocalTree: true,
     });
+
+    // Switch OPFS to collab cache and sync down
+    await switchDatabase(`familytree-collab-${tree.id}.db`);
+    await syncDown();
+
+    emit(COLLAB_MODE_CHANGED, 'collab');
+    emit(DATA_CHANGED);
+  } catch (e) {
+    // Clean up the remote tree if import or setup failed
+    try {
+      await apiFetch(`/trees/${tree.id}/members/${state.userId}`, { method: 'DELETE' });
+    } catch {}
+    throw e;
   }
-
-  // Switch OPFS to collab cache and sync down
-  await switchDatabase(`familytree-collab-${tree.id}.db`);
-  await syncDown();
-
-  emit(COLLAB_MODE_CHANGED, 'collab');
-  emit(DATA_CHANGED);
 }
 
 /**
