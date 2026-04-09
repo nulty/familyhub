@@ -88,12 +88,16 @@ export async function forkToLocal() {
   const state = getCollabState();
   if (!state?.treeId) throw new Error('No collaborative tree');
 
-  const { data } = await apiFetch(`/trees/${state.treeId}/fork`, {
-    method: 'POST',
-  });
-
-  await switchDatabase('familytree-local.db');
-  await bulk.import(data);
+  // Try to fork from server — if it fails (404, offline), just switch to local
+  try {
+    const { data } = await apiFetch(`/trees/${state.treeId}/fork`, {
+      method: 'POST',
+    });
+    await switchDatabase('familytree-local.db');
+    await bulk.import(data);
+  } catch {
+    await switchDatabase('familytree-local.db');
+  }
 
   setCollabState({
     ...state,
