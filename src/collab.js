@@ -10,6 +10,22 @@ import { isAuthenticated, signOut as authSignOut, getCurrentUser } from './auth.
 import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
 
 /**
+ * Tell the server which tree (or local mode) we're now on, so sign-in
+ * on another device can restore it. Best-effort — failures are ignored
+ * since this is a convenience, not a correctness requirement.
+ */
+async function setLastTreeRemote(treeId) {
+  try {
+    await apiFetch('/users/me/last-tree', {
+      method: 'POST',
+      body: JSON.stringify({ treeId }),
+    });
+  } catch (e) {
+    console.warn('[collab] failed to record last tree:', e.message);
+  }
+}
+
+/**
  * Share the current local tree — upload to API and switch to collab mode.
  */
 export async function shareTree(name) {
@@ -43,6 +59,7 @@ export async function shareTree(name) {
       treeName: tree.name,
       hasLocalTree: true,
     });
+    await setLastTreeRemote(tree.id);
 
     // Switch OPFS to collab cache and sync down
     await switchDatabase(`familytree-collab-${tree.id}.db`);
@@ -80,6 +97,7 @@ export async function joinTree(code) {
     treeName: tree.name,
     hasLocalTree,
   });
+  await setLastTreeRemote(tree.id);
 
   await switchDatabase(`familytree-collab-${tree.id}.db`);
   await syncDown();
@@ -115,6 +133,7 @@ export async function forkToLocal() {
     treeName: null,
     hasLocalTree: true,
   });
+  await setLastTreeRemote(null);
 
   emit(COLLAB_MODE_CHANGED, 'local');
   emit(DATA_CHANGED);
@@ -127,6 +146,7 @@ export async function switchToLocal() {
   const state = getCollabState();
   setCollabState({ ...state, mode: 'local' });
   await switchDatabase('familytree-local.db');
+  await setLastTreeRemote(null);
 
   emit(COLLAB_MODE_CHANGED, 'local');
   emit(DATA_CHANGED);
@@ -142,6 +162,7 @@ export async function switchToCollab() {
   setCollabState({ ...state, mode: 'collab' });
   await switchDatabase(`familytree-collab-${state.treeId}.db`);
   await syncDown();
+  await setLastTreeRemote(state.treeId);
 
   emit(COLLAB_MODE_CHANGED, 'collab');
   emit(DATA_CHANGED);
