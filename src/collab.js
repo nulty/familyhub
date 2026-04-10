@@ -6,8 +6,9 @@
 import { getCollabState, setCollabState, clearCollabState, getMode } from './config.js';
 import { initDB, switchDatabase, syncDown, bulk, nukeDatabase } from './db/db.js';
 import { apiFetch, remoteCall } from './db/remote.js';
-import { isAuthenticated, signOut as authSignOut, getCurrentUser } from './auth.js';
+import { isAuthenticated, signOut as authSignOut, getCurrentUser, getAccessToken } from './auth.js';
 import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
+import { createPoller } from './poll.js';
 
 /**
  * Tell the server which tree (or local mode) we're now on, so sign-in
@@ -221,4 +222,81 @@ export async function listTrees() {
 export function collabSignOut() {
   authSignOut();
   emit(COLLAB_MODE_CHANGED, 'local');
+}
+
+// ─── Real-time polling wrapper ──────────────────────────────────────────────
+// Thin glue between createPoller (pure core in ./poll.js) and the real
+// fetch/timers/DOM events. Not unit-tested — exercised via manual/integration
+// testing against the deployed Worker.
+
+const POLL_API_URL = import.meta.env.VITE_API_URL || 'https://api.sinsear.org';
+
+let currentPoller = null;
+let currentPollTreeId = null;
+
+async function fetchTreeVersion(treeId, lastKnown) {
+  const token = await getAccessToken();
+  if (!token) throw new Error('No auth token');
+
+  const apiUrl = getCollabState()?.apiUrl || POLL_API_URL;
+  const headers = { Authorization: `Bearer ${token}` };
+  if (lastKnown !== null) {
+    headers['If-None-Match'] = `"${lastKnown}"`;
+  }
+
+  const res = await fetch(`${apiUrl}/trees/${treeId}/version`, { headers });
+
+  if (res.status === 304) return { version: lastKnown };
+  if (!res.ok) throw new Error(`version fetch failed: ${res.status}`);
+
+  const { version } = await res.json();
+  return { version };
+}
+
+function handlePollVisibility() {
+  if (!currentPoller) return;
+  if (document.hidden) {
+    currentPoller.pause();
+  } else {
+    currentPoller.resume();
+  }
+}
+
+function handlePollOnline() {
+  if (!currentPoller) return;
+  currentPoller.tick();
+}
+
+/**
+ * Start polling for version changes on the given tree.
+ * Idempotent: no-op if already polling this tree; swaps target if polling a different one.
+ */
+export function startPolling(treeId) {
+  if (currentPoller && currentPollTreeId === treeId) return;
+  stopPolling();
+
+  currentPollTreeId = treeId;
+  currentPoller = createPoller({
+    fetchVersion: (lastKnown) => fetchTreeVersion(treeId, lastKnown),
+    onChange: () => {
+      syncDown().then(() => emit(DATA_CHANGED)).catch(() => {});
+    },
+  });
+  currentPoller.start();
+
+  document.addEventListener('visibilitychange', handlePollVisibility);
+  window.addEventListener('online', handlePollOnline);
+}
+
+/**
+ * Stop polling and detach event listeners. Safe to call when not polling.
+ */
+export function stopPolling() {
+  if (currentPoller) {
+    currentPoller.stop();
+    currentPoller = null;
+    currentPollTreeId = null;
+  }
+  document.removeEventListener('visibilitychange', handlePollVisibility);
+  window.removeEventListener('online', handlePollOnline);
 }
