@@ -59,7 +59,7 @@ export async function shareTree(name) {
       treeName: tree.name,
       hasLocalTree: true,
     });
-    await setLastTreeRemote(tree.id);
+    setLastTreeRemote(tree.id);
 
     // Switch OPFS to collab cache and sync down
     await switchDatabase(`familytree-collab-${tree.id}.db`);
@@ -97,7 +97,7 @@ export async function joinTree(code) {
     treeName: tree.name,
     hasLocalTree,
   });
-  await setLastTreeRemote(tree.id);
+  setLastTreeRemote(tree.id);
 
   await switchDatabase(`familytree-collab-${tree.id}.db`);
   await syncDown();
@@ -133,7 +133,7 @@ export async function forkToLocal() {
     treeName: null,
     hasLocalTree: true,
   });
-  await setLastTreeRemote(null);
+  setLastTreeRemote(null);
 
   emit(COLLAB_MODE_CHANGED, 'local');
   emit(DATA_CHANGED);
@@ -146,7 +146,7 @@ export async function switchToLocal() {
   const state = getCollabState();
   setCollabState({ ...state, mode: 'local' });
   await switchDatabase('familytree-local.db');
-  await setLastTreeRemote(null);
+  setLastTreeRemote(null);
 
   emit(COLLAB_MODE_CHANGED, 'local');
   emit(DATA_CHANGED);
@@ -162,7 +162,7 @@ export async function switchToCollab() {
   setCollabState({ ...state, mode: 'collab' });
   await switchDatabase(`familytree-collab-${state.treeId}.db`);
   await syncDown();
-  await setLastTreeRemote(state.treeId);
+  setLastTreeRemote(state.treeId);
 
   emit(COLLAB_MODE_CHANGED, 'collab');
   emit(DATA_CHANGED);
