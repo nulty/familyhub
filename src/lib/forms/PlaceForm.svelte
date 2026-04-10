@@ -91,7 +91,7 @@
     geocodeLoading = true;
     try {
       const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: geocodeQuery.trim(), format: 'json', limit: '1' })}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'FamilyHub/0.2.0' } });
+      const res = await fetch(url, { headers: { 'User-Agent': 'Sinsear/0.2.0' } });
       if (!res.ok) { showToast('Geocode request failed'); return; }
       const data = await res.json();
       if (data.length > 0) {

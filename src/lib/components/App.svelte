@@ -338,7 +338,7 @@
 
 <div id="app">
   <header id="header">
-    <span class="logo">FamilyHub</span>
+    <span class="logo">Sinsear</span>
 
     <Search />
 
@@ -456,9 +456,9 @@
     <div class="migration-card">
       <h3>Database Update Required</h3>
       {#if migrationFromUpload}
-        <p>The uploaded database needs to be updated to work with this version of FamilyHub. Keep your original file safe in case anything goes wrong.</p>
+        <p>The uploaded database needs to be updated to work with this version of Sinsear. Keep your original file safe in case anything goes wrong.</p>
       {:else}
-        <p>Your database needs to be updated to work with this version of FamilyHub. We recommend downloading a backup first.</p>
+        <p>Your database needs to be updated to work with this version of Sinsear. We recommend downloading a backup first.</p>
       {/if}
       <ul class="migration-list">
         {#each migrationPrompt as m}

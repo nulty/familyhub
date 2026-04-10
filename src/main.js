@@ -19,7 +19,7 @@ async function start() {
     document.body.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;padding:2rem;text-align:center;font-family:system-ui,sans-serif;color:#1a1a1a">
         <div>
-          <h2 style="margin-bottom:0.5rem">FamilyHub is open in another tab</h2>
+          <h2 style="margin-bottom:0.5rem">Sinsear is open in another tab</h2>
           <p style="color:#666;margin-bottom:1.5rem">The database can only be used by one tab at a time.<br>Close the other tab and reload this one.</p>
           <button onclick="location.reload()" style="padding:8px 20px;border:1px solid #e2e2e2;border-radius:6px;background:#2563eb;color:white;font-size:14px;cursor:pointer">Reload</button>
         </div>

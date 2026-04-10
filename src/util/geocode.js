@@ -1,5 +1,5 @@
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
-const USER_AGENT = 'FamilyHub/0.2.0';
+const USER_AGENT = 'Sinsear/0.2.0';
 const DELAY_MS = 1100;
 
 // Type-specific query formatting to help Nominatim disambiguate
