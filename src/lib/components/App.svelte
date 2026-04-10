@@ -48,6 +48,7 @@
         await handleAuthCallback(authCode);
         authenticated = true;
         currentUser = getCurrentUser();
+        collabMode = getMode();
         showToast('Signed in successfully');
       } catch (e) {
         showToast('Sign-in failed: ' + e.message);
