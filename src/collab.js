@@ -264,7 +264,7 @@ function handlePollVisibility() {
 
 function handlePollOnline() {
   if (!currentPoller) return;
-  currentPoller.tick();
+  currentPoller.tick().catch(() => {});
 }
 
 /**
