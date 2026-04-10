@@ -10,7 +10,7 @@
   import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
   import { triggerImport, triggerExport } from '../../gedcom/gedcom.js';
   import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
-  import { shareTree, joinTree, forkToLocal, switchToLocal, switchToCollab, collabSignOut } from '../../collab.js';
+  import { shareTree, joinTree, forkToLocal, switchToLocal, switchToCollab, collabSignOut, startPolling } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
   import { getStack, pushModal } from '../shared/modal-stack.svelte.js';
   import CollabMenu from './CollabMenu.svelte';
@@ -140,10 +140,8 @@
       syncStatus = status;
     });
 
-    // Monitor online/offline for collab mode
-    window.addEventListener('online', () => {
-      if (getMode() === 'collab') syncDown().then(() => emit(DATA_CHANGED));
-    });
+    // The poller (src/collab.js) handles online reconnection on its own.
+    // Keep the offline handler so the UI can show an offline indicator.
     window.addEventListener('offline', () => {
       if (getMode() === 'collab') emit(COLLAB_SYNC_STATUS, 'offline');
     });
@@ -161,13 +159,12 @@
       applyCardDisplay(treeCfg);
     }
 
-    // Periodic sync for collab mode
+    // Start polling for real-time updates when in collab mode
     if (getMode() === 'collab') {
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && getMode() === 'collab') {
-          syncDown().then(() => emit(DATA_CHANGED));
-        }
-      });
+      const collabState = getCollabState();
+      if (collabState?.treeId) {
+        startPolling(collabState.treeId);
+      }
     }
   }
 
