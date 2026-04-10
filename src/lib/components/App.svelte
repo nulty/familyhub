@@ -43,11 +43,7 @@
     const url = new URL(window.location.href);
     const authCode = url.searchParams.get('code');
     if (authCode) {
-      url.searchParams.delete('code');
-      url.searchParams.delete('scope');
-      url.searchParams.delete('authuser');
-      url.searchParams.delete('prompt');
-      window.history.replaceState({}, '', url.pathname);
+      window.history.replaceState({}, '', '/');
       try {
         await handleAuthCallback(authCode);
         authenticated = true;
