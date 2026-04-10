@@ -25,6 +25,7 @@
   let notes = $state('');
   let isEdit = $state(false);
   let title = $state('New Citation');
+  let original = null;
 
   $effect(() => {
     if (citationId) {
@@ -39,6 +40,14 @@
         confidence = c.confidence || '';
         notes = c.notes || '';
         if (selectedSourceId) showPicker = false;
+        original = {
+          source_id: c.source_id || null,
+          detail: (c.detail || '').trim(),
+          url: (c.url || '').trim(),
+          accessed: (c.accessed || '').trim(),
+          confidence: c.confidence || '',
+          notes: (c.notes || '').trim(),
+        };
       });
     } else if (prefill) {
       selectedSourceId = prefill.source_id || null;
@@ -90,7 +99,14 @@
 
     try {
       if (isEdit) {
-        const updated = await citations.update(citationId, data);
+        const dirty = !original
+          || data.source_id !== original.source_id
+          || data.detail !== original.detail
+          || data.url !== original.url
+          || data.accessed !== original.accessed
+          || data.confidence !== original.confidence
+          || data.notes !== original.notes;
+        const updated = dirty ? await citations.update(citationId, data) : { id: citationId, ...data };
         onclose?.();
         emit(DATA_CHANGED);
         showToast('Citation updated');

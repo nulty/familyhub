@@ -35,6 +35,7 @@
   let title = $state('New Source');
   let repoTimer = null;
   let repoInputEl;
+  let original = null;
 
   $effect(() => {
     if (sourceId) {
@@ -51,6 +52,16 @@
         publisher = s.publisher || '';
         year = s.year || '';
         notes = s.notes || '';
+        original = {
+          title: (s.title || '').trim(),
+          type: s.type || '',
+          repository_id: s.repository_id || null,
+          url: (s.url || '').trim(),
+          author: (s.author || '').trim(),
+          publisher: (s.publisher || '').trim(),
+          year: (s.year || '').toString().trim(),
+          notes: (s.notes || '').trim(),
+        };
       });
     } else if (prefill) {
       selectedRepoId = prefill.repository_id || null;
@@ -108,7 +119,16 @@
 
     try {
       if (isEdit) {
-        const updated = await sources.update(sourceId, data);
+        const dirty = !original
+          || data.title !== original.title
+          || data.type !== original.type
+          || data.repository_id !== original.repository_id
+          || data.url !== original.url
+          || data.author !== original.author
+          || data.publisher !== original.publisher
+          || data.year !== original.year
+          || data.notes !== original.notes;
+        const updated = dirty ? await sources.update(sourceId, data) : { id: sourceId, ...data };
         onclose?.();
         emit(DATA_CHANGED);
         showToast('Source updated');

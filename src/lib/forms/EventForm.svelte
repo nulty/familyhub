@@ -56,6 +56,8 @@
   // Citations
   let citationEntries = $state([]);
 
+  let original = null;
+
   $effect(() => {
     // Load known partners for marriage spouse suggestion
     if (personId) {
@@ -76,6 +78,14 @@
         placeText = existing.place || '';
         selectedPlaceId = existing.place_id || null;
         eventNotes = existing.notes || '';
+
+        original = {
+          type: existing.type || 'birth',
+          date: (existing.date || '').trim(),
+          place: (existing.place || '').trim(),
+          place_id: existing.place_id || null,
+          notes: (existing.notes || '').trim(),
+        };
 
         const existingCitations = await citations.listForEvent(eventId);
         citationEntries = existingCitations.map(c => ({
@@ -254,7 +264,16 @@
             await events.addParticipant(eventId, personId, isMarriage ? 'spouse' : 'resident');
           }
         }
-        await events.update(eventId, data);
+        const eventDirty = !original
+          || data.type !== original.type
+          || data.date !== original.date
+          || data.place !== original.place
+          || data.place_id !== original.place_id
+          || data.notes !== original.notes
+          || 'person_id' in data;
+        if (eventDirty) {
+          await events.update(eventId, data);
+        }
         for (const c of citationEntries) {
           if (c.deleted && c.id && c.existing) {
             // Unlink existing citation from this event (don't delete the citation itself)

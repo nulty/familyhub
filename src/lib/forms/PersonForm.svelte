@@ -22,6 +22,7 @@
   let isEdit = $state(false);
   let title = $state('New Person');
   let inputEl;
+  let original = null;
 
   $effect(() => {
     if (personId) {
@@ -44,6 +45,20 @@
           date: n.date || '',
           deleted: false,
         }));
+
+        original = {
+          given_name: (p.given_name || '').trim(),
+          surname: (p.surname || '').trim(),
+          gender: p.gender || 'U',
+          notes: (p.notes || '').trim(),
+          names: existingNames.map(n => ({
+            id: n.id,
+            given_name: n.given_name || '',
+            surname: n.surname || '',
+            type: n.type || '',
+            date: n.date || '',
+          })),
+        };
       })();
     }
   });
@@ -71,12 +86,27 @@
 
     try {
       if (isEdit) {
-        await people.update(personId, data);
+        const personDirty = !original
+          || data.given_name !== original.given_name
+          || data.surname !== original.surname
+          || data.gender !== original.gender
+          || data.notes !== original.notes;
+        if (personDirty) {
+          await people.update(personId, data);
+        }
         for (const n of nameEntries) {
           if (n.deleted && n.id) {
             await personNames.delete(n.id);
           } else if (n.id && !n.deleted) {
-            await personNames.update(n.id, { given_name: n.given_name, surname: n.surname, type: n.type, date: n.date });
+            const orig = original?.names.find(o => o.id === n.id);
+            const nameDirty = !orig
+              || n.given_name !== orig.given_name
+              || n.surname !== orig.surname
+              || n.type !== orig.type
+              || n.date !== orig.date;
+            if (nameDirty) {
+              await personNames.update(n.id, { given_name: n.given_name, surname: n.surname, type: n.type, date: n.date });
+            }
           } else if (!n.id && !n.deleted && (n.given_name || n.surname)) {
             await personNames.create({ person_id: personId, given_name: n.given_name, surname: n.surname, type: n.type, date: n.date });
           }

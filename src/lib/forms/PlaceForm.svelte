@@ -24,6 +24,7 @@
   let geocodeQuery = $state('');
   let geocodeOpen = $state(false);
   let geocodeLoading = $state(false);
+  let original = null;
 
   $effect(() => {
     if (!placeId && prefill?.parent_id) {
@@ -51,6 +52,14 @@
           const parent = await places.get(pid);
           if (parent && pickerRef) pickerRef.setValue(parent.name);
         }
+        original = {
+          name: (p.name || '').trim(),
+          type: p.type || '',
+          parent_id: pid || null,
+          latitude: p.latitude != null ? parseFloat(p.latitude) : null,
+          longitude: p.longitude != null ? parseFloat(p.longitude) : null,
+          notes: (p.notes || '').trim(),
+        };
       });
     }
   });
@@ -136,7 +145,14 @@
 
     try {
       if (isEdit) {
-        const updated = await places.update(placeId, data);
+        const dirty = !original
+          || data.name !== original.name
+          || data.type !== original.type
+          || data.parent_id !== original.parent_id
+          || data.latitude !== original.latitude
+          || data.longitude !== original.longitude
+          || data.notes !== original.notes;
+        const updated = dirty ? await places.update(placeId, data) : { id: placeId, ...data };
         onclose?.();
         emit(DATA_CHANGED);
         showToast('Place updated');

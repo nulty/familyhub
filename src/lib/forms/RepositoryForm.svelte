@@ -25,6 +25,7 @@
   let notes = $state('');
   let isEdit = $state(false);
   let title = $state('New Repository');
+  let original = null;
 
   $effect(() => {
     if (repoId) {
@@ -37,6 +38,13 @@
         address = r.address || '';
         notes = r.notes || '';
         title = `Edit ${r.name}`;
+        original = {
+          name: (r.name || '').trim(),
+          type: r.type || '',
+          url: (r.url || '').trim(),
+          address: (r.address || '').trim(),
+          notes: (r.notes || '').trim(),
+        };
       });
     }
   });
@@ -58,7 +66,13 @@
 
     try {
       if (isEdit) {
-        const updated = await repositories.update(repoId, data);
+        const dirty = !original
+          || data.name !== original.name
+          || data.type !== original.type
+          || data.url !== original.url
+          || data.address !== original.address
+          || data.notes !== original.notes;
+        const updated = dirty ? await repositories.update(repoId, data) : { id: repoId, ...data };
         onclose?.();
         emit(DATA_CHANGED);
         showToast('Repository updated');
