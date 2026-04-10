@@ -152,6 +152,8 @@
         // Clear immediately — selected people are shown in the list below
         tomSelect.clear(true);
         tomSelect.clearOptions();
+        // Dismiss mobile keyboard
+        tomSelect.blur();
       },
     });
 

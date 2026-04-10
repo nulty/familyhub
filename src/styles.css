@@ -529,6 +529,16 @@ a:hover { text-decoration: underline; }
   overflow-y: auto;
 }
 
+/* Map mode: disable outer panel scroll so the inner list handles scrolling
+   (keeps the "Add person" picker and footer pinned) */
+#main.map-active #panel { overflow: hidden; }
+#main.map-active #panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 #main.has-panel #panel { display: flex; }
 
 /* ─── Panel: Header ──────────────────────────────────────────────────── */
