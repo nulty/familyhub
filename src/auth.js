@@ -103,6 +103,9 @@ async function refreshAccessToken() {
     }
 
     const data = await res.json();
+    // Note: data.lastTree is intentionally ignored here. The user's current
+    // treeId in state is authoritative during an active session — only a
+    // fresh sign-in via handleAuthCallback should hydrate it.
     setCollabState({
       ...state,
       jwt: data.accessToken,
