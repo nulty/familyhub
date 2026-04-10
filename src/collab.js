@@ -9,6 +9,7 @@ import { apiFetch, remoteCall } from './db/remote.js';
 import { isAuthenticated, signOut as authSignOut, getCurrentUser, getAccessToken } from './auth.js';
 import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
 import { createPoller } from './poll.js';
+import { showToast } from './lib/shared/toast-store.js';
 
 /**
  * Tell the server which tree (or local mode) we're now on, so sign-in
@@ -243,6 +244,7 @@ const POLL_API_URL = import.meta.env.VITE_API_URL || 'https://api.sinsear.org';
 
 let currentPoller = null;
 let currentPollTreeId = null;
+let lastSeenActivityId = null;
 
 async function fetchTreeVersion(treeId, lastKnown) {
   const token = await getAccessToken();
@@ -261,6 +263,43 @@ async function fetchTreeVersion(treeId, lastKnown) {
 
   const { version } = await res.json();
   return { version };
+}
+
+/**
+ * Fetch the latest activity for the current tree and show a toast for any
+ * entries by other users that are newer than the last seen entry. Also
+ * initializes `lastSeenActivityId` on first call so historical entries
+ * don't generate a flood of toasts. Best-effort — swallows all errors.
+ */
+async function showActivityToast() {
+  try {
+    const activity = await getActivity();
+    if (!activity || activity.length === 0) return;
+
+    const newestId = activity[0].id;
+    const currentUserId = getCurrentUser()?.id;
+
+    // Filter to entries NOT by us and newer than the last seen entry.
+    // On first call (lastSeenActivityId === null) show at most one toast
+    // for the most recent other-user entry rather than flooding.
+    const isFirst = lastSeenActivityId === null;
+    const newByOthers = activity.filter((a) =>
+      a.user_id !== currentUserId &&
+      (isFirst || a.id > lastSeenActivityId)
+    );
+
+    lastSeenActivityId = newestId;
+
+    if (newByOthers.length === 0) return;
+
+    const latest = newByOthers[0];
+    const extra = !isFirst && newByOthers.length > 1
+      ? ` (+${newByOthers.length - 1} more)`
+      : '';
+    showToast(`${latest.user_name}: ${latest.summary}${extra}`);
+  } catch {
+    // swallow — toast is best-effort
+  }
 }
 
 function handlePollVisibility() {
@@ -291,9 +330,20 @@ export function startPolling(treeId) {
     onChange: async () => {
       await syncDown();
       emit(DATA_CHANGED);
+      await showActivityToast();
     },
   });
   currentPoller.start();
+
+  // Prime lastSeenActivityId in the background so the first toast only
+  // covers activity that happened after polling started.
+  getActivity()
+    .then((activity) => {
+      if (activity && activity.length > 0 && lastSeenActivityId === null) {
+        lastSeenActivityId = activity[0].id;
+      }
+    })
+    .catch(() => {});
 
   document.addEventListener('visibilitychange', handlePollVisibility);
   window.addEventListener('online', handlePollOnline);
@@ -307,6 +357,7 @@ export function stopPolling() {
     currentPoller.stop();
     currentPoller = null;
     currentPollTreeId = null;
+    lastSeenActivityId = null;
   }
   document.removeEventListener('visibilitychange', handlePollVisibility);
   window.removeEventListener('online', handlePollOnline);
