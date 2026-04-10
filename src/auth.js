@@ -25,6 +25,8 @@ export function startGoogleSignIn() {
 
 /**
  * Handle the OAuth callback — exchange code for tokens.
+ * If the server reports a last tree for this user, hydrate collab state
+ * so the app re-opens that tree's OPFS cache on the next initDB call.
  */
 export async function handleAuthCallback(code) {
   const redirectUri = `${window.location.origin}/auth/callback`;
@@ -40,14 +42,21 @@ export async function handleAuthCallback(code) {
   }
 
   const data = await res.json();
+  const existing = getCollabState() || {};
+  const hasLast = data.lastTree && data.lastTree.id;
+
   setCollabState({
-    mode: 'local',
+    ...existing,
+    mode: hasLast ? 'collab' : 'local',
     apiUrl: API_URL,
     jwt: data.accessToken,
     refreshToken: data.refreshToken,
     userId: data.user.id,
     userName: data.user.name,
     userEmail: data.user.email,
+    treeId: hasLast ? data.lastTree.id : null,
+    treeName: hasLast ? data.lastTree.name : null,
+    hasLocalTree: existing.hasLocalTree ?? false,
   });
 
   return data.user;
