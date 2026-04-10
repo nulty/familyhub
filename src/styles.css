@@ -37,7 +37,7 @@ a:hover { text-decoration: underline; }
 #app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -397,6 +397,7 @@ a:hover { text-decoration: underline; }
   position: relative;
   overflow: hidden;
   display: none;
+  isolation: isolate; /* contain Leaflet's internal z-indexes */
 }
 
 #main.map-active #map-container { display: block; }
@@ -1759,9 +1760,26 @@ a:hover { text-decoration: underline; }
 
   #panel {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
     z-index: 50;
     border-left: none;
+  }
+
+  /* Map mode: panel becomes a bottom sheet so the map is visible & touchable.
+     Clamp the sheet so the map area between header and footer stays ≥ ~240px. */
+  #main.map-active {
+    --panel-sheet: max(160px, min(45dvh, calc(100dvh - 390px)));
+    padding-bottom: calc(56px + var(--panel-sheet) + env(safe-area-inset-bottom));
+  }
+
+  #main.map-active #panel {
+    top: auto;
+    height: var(--panel-sheet);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 12px rgba(0,0,0,.08);
   }
 
   #main.has-panel #panel {
