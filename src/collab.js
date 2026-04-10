@@ -288,8 +288,9 @@ export function startPolling(treeId) {
   currentPollTreeId = treeId;
   currentPoller = createPoller({
     fetchVersion: (lastKnown) => fetchTreeVersion(treeId, lastKnown),
-    onChange: () => {
-      syncDown().then(() => emit(DATA_CHANGED)).catch(() => {});
+    onChange: async () => {
+      await syncDown();
+      emit(DATA_CHANGED);
     },
   });
   currentPoller.start();

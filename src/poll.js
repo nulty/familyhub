@@ -36,17 +36,30 @@ export function createPoller({ fetchVersion, onChange, intervalMs = 15000 }) {
   let lastVersion = null;
   let timerId = null;
   let running = false;
+  let inFlight = false;
 
   async function tick() {
+    if (inFlight) return;
+    inFlight = true;
     try {
       const { version } = await fetchVersion(lastVersion);
       if (version !== lastVersion) {
-        const wasFirst = lastVersion === null;
+        const prev = lastVersion;
+        const wasFirst = prev === null;
         lastVersion = version;
-        if (!wasFirst) onChange();
+        if (!wasFirst) {
+          try {
+            await onChange();
+          } catch {
+            // Roll back so the next tick retries.
+            lastVersion = prev;
+          }
+        }
       }
     } catch {
       // Silent — the next tick will retry.
+    } finally {
+      inFlight = false;
     }
   }
 

@@ -121,4 +121,57 @@ describe('createPoller', () => {
 
     expect(fetchVersion).toHaveBeenCalledTimes(1);
   });
+
+  it('rolls back lastVersion when onChange rejects so the next tick retries', async () => {
+    const fetchVersion = vi.fn()
+      .mockResolvedValueOnce({ version: 100 }) // initial
+      .mockResolvedValueOnce({ version: 200 }) // change — onChange will reject
+      .mockResolvedValueOnce({ version: 200 }); // retry — onChange succeeds
+    let shouldFail = true;
+    const onChange = vi.fn(async () => {
+      if (shouldFail) {
+        shouldFail = false;
+        throw new Error('sync failed');
+      }
+    });
+
+    const poller = createPoller({ fetchVersion, onChange, intervalMs: 1000 });
+    poller.start();
+    await vi.runOnlyPendingTimersAsync();
+    expect(poller.getLastVersion()).toBe(100);
+
+    // First interval tick — version changes, onChange rejects, rollback
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(poller.getLastVersion()).toBe(100); // rolled back
+
+    // Second interval tick — same version on server, onChange succeeds
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(poller.getLastVersion()).toBe(200); // committed
+  });
+
+  it('does not fire concurrent ticks when tick() is called re-entrantly', async () => {
+    // Slow fetchVersion: returns a promise that resolves on demand
+    let resolveFirst;
+    const firstPromise = new Promise((r) => { resolveFirst = r; });
+    const fetchVersion = vi.fn()
+      .mockReturnValueOnce(firstPromise)
+      .mockResolvedValue({ version: 100 });
+    const onChange = vi.fn();
+
+    const poller = createPoller({ fetchVersion, onChange, intervalMs: 1000 });
+    poller.start();
+    // Allow start() to reach the in-flight branch
+    await vi.advanceTimersByTimeAsync(0);
+
+    // First tick is hanging on resolveFirst. A direct tick() call should no-op.
+    await poller.tick();
+    expect(fetchVersion).toHaveBeenCalledTimes(1);
+
+    // Let the first fetch complete
+    resolveFirst({ version: 100 });
+    await vi.runOnlyPendingTimersAsync();
+    expect(poller.getLastVersion()).toBe(100);
+  });
 });
