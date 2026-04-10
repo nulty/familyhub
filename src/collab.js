@@ -66,6 +66,8 @@ export async function shareTree(name) {
     await switchDatabase(`familytree-collab-${tree.id}.db`);
     await syncDown();
 
+    startPolling(tree.id);
+
     emit(COLLAB_MODE_CHANGED, 'collab');
     emit(DATA_CHANGED);
   } catch (e) {
@@ -103,6 +105,8 @@ export async function joinTree(code) {
   await switchDatabase(`familytree-collab-${tree.id}.db`);
   await syncDown();
 
+  startPolling(tree.id);
+
   emit(COLLAB_MODE_CHANGED, 'collab');
   emit(DATA_CHANGED);
 
@@ -115,6 +119,8 @@ export async function joinTree(code) {
 export async function forkToLocal() {
   const state = getCollabState();
   if (!state?.treeId) throw new Error('No collaborative tree');
+
+  stopPolling();
 
   // Try to fork from server — if it fails (404, offline), just switch to local
   try {
@@ -145,6 +151,7 @@ export async function forkToLocal() {
  */
 export async function switchToLocal() {
   const state = getCollabState();
+  stopPolling();
   setCollabState({ ...state, mode: 'local' });
   await switchDatabase('familytree-local.db');
   setLastTreeRemote(null);
@@ -164,6 +171,8 @@ export async function switchToCollab() {
   await switchDatabase(`familytree-collab-${state.treeId}.db`);
   await syncDown();
   setLastTreeRemote(state.treeId);
+
+  startPolling(state.treeId);
 
   emit(COLLAB_MODE_CHANGED, 'collab');
   emit(DATA_CHANGED);
@@ -220,6 +229,7 @@ export async function listTrees() {
  * Sign out and clear collab state.
  */
 export function collabSignOut() {
+  stopPolling();
   authSignOut();
   emit(COLLAB_MODE_CHANGED, 'local');
 }
