@@ -1,8 +1,10 @@
 <script>
   import { getCollabState } from '../../config.js';
-  import { getMembers, generateInviteCode, removeMember, forkToLocal, getActivity } from '../../collab.js';
+  import { getMembers, generateInviteCode, removeMember, disconnectFromTree, getActivity } from '../../collab.js';
   import { getCurrentUser } from '../../auth.js';
   import { showToast } from '../shared/toast-store.js';
+  import { bulk } from '../../db/db.js';
+  import { triggerExport } from '../../gedcom/gedcom.js';
   import Modal from '../forms/Modal.svelte';
 
   let { onclose } = $props();
@@ -25,6 +27,8 @@
       })
       .catch(() => { loading = false; });
   });
+
+  const isSolo = $derived(members.length === 1);
 
   async function handleInvite() {
     try {
@@ -52,11 +56,46 @@
     }
   }
 
-  async function handleDisconnect() {
-    if (!confirm('Disconnect from this tree? Your data will be copied to a local tree.')) return;
+  async function downloadSqlite() {
+    const bytes = await bulk.exportDatabase();
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${collabState?.treeName || 'familytree'}.db`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadGedcom() {
+    triggerExport();
+  }
+
+  async function handleDelete() {
+    const treeName = collabState?.treeName || 'this tree';
+    const msg = `Delete "${treeName}"?\n\n`
+      + `This permanently deletes the cloud copy. It cannot be undone.\n\n`
+      + `If you want to keep a copy, cancel and use the Download buttons first — `
+      + `the tree will NOT be saved to your local tree.`;
+    if (!confirm(msg)) return;
     try {
-      await forkToLocal();
-      showToast('Disconnected — data saved locally');
+      await disconnectFromTree();
+      showToast('Tree deleted');
+      close();
+    } catch (e) {
+      showToast('Failed: ' + e.message);
+    }
+  }
+
+  async function handleLeave() {
+    const treeName = collabState?.treeName || 'this tree';
+    const msg = `Leave "${treeName}"?\n\n`
+      + `Other members will keep editing the shared tree. `
+      + `You can rejoin with a new invite code.`;
+    if (!confirm(msg)) return;
+    try {
+      await disconnectFromTree();
+      showToast('Left the tree');
       close();
     } catch (e) {
       showToast('Failed: ' + e.message);
@@ -113,8 +152,25 @@
 
     <section>
       <hr class="menu-divider" />
-      <button class="btn btn-danger" onclick={handleDisconnect}>Disconnect from Tree</button>
-      <p class="form-hint">Downloads a copy of the data to your local tree and leaves the shared tree.</p>
+      {#if isSolo}
+        <h3>Delete tree</h3>
+        <p class="form-hint">
+          You're the only member. Deleting permanently removes the cloud copy — it
+          will <strong>not</strong> be saved to your local tree. Download a copy first if you
+          want to keep the data.
+        </p>
+        <div class="download-row">
+          <button class="btn" onclick={downloadGedcom}>Download GEDCOM</button>
+          <button class="btn" onclick={downloadSqlite}>Download SQLite</button>
+        </div>
+        <button class="btn btn-danger" onclick={handleDelete}>Delete tree</button>
+      {:else}
+        <h3>Leave tree</h3>
+        <p class="form-hint">
+          Other members will keep editing the shared tree. You can rejoin with a new invite code.
+        </p>
+        <button class="btn" onclick={handleLeave}>Leave tree</button>
+      {/if}
     </section>
   {/if}
 </Modal>
@@ -134,4 +190,5 @@
   .activity-item { font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); }
   .activity-user { font-weight: 500; margin-right: 4px; }
   .activity-summary { color: var(--text-muted); }
+  .download-row { display: flex; gap: 8px; margin-bottom: 0.75rem; }
 </style>
