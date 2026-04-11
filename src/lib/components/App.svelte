@@ -389,17 +389,19 @@
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
+            <hr class="menu-divider" />
+            {#if collabMode === 'local'}
+              <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
+            {/if}
             {#if hasAnyData}
-              <hr class="menu-divider" />
-              {#if collabMode === 'local'}
-                <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
-              {/if}
               <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
-              <hr class="menu-divider" />
+            {/if}
+            <hr class="menu-divider" />
+            {#if hasAnyData}
               <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
-              {#if collabMode === 'local'}
-                <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
-              {/if}
+            {/if}
+            {#if collabMode === 'local'}
+              <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
