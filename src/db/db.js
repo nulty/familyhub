@@ -53,7 +53,28 @@ export async function initDB(dbName = 'familytree-local.db') {
   const schemaBaseUrl = new URL(base, window.location.origin).href;
   readyPromise = call('init', schemaBaseUrl, dbName);
   const result = await readyPromise;
+
+  // Background sweep: remove any orphaned per-tree cache files from OPFS.
+  // A cache file is orphaned if it does not match the currently-open DB.
+  // Swallows all errors — this is a best-effort safety net.
+  sweepOrphanedCollabCaches(dbName).catch(() => {});
+
   return result;
+}
+
+async function sweepOrphanedCollabCaches(currentDbName) {
+  if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) return;
+  const root = await navigator.storage.getDirectory();
+  for await (const [name, handle] of root.entries()) {
+    if (handle.kind !== 'file') continue;
+    if (!name.startsWith('familytree-collab-')) continue;
+    if (name === currentDbName) continue; // leave the active cache alone
+    try {
+      await root.removeEntry(name);
+    } catch {
+      // File may be open or otherwise undeletable — ignore.
+    }
+  }
 }
 
 export function runMigrations() {

@@ -59,7 +59,6 @@ export async function shareTree(name) {
       mode: 'collab',
       treeId: tree.id,
       treeName: tree.name,
-      hasLocalTree: true,
     });
     setLastTreeRemote(tree.id);
 
@@ -87,8 +86,6 @@ export async function joinTree(code) {
   if (!isAuthenticated()) throw new Error('Not authenticated');
 
   const state = getCollabState();
-  const hasLocalTree = getMode() === 'local';
-
   const { tree } = await apiFetch('/trees/_/join', {
     method: 'POST',
     body: JSON.stringify({ code }),
@@ -99,7 +96,6 @@ export async function joinTree(code) {
     mode: 'collab',
     treeId: tree.id,
     treeName: tree.name,
-    hasLocalTree,
   });
   setLastTreeRemote(tree.id);
 

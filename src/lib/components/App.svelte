@@ -10,7 +10,7 @@
   import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
   import { triggerImport, triggerExport } from '../../gedcom/gedcom.js';
   import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
-  import { shareTree, joinTree, forkToLocal, switchToLocal, switchToCollab, collabSignOut, startPolling } from '../../collab.js';
+  import { shareTree, joinTree, collabSignOut, startPolling } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
   import { getStack, pushModal } from '../shared/modal-stack.svelte.js';
   import CollabMenu from './CollabMenu.svelte';
@@ -372,30 +372,26 @@
             <button class="menu-item" onclick={() => menuAction(startWizard)}>Data Entry Wizard</button>
             <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
             <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
-            {#if authenticated && collabMode === 'local'}
+            {#if authenticated && collabMode === 'local' && !getCollabState()?.treeId}
               <button class="menu-item" onclick={() => menuAction(handleShareTree)}>Share This Tree</button>
               <button class="menu-item" onclick={() => menuAction(handleJoinTree)}>Join a Tree</button>
             {/if}
             {#if authenticated && collabMode === 'collab'}
               <button class="menu-item" onclick={() => menuAction(openCollabMenu)}>Collaboration</button>
             {/if}
-            {#if authenticated && getCollabState()?.hasLocalTree && collabMode === 'collab'}
-              <button class="menu-item" onclick={() => menuAction(switchToLocal)}>Switch to Local Tree</button>
-            {/if}
-            {#if authenticated && getCollabState()?.treeId && collabMode === 'local'}
-              <button class="menu-item" onclick={() => menuAction(switchToCollab)}>Switch to Shared Tree</button>
-            {/if}
             {#if authenticated}
               <button class="menu-item" onclick={() => menuAction(handleSignOut)}>Sign Out</button>
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
+            <hr class="menu-divider" />
             {#if collabMode === 'local'}
-              <hr class="menu-divider" />
               <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
-              <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
-              <hr class="menu-divider" />
-              <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
+            {/if}
+            <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
+            <hr class="menu-divider" />
+            <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
+            {#if collabMode === 'local'}
               <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
             {/if}
             <hr class="menu-divider" />
