@@ -338,10 +338,6 @@ export function stopPolling() {
     currentPollTreeId = null;
     lastSeenActivityId = null;
   }
-  if (typeof document !== 'undefined') {
-    document.removeEventListener('visibilitychange', handlePollVisibility);
-  }
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('online', handlePollOnline);
-  }
+  document.removeEventListener('visibilitychange', handlePollVisibility);
+  window.removeEventListener('online', handlePollOnline);
 }
