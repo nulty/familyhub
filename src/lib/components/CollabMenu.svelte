@@ -28,7 +28,7 @@
       .catch(() => { loading = false; });
   });
 
-  const isSolo = $derived(members.length === 1);
+  const isSolo = $derived(members.length > 0 && members.length === 1);
 
   async function handleInvite() {
     try {
@@ -64,7 +64,7 @@
     a.href = url;
     a.download = `${collabState?.treeName || 'familytree'}.db`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function downloadGedcom() {
