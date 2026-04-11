@@ -373,7 +373,9 @@
             <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
             <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
             {#if authenticated && collabMode === 'local' && !getCollabState()?.treeId}
-              <button class="menu-item" onclick={() => menuAction(handleShareTree)}>Share This Tree</button>
+              {#if hasData}
+                <button class="menu-item" onclick={() => menuAction(handleShareTree)}>Share This Tree</button>
+              {/if}
               <button class="menu-item" onclick={() => menuAction(handleJoinTree)}>Join a Tree</button>
             {/if}
             {#if authenticated && collabMode === 'collab'}
@@ -384,15 +386,17 @@
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
-            <hr class="menu-divider" />
-            {#if collabMode === 'local'}
-              <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
-            {/if}
-            <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
-            <hr class="menu-divider" />
-            <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
-            {#if collabMode === 'local'}
-              <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
+            {#if hasData}
+              <hr class="menu-divider" />
+              {#if collabMode === 'local'}
+                <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
+              {/if}
+              <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
+              <hr class="menu-divider" />
+              <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
+              {#if collabMode === 'local'}
+                <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
+              {/if}
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
