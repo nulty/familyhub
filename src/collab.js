@@ -4,7 +4,7 @@
  */
 
 import { getCollabState, setCollabState, clearCollabState, getMode } from './config.js';
-import { switchDatabase, syncDown, bulk, clearDatabase } from './db/db.js';
+import { switchDatabase, syncDown, bulk, removeOpfsFile } from './db/db.js';
 import { apiFetch, remoteCall } from './db/remote.js';
 import { isAuthenticated, signOut as authSignOut, getCurrentUser, getAccessToken } from './auth.js';
 import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
@@ -139,9 +139,9 @@ export async function disconnectFromTree() {
   // you can't remove a file that has an open SAH pool handle.
   await switchDatabase('familytree-local.db');
   try {
-    await clearDatabase(`familytree-collab-${treeId}.db`);
+    await removeOpfsFile(`familytree-collab-${treeId}.db`);
   } catch (e) {
-    console.warn('[collab] failed to clear collab cache:', e?.message);
+    console.warn('[collab] failed to remove collab cache file:', e?.message);
   }
 
   setCollabState({

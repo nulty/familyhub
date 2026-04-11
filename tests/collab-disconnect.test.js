@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   getCollabState: vi.fn(),
   setCollabState: vi.fn(),
   switchDatabase: vi.fn(async () => {}),
-  clearDatabase: vi.fn(async () => {}),
+  removeOpfsFile: vi.fn(async () => {}),
   apiFetch: vi.fn(async () => ({ ok: true })),
   getCurrentUser: vi.fn(() => ({ id: 'USER01' })),
   emit: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock('../src/db/db.js', () => ({
   syncDown: vi.fn(async () => {}),
   bulk: { exportAll: vi.fn(async () => ({})), import: vi.fn(async () => {}) },
   nukeDatabase: vi.fn(),
-  clearDatabase: mocks.clearDatabase,
+  removeOpfsFile: mocks.removeOpfsFile,
 }));
 
 vi.mock('../src/db/remote.js', () => ({
@@ -94,12 +94,12 @@ describe('disconnectFromTree', () => {
     await disconnectFromTree();
 
     expect(mocks.switchDatabase).toHaveBeenCalledWith('familytree-local.db');
-    expect(mocks.clearDatabase).toHaveBeenCalledWith('familytree-collab-TREE01.db');
+    expect(mocks.removeOpfsFile).toHaveBeenCalledWith('familytree-collab-TREE01.db');
 
-    // switchDatabase MUST run before clearDatabase (you can't delete an open file).
+    // switchDatabase MUST run before removeOpfsFile (you can't delete an open file).
     const switchOrder = mocks.switchDatabase.mock.invocationCallOrder[0];
-    const clearOrder = mocks.clearDatabase.mock.invocationCallOrder[0];
-    expect(switchOrder).toBeLessThan(clearOrder);
+    const removeOrder = mocks.removeOpfsFile.mock.invocationCallOrder[0];
+    expect(switchOrder).toBeLessThan(removeOrder);
   });
 
   it('clears treeId/treeName and flips mode to local in collabState', async () => {
@@ -124,7 +124,7 @@ describe('disconnectFromTree', () => {
     await expect(disconnectFromTree()).rejects.toThrow('network boom');
 
     expect(mocks.switchDatabase).not.toHaveBeenCalled();
-    expect(mocks.clearDatabase).not.toHaveBeenCalled();
+    expect(mocks.removeOpfsFile).not.toHaveBeenCalled();
     expect(mocks.setCollabState).not.toHaveBeenCalled();
   });
 });

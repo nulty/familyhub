@@ -423,6 +423,27 @@ export async function clearDatabase(dbName) {
 }
 
 /**
+ * Delete OPFS files matching `dbName` without touching the worker.
+ * Use this when the worker has already been moved off the target file
+ * via `switchDatabase` and you just want to reclaim the disk space.
+ * Unlike `clearDatabase`, this does NOT terminate the worker — so the
+ * app stays usable after the call returns.
+ */
+export async function removeOpfsFile(dbName) {
+  if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) return;
+  const root = await navigator.storage.getDirectory();
+  for await (const [name] of root.entries()) {
+    if (name.includes(dbName)) {
+      try {
+        await root.removeEntry(name, { recursive: true });
+      } catch {
+        // File may be held open (e.g. by the SAH pool) — ignore.
+      }
+    }
+  }
+}
+
+/**
  * Full sync-down: download all data from the API and import into local cache.
  */
 export async function syncDown() {
