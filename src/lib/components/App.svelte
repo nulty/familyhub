@@ -20,6 +20,7 @@
   import Toast from '../shared/Toast.svelte';
 
   let hasData = $state(false);
+  let hasAnyData = $state(false);
   let selectedPersonId = $state(null);
   let dataVersion = $state(0);
   let menuOpen = $state(false);
@@ -88,6 +89,7 @@
 
     on(DATA_CHANGED, async () => {
       const stats = await getStats();
+      hasAnyData = stats.people > 0 || stats.places > 0 || stats.sources > 0 || stats.repositories > 0;
       if (stats.people > 0 && !hasData) {
         hasData = true;
         emit(DB_POPULATED);
@@ -150,6 +152,7 @@
   async function boot() {
     const stats = await getStats();
     hasData = stats.people > 0;
+    hasAnyData = stats.people > 0 || stats.places > 0 || stats.sources > 0 || stats.repositories > 0;
 
     if (hasData) {
       const rootId = getConfig('rootPerson') || getConfig('lastFocusedPerson');
@@ -373,7 +376,7 @@
             <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
             <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
             {#if authenticated && collabMode === 'local' && !getCollabState()?.treeId}
-              {#if hasData}
+              {#if hasAnyData}
                 <button class="menu-item" onclick={() => menuAction(handleShareTree)}>Share This Tree</button>
               {/if}
               <button class="menu-item" onclick={() => menuAction(handleJoinTree)}>Join a Tree</button>
@@ -386,7 +389,7 @@
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
-            {#if hasData}
+            {#if hasAnyData}
               <hr class="menu-divider" />
               {#if collabMode === 'local'}
                 <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
