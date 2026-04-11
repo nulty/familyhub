@@ -4,7 +4,7 @@
  */
 
 import { getCollabState, setCollabState, clearCollabState, getMode } from './config.js';
-import { initDB, switchDatabase, syncDown, bulk, nukeDatabase } from './db/db.js';
+import { switchDatabase, syncDown, bulk, clearDatabase } from './db/db.js';
 import { apiFetch, remoteCall } from './db/remote.js';
 import { isAuthenticated, signOut as authSignOut, getCurrentUser, getAccessToken } from './auth.js';
 import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
@@ -115,23 +115,35 @@ export async function joinTree(code) {
 }
 
 /**
- * Disconnect from collab tree — fork data to local.
+ * Disconnect from the current collaborative tree. Always:
+ *  - calls the server (which will delete the tree if we were the last member)
+ *  - switches the worker to the local DB
+ *  - removes the per-tree OPFS cache file
+ *  - clears collab state and emits mode-change events
+ *
+ * The local tree (familytree-local.db) is NEVER read from, written to,
+ * or merged with during disconnect. If the user wanted to keep a copy
+ * of the shared tree's data, they should have downloaded it first.
  */
-export async function forkToLocal() {
+export async function disconnectFromTree() {
   const state = getCollabState();
-  if (!state?.treeId) throw new Error('No collaborative tree');
+  if (!state?.treeId) throw new Error('Not in a collaborative tree');
+  const treeId = state.treeId;
+  const userId = state.userId;
 
   stopPolling();
 
-  // Try to fork from server — if it fails (404, offline), just switch to local
+  // Server call first. If this throws, leave local state untouched so
+  // the user can retry.
+  await apiFetch(`/trees/${treeId}/members/${userId}`, { method: 'DELETE' });
+
+  // Swap the worker off the collab DB before deleting the OPFS file —
+  // you can't remove a file that has an open SAH pool handle.
+  await switchDatabase('familytree-local.db');
   try {
-    const { data } = await apiFetch(`/trees/${state.treeId}/fork`, {
-      method: 'POST',
-    });
-    await switchDatabase('familytree-local.db');
-    await bulk.import(data);
-  } catch {
-    await switchDatabase('familytree-local.db');
+    await clearDatabase(`familytree-collab-${treeId}.db`);
+  } catch (e) {
+    console.warn('[collab] failed to clear collab cache:', e?.message);
   }
 
   setCollabState({
@@ -139,43 +151,10 @@ export async function forkToLocal() {
     mode: 'local',
     treeId: null,
     treeName: null,
-    hasLocalTree: true,
   });
   setLastTreeRemote(null);
 
   emit(COLLAB_MODE_CHANGED, 'local');
-  emit(DATA_CHANGED);
-}
-
-/**
- * Switch to local tree (without forking).
- */
-export async function switchToLocal() {
-  const state = getCollabState();
-  stopPolling();
-  setCollabState({ ...state, mode: 'local' });
-  await switchDatabase('familytree-local.db');
-  setLastTreeRemote(null);
-
-  emit(COLLAB_MODE_CHANGED, 'local');
-  emit(DATA_CHANGED);
-}
-
-/**
- * Switch to collab tree.
- */
-export async function switchToCollab() {
-  const state = getCollabState();
-  if (!state?.treeId) throw new Error('No collaborative tree to switch to');
-
-  setCollabState({ ...state, mode: 'collab' });
-  await switchDatabase(`familytree-collab-${state.treeId}.db`);
-  await syncDown();
-  setLastTreeRemote(state.treeId);
-
-  startPolling(state.treeId);
-
-  emit(COLLAB_MODE_CHANGED, 'collab');
   emit(DATA_CHANGED);
 }
 
@@ -359,6 +338,10 @@ export function stopPolling() {
     currentPollTreeId = null;
     lastSeenActivityId = null;
   }
-  document.removeEventListener('visibilitychange', handlePollVisibility);
-  window.removeEventListener('online', handlePollOnline);
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', handlePollVisibility);
+  }
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('online', handlePollOnline);
+  }
 }

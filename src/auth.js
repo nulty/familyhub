@@ -56,7 +56,6 @@ export async function handleAuthCallback(code) {
     userEmail: data.user.email,
     treeId: hasLast ? data.lastTree.id : null,
     treeName: hasLast ? data.lastTree.name : null,
-    hasLocalTree: existing.hasLocalTree ?? false,
   });
 
   return data.user;
