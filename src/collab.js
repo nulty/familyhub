@@ -131,11 +131,13 @@ export async function disconnectFromTree() {
   const treeId = state.treeId;
   const userId = state.userId;
 
-  stopPolling();
-
-  // Server call first. If this throws, leave local state untouched so
-  // the user can retry.
+  // Server call first. If this throws, leave local state untouched
+  // (including the still-running poller) so the user can retry.
   await apiFetch(`/trees/${treeId}/members/${userId}`, { method: 'DELETE' });
+
+  // Server confirmed the tree is gone from our perspective — now it's
+  // safe to stop polling.
+  stopPolling();
 
   // Swap the worker off the collab DB before deleting the OPFS file —
   // you can't remove a file that has an open SAH pool handle.
