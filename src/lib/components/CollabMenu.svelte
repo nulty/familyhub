@@ -58,7 +58,7 @@
     if (!await showConfirm({ title: `Remove ${name}?`, message: 'They will lose access to this shared tree.', confirm: 'Remove', danger: true })) return;
     try {
       await removeMember(userId);
-      members = members.filter(m => m.user_id !== userId);
+      members = members.filter(m => m.id !== userId);
       showToast(`${name} removed`);
     } catch (e) {
       showToast('Failed: ' + e.message);
@@ -131,12 +131,12 @@
           <li class="member-item">
             <span class="member-name">
               {member.name || member.email}
-              {#if member.user_id === currentUser?.id}
+              {#if member.id === currentUser?.id}
                 <span class="member-you">(you)</span>
               {/if}
             </span>
-            {#if member.user_id !== currentUser?.id}
-              <button class="btn-small btn-remove" onclick={() => handleRemove(member.user_id, member.name)}>Remove</button>
+            {#if member.id !== currentUser?.id}
+              <button class="btn-small btn-remove" onclick={() => handleRemove(member.id, member.name)}>Remove</button>
             {/if}
           </li>
         {/each}
