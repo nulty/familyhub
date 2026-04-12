@@ -12,6 +12,7 @@
   import { shareTree, joinTree, collabSignOut, startPolling } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
   import { showConfirm } from '../shared/confirm.js';
+  import { showPrompt } from '../shared/prompt.js';
   import { getStack, pushModal } from '../shared/modal-stack.svelte.js';
   import CollabMenu from './CollabMenu.svelte';
   import Search from './Search.svelte';
@@ -256,7 +257,7 @@
   }
 
   async function handleShareTree() {
-    const name = prompt('Name for your shared tree:');
+    const name = await showPrompt({ title: 'Share this tree', message: 'Choose a name for your shared tree.', placeholder: 'e.g. The Burke Family', confirm: 'Share' });
     if (!name) return;
     uploadStatus = 'Sharing tree\u2026';
     try {
@@ -269,8 +270,8 @@
     }
   }
 
-  function handleJoinTree() {
-    const code = prompt('Enter invite code:');
+  async function handleJoinTree() {
+    const code = await showPrompt({ title: 'Join a tree', message: 'Enter the invite code you received.', placeholder: 'Paste invite code', confirm: 'Join' });
     if (!code) return;
     uploadStatus = 'Joining tree\u2026';
     joinTree(code.trim())
