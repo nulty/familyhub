@@ -12,6 +12,7 @@
   import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
   import { shareTree, joinTree, collabSignOut, startPolling } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
+  import { showConfirm } from '../shared/confirm.js';
   import { getStack, pushModal } from '../shared/modal-stack.svelte.js';
   import CollabMenu from './CollabMenu.svelte';
   import Search from './Search.svelte';
@@ -212,7 +213,8 @@
   function handleImport() {
     openImportModal(
       (status) => { uploadStatus = status; },
-      (pending) => { migrationFromUpload = true; migrationPrompt = pending; }
+      (pending) => { migrationFromUpload = true; migrationPrompt = pending; },
+      hasAnyData
     );
   }
 
@@ -237,13 +239,13 @@
   async function nukeDB() {
     const mode = getMode();
     if (mode === 'collab') {
-      if (!confirm('Clear the local cache? This does not affect the shared tree.')) return;
+      if (!await showConfirm({ title: 'Clear local cache?', message: 'This does not affect the shared tree.', confirm: 'Clear' })) return;
       uploadStatus = 'Clearing cache\u2026';
       const state = getCollabState();
       await clearDatabase(`familytree-collab-${state.treeId}.db`);
       window.location.reload();
     } else {
-      if (!confirm('Delete ALL data? This cannot be undone.')) return;
+      if (!await showConfirm({ title: 'Delete all data?', message: 'This cannot be undone.', confirm: 'Delete', danger: true })) return;
       uploadStatus = 'Deleting all data\u2026';
       await nukeDatabase();
       window.location.reload();

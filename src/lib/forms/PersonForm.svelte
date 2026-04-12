@@ -12,11 +12,11 @@
     { value: 'aka', label: 'Also known as' },
   ];
 
-  let { personId = null, onclose, oncreated } = $props();
+  let { personId = null, onclose, oncreated, defaultGender = 'U' } = $props();
 
   let givenName = $state('');
   let surname = $state('');
-  let gender = $state('U');
+  let gender = $state(defaultGender);
   let notes = $state('');
   let nameEntries = $state([]);
   let isEdit = $state(false);

@@ -4,13 +4,14 @@
   import { emit, DATA_CHANGED } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
   import Modal from '../forms/Modal.svelte';
+  import { showConfirm } from '../shared/confirm.js';
 
   let { filename, data, stats, warnings, onclose } = $props();
 
   async function doImport(reset) {
     try {
       if (reset) {
-        if (!confirm('This will delete ALL existing data and recreate the database. Continue?')) return;
+        if (!await showConfirm({ title: 'Replace all data?', message: 'This will delete ALL existing data and recreate the database.', confirm: 'Replace', danger: true })) return;
         await resetDatabase();
         setConfig('resolvedPlaceSegments', {});
         setConfig('skippedPlaceSegments', []);

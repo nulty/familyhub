@@ -3,6 +3,7 @@
   import { getMembers, generateInviteCode, removeMember, disconnectFromTree, getActivity } from '../../collab.js';
   import { getCurrentUser } from '../../auth.js';
   import { showToast } from '../shared/toast-store.js';
+  import { showConfirm } from '../shared/confirm.js';
   import { bulk } from '../../db/db.js';
   import { triggerExport } from '../../gedcom/gedcom.js';
   import Modal from '../forms/Modal.svelte';
@@ -55,7 +56,7 @@
   }
 
   async function handleRemove(userId, name) {
-    if (!confirm(`Remove ${name} from this tree?`)) return;
+    if (!await showConfirm({ title: `Remove ${name}?`, message: 'They will lose access to this shared tree.', confirm: 'Remove', danger: true })) return;
     try {
       await removeMember(userId);
       members = members.filter(m => m.user_id !== userId);
@@ -82,11 +83,13 @@
 
   async function handleDelete() {
     const treeName = collabState?.treeName || 'this tree';
-    const msg = `Delete "${treeName}"?\n\n`
-      + `This permanently deletes the cloud copy. It cannot be undone.\n\n`
-      + `If you want to keep a copy, cancel and use the Download buttons first — `
-      + `the tree will NOT be saved to your local tree.`;
-    if (!confirm(msg)) return;
+    const confirmed = await showConfirm({
+      title: `Delete "${treeName}"?`,
+      message: `This permanently deletes the cloud copy. It cannot be undone.\n\nIf you want to keep a copy, cancel and use the Download buttons first — the tree will NOT be saved to your local tree.`,
+      confirm: 'Delete',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await disconnectFromTree();
       showToast('Tree deleted');
@@ -98,10 +101,12 @@
 
   async function handleLeave() {
     const treeName = collabState?.treeName || 'this tree';
-    const msg = `Leave "${treeName}"?\n\n`
-      + `Other members will keep editing the shared tree. `
-      + `You can rejoin with a new invite code.`;
-    if (!confirm(msg)) return;
+    const confirmed = await showConfirm({
+      title: `Leave "${treeName}"?`,
+      message: 'Other members will keep editing the shared tree. You can rejoin with a new invite code.',
+      confirm: 'Leave',
+    });
+    if (!confirmed) return;
     try {
       await disconnectFromTree();
       showToast('Left the tree');

@@ -4,8 +4,9 @@
   import { showToast } from '../shared/toast-store.js';
   import { bulk } from '../../db/db.js';
   import { emit, DATA_CHANGED, PERSON_DESELECTED } from '../../state.js';
+  import { showConfirm } from '../shared/confirm.js';
 
-  let { onclose, onuploadstatus, onmigration } = $props();
+  let { onclose, onuploadstatus, onmigration, hasdata = false } = $props();
 
   function importGedcom() {
     onclose?.();
@@ -19,7 +20,7 @@
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      if (!confirm(`Replace the current database with "${file.name}"? This cannot be undone.`)) return;
+      if (hasdata && !await showConfirm({ title: 'Replace database?', message: `Replace the current database with "${file.name}"? This cannot be undone.`, confirm: 'Replace', danger: true })) return;
       onclose?.();
       try {
         onuploadstatus?.('Reading file\u2026');

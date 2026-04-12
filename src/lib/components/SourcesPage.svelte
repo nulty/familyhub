@@ -5,6 +5,7 @@
   import { openRepositoryForm, openSourceForm } from '../shared/open.js';
   import { focusPerson } from '../../ui/tree.js';
   import Modal from '../forms/Modal.svelte';
+  import { showConfirm } from '../shared/confirm.js';
 
   let { onclose } = $props();
 
@@ -26,14 +27,14 @@
   }
 
   async function deleteRepo(repoId) {
-    if (!confirm('Delete this repository? Sources will be kept but unlinked.')) return;
+    if (!await showConfirm({ title: 'Delete repository?', message: 'Sources will be kept but unlinked.', confirm: 'Delete', danger: true })) return;
     await repositories.delete(repoId);
     showToast('Repository deleted');
     await loadData();
   }
 
   async function deleteSource(src) {
-    if (!confirm(`Delete "${src.title}"? All citations to this source will be removed.`)) return;
+    if (!await showConfirm({ title: `Delete "${src.title}"?`, message: 'All citations to this source will be removed.', confirm: 'Delete', danger: true })) return;
     await sources.delete(src.id);
     showToast('Source deleted');
     await loadData();

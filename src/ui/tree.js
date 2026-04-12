@@ -3,15 +3,17 @@
  */
 
 import { createChart } from 'family-chart';
-import { graph } from '../db/db.js';
-import { emit, PERSON_SELECTED } from '../state.js';
+import { graph, relationships } from '../db/db.js';
+import { emit, PERSON_SELECTED, DATA_CHANGED } from '../state.js';
 import { getTreeConfig, applyTreeColors, applyCardDisplay } from './tree-config.js';
+import { openPersonForm } from '../lib/shared/open.js';
 
 let chart = null;
 let card = null;
 let currentMainId = null;
 
 function formatData(data) {
+  const ids = new Set(data.map(d => d.id));
   return data.map(d => ({
     id: d.id,
     data: {
@@ -26,10 +28,10 @@ function formatData(data) {
       gender: d.data.gender === 'F' ? 'F' : d.data.gender === 'M' ? 'M' : undefined,
     },
     rels: {
-      spouses: d.rels.spouses || [],
-      children: d.rels.children || [],
-      father: d.rels.father || undefined,
-      mother: d.rels.mother || undefined,
+      spouses: (d.rels.spouses || []).filter(id => ids.has(id)),
+      children: (d.rels.children || []).filter(id => ids.has(id)),
+      father: ids.has(d.rels.father) ? d.rels.father : undefined,
+      mother: ids.has(d.rels.mother) ? d.rels.mother : undefined,
     },
   }));
 }
@@ -101,6 +103,27 @@ export async function initTree(initialFocusId) {
     .setCardInnerHtmlCreator(cardHtmlCreator)
     .setMiniTree(true)
     .setOnCardClick((e, d) => {
+      if (d.data.to_add) {
+        // Placeholder card from family-chart — create person and link relationships
+        const gender = d.data.data?.gender || 'U';
+        const rels = d.data.rels || {};
+        openPersonForm(null, async (created) => {
+          // Link as parent of any children
+          for (const childId of (rels.children || [])) {
+            await relationships.addParentChild(created.id, childId);
+          }
+          // Link as partner of any spouses
+          for (const spouseId of (rels.spouses || [])) {
+            await relationships.addPartner(created.id, spouseId);
+          }
+          // Link as child of any parents
+          for (const parentId of (rels.parents || [])) {
+            await relationships.addParentChild(parentId, created.id);
+          }
+          emit(DATA_CHANGED);
+        }, gender);
+        return;
+      }
       const clickedId = d.data.id;
       if (clickedId === currentMainId) {
         emit(PERSON_SELECTED, clickedId);
@@ -140,12 +163,18 @@ export async function refreshTree() {
     card = null;
     return;
   }
+  // If the focused person was deleted, fall back to any valid person
+  if (currentMainId && !data.some(d => d.id === currentMainId)) {
+    currentMainId = data[0].id;
+  }
   if (!chart) {
     await initTree(currentMainId);
     applyTreeColors(getTreeConfig());
     return;
   }
-  chart.updateData(formatData(data));
+  const formatted = formatData(data);
+  chart.updateData(formatted);
+  chart.updateMainId(currentMainId);
   chart.updateTree({ tree_position: 'inherit' });
 }
 

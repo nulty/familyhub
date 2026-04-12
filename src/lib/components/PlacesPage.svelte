@@ -7,6 +7,7 @@
   import { openOrganizeWizard } from '../../ui/places-organize.js';
   import { focusPerson } from '../../ui/tree.js';
   import Modal from '../forms/Modal.svelte';
+  import { showConfirm } from '../shared/confirm.js';
 
   let { onclose } = $props();
 
@@ -76,7 +77,7 @@
   }
 
   async function deletePlace(place) {
-    if (!confirm(`Delete "${place.name}"? Children will become root places.`)) return;
+    if (!await showConfirm({ title: `Delete "${place.name}"?`, message: 'Children will become root places.', confirm: 'Delete', danger: true })) return;
     await places.delete(place.id);
     emit(DATA_CHANGED);
     showToast(`Deleted ${place.name}`);

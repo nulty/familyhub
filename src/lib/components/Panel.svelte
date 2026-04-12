@@ -5,6 +5,7 @@
   import { focusPerson } from '../../ui/tree.js';
   import { showToast } from '../shared/toast-store.js';
   import { getConfig, setConfig } from '../../config.js';
+  import { showConfirm } from '../shared/confirm.js';
 
   let { personId, onEditChange } = $props();
 
@@ -99,7 +100,7 @@
   }
 
   async function deletePerson() {
-    if (!confirm(`Delete ${fullName}? This will remove all their events and relationships.`)) return;
+    if (!await showConfirm({ title: `Delete ${fullName}?`, message: 'This will remove all their events and relationships.', confirm: 'Delete', danger: true })) return;
     await people.delete(person.id);
     editing = false;
     emit(PERSON_DESELECTED);
@@ -108,14 +109,14 @@
   }
 
   async function deleteEvent(eventId) {
-    if (!confirm('Delete this event?')) return;
+    if (!await showConfirm({ title: 'Delete event?', message: 'This event will be permanently removed.', confirm: 'Delete', danger: true })) return;
     await eventsApi.delete(eventId);
     emit(DATA_CHANGED);
     showToast('Event deleted');
   }
 
   async function removeRelationship(relId) {
-    if (!confirm('Remove this relationship?')) return;
+    if (!await showConfirm({ title: 'Remove relationship?', message: 'This relationship will be removed.', confirm: 'Remove', danger: true })) return;
     await relationships.remove(relId);
     emit(DATA_CHANGED);
     showToast('Relationship removed');
