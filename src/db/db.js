@@ -107,9 +107,17 @@ async function call(method, ...args) {
   // Collab mode
   if (WRITE_METHODS.has(method)) {
     if (!navigator.onLine) {
-      throw new Error("Can't save while offline");
+      throw new Error("You're offline — changes can't be saved right now");
     }
-    const result = await remoteCall(method, ...args);
+    let result;
+    try {
+      result = await remoteCall(method, ...args);
+    } catch (err) {
+      if (!navigator.onLine || err instanceof TypeError) {
+        throw new Error("You're offline — changes can't be saved right now");
+      }
+      throw err;
+    }
     // Update local cache by replaying the write
     try { await workerCall(method, ...args); } catch {}
     return result;

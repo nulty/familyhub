@@ -363,7 +363,10 @@
           </span>
         {/if}
       {:else}
-        <button class="btn btn-outline" onclick={startGoogleSignIn}>Sign In</button>
+        <button class="btn btn-outline" onclick={() => {
+          if (!navigator.onLine) { showToast("You're offline — sign in when you have a connection"); return; }
+          startGoogleSignIn();
+        }}>Sign In</button>
       {/if}
       <div class="menu-wrapper">
         <button class="btn menu-toggle" onclick={() => menuOpen = !menuOpen} aria-label="Menu">

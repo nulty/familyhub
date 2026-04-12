@@ -14,18 +14,27 @@
   let activity = $state([]);
   let inviteCode = $state(null);
   let loading = $state(true);
+  let offline = $state(false);
 
   const collabState = getCollabState();
   const currentUser = getCurrentUser();
 
   $effect(() => {
+    if (!navigator.onLine) {
+      loading = false;
+      offline = true;
+      return;
+    }
     Promise.all([getMembers(), getActivity()])
       .then(([m, a]) => {
         members = m;
         activity = a;
         loading = false;
       })
-      .catch(() => { loading = false; });
+      .catch(() => {
+        loading = false;
+        offline = true;
+      });
   });
 
   const isSolo = $derived(members.length > 0 && members.length === 1);
@@ -106,6 +115,8 @@
 <Modal title={collabState?.treeName || 'Collaboration'} onclose={close} wide>
   {#if loading}
     <p>Loading...</p>
+  {:else if offline}
+    <p class="offline-msg">You're offline. Collaboration details will be available when you reconnect.</p>
   {:else}
     <section>
       <h3>Members</h3>
@@ -176,6 +187,7 @@
 </Modal>
 
 <style>
+  .offline-msg { color: var(--text-muted); font-size: 14px; padding: 1rem 0; }
   section { margin-bottom: 1.5rem; }
   h3 { font-size: 14px; font-weight: 600; margin-bottom: 0.5rem; }
   .member-list { list-style: none; padding: 0; margin: 0; }
