@@ -66,6 +66,9 @@
         {#each results as p}
           <div class="search-result" onclick={() => select(p)}>
             <span class="search-result-name">{formatName(p)}</span>
+            {#if p.birth_year}
+              <span class="search-result-year">b. {p.birth_year}</span>
+            {/if}
           </div>
         {/each}
       {/if}

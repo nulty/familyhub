@@ -141,10 +141,11 @@
       maxItems: 1,
       load(query, callback) {
         people.search(query).then(results => {
-          callback(results.map(p => ({
-            id: p.id,
-            label: [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed',
-          })));
+          callback(results.map(p => {
+            let label = [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed';
+            if (p.birth_year) label += ` (b. ${p.birth_year})`;
+            return { id: p.id, label };
+          }));
         }).catch(() => callback());
       },
       onItemAdd(value) {

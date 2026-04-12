@@ -114,6 +114,7 @@ a:hover { text-decoration: underline; }
 .search-result:hover { background: #f0f4ff; }
 
 .search-result .search-result-name { font-weight: 500; }
+.search-result .search-result-year { color: var(--text-muted); font-size: 12px; margin-left: 4px; }
 
 .header-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
 
