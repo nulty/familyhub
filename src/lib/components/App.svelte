@@ -314,7 +314,7 @@
 
 <div id="app">
   <header id="header">
-    <span class="logo">Sinsear</span>
+    <span class="logo"><img src="/favicon.png" alt="" class="logo-icon" />Sinsear</span>
 
     {#if hasData}
       <Search />
@@ -345,7 +345,7 @@
           startGoogleSignIn();
         }}>Sign In</button>
       {/if}
-      <div class="menu-wrapper">
+      <div class="menu-wrapper" class:hidden={!hasAnyData && !authenticated}>
         <button class="btn menu-toggle" onclick={() => menuOpen = !menuOpen} aria-label="Menu">
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <line x1="3" y1="4" x2="15" y2="4"/><line x1="3" y1="9" x2="15" y2="9"/><line x1="3" y1="14" x2="15" y2="14"/>
@@ -378,8 +378,10 @@
               <hr class="menu-divider" />
               <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
             {/if}
-            <hr class="menu-divider" />
-            {#if collabMode === 'local'}
+            {#if hasAnyData}
+              <hr class="menu-divider" />
+            {/if}
+            {#if collabMode === 'local' && hasAnyData}
               <button class="menu-item" onclick={() => menuAction(handleImport)}>Import</button>
             {/if}
             {#if hasAnyData}
@@ -408,7 +410,8 @@
     {:else}
       <div id="empty-state">
         <div class="welcome">
-          <h1 class="welcome-title">Welcome to Sinsear</h1>
+          <h1 class="welcome-title">Welcome to Sinsear <span class="welcome-phonetic">/ˈʃɪn.ʃɛɾ/</span></h1>
+          <p class="welcome-meaning">Irish — <em>ancestor, grandparent</em></p>
           <p class="welcome-subtitle">A family tree app that runs entirely in your browser.</p>
 
           <div class="welcome-features">
