@@ -41,7 +41,6 @@
   let eventNotes = $state('');
   let isEdit = $state(false);
   let title = $state('New Event');
-  let debugPersonId = $state(personId); // debug: shows the event's person_id
 
   // Participants
   let participantEntries = $state([]);
@@ -72,7 +71,6 @@
       (async () => {
         const existing = await events.get(eventId);
         if (!existing) { onclose?.(); return; }
-        debugPersonId = existing.person_id;
         type = existing.type || 'birth';
         date = existing.date || '';
         placeText = existing.place || '';
@@ -352,9 +350,6 @@
 
 <Modal {title} onclose={onclose}>
   <form onsubmit={handleSubmit}>
-    <div class="form-group" style="background:#fff3cd;padding:6px 8px;border-radius:4px;font-size:12px;font-family:monospace">
-      <label style="font-weight:600;margin:0">person_id: <span style="color:#666">{debugPersonId ?? 'NULL'}</span></label>
-    </div>
     <div class="form-group">
       <label for="ef-type">Type</label>
       <select id="ef-type" bind:value={type}>
