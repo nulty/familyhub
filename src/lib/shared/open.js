@@ -14,6 +14,7 @@ import SourcesPage from '../components/SourcesPage.svelte';
 import PlacesPage from '../components/PlacesPage.svelte';
 import GedcomImport from '../components/GedcomImport.svelte';
 import ImportModal from '../components/ImportModal.svelte';
+import ExportModal from '../components/ExportModal.svelte';
 
 export function openPersonForm(personId, onCreated, defaultGender) {
   pushModal(PersonForm, { personId, oncreated: onCreated, defaultGender });
@@ -57,4 +58,8 @@ export function openGedcomImport(filename, data, stats, warnings) {
 
 export function openImportModal(onUploadStatus, onMigration, hasData) {
   pushModal(ImportModal, { onuploadstatus: onUploadStatus, onmigration: onMigration, hasdata: hasData });
+}
+
+export function openExportModal() {
+  pushModal(ExportModal, {});
 }

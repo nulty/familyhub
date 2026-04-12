@@ -7,8 +7,7 @@
   import MapPanel from './MapPanel.svelte';
   import { getConfig, setConfig, getMode, getCollabState } from '../../config.js';
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
-  import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage, openImportModal } from '../shared/open.js';
-  import { triggerExport } from '../../gedcom/gedcom.js';
+  import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage, openImportModal, openExportModal } from '../shared/open.js';
   import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
   import { shareTree, joinTree, collabSignOut, startPolling } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
@@ -383,8 +382,7 @@
               <button class="menu-item" onclick={() => menuAction(handleImport)}>Import</button>
             {/if}
             {#if hasAnyData}
-              <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
-              <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download Sinsear Backup</button>
+              <button class="menu-item" onclick={() => menuAction(openExportModal)}>Export</button>
             {/if}
             {#if hasAnyData}
               <hr class="menu-divider" />
