@@ -405,11 +405,29 @@
       <div id="map-container"></div>
     {:else}
       <div id="empty-state">
-        <h2>No people yet</h2>
-        <p>Create your first person or import a GEDCOM file to get started.</p>
-        <div class="empty-actions">
-          <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Add First Person</button>
-          <button class="btn" onclick={handleImport}>Import</button>
+        <div class="welcome">
+          <h1 class="welcome-title">Welcome to Sinsear</h1>
+          <p class="welcome-subtitle">A family tree app that runs entirely in your browser.</p>
+
+          <div class="welcome-features">
+            <div class="welcome-feature">
+              <strong>Private by default</strong>
+              <span>Your data is stored on your device. No account needed to get started.</span>
+            </div>
+            <div class="welcome-feature">
+              <strong>Works offline</strong>
+              <span>Add people, events, and places — even without an internet connection.</span>
+            </div>
+            <div class="welcome-feature">
+              <strong>Collaborate with family</strong>
+              <span>Sign in to share your tree and work on it together in real time.</span>
+            </div>
+          </div>
+
+          <div class="welcome-actions">
+            <button class="btn btn-primary btn-lg" onclick={() => openPersonForm()}>+ Add First Person</button>
+            <button class="btn btn-lg" onclick={handleImport}>Import</button>
+          </div>
         </div>
       </div>
     {/if}
