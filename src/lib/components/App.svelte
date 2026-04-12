@@ -7,8 +7,8 @@
   import MapPanel from './MapPanel.svelte';
   import { getConfig, setConfig, getMode, getCollabState } from '../../config.js';
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
-  import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage } from '../shared/open.js';
-  import { triggerImport, triggerExport } from '../../gedcom/gedcom.js';
+  import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage, openImportModal } from '../shared/open.js';
+  import { triggerExport } from '../../gedcom/gedcom.js';
   import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
   import { shareTree, joinTree, collabSignOut, startPolling } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
@@ -182,7 +182,7 @@
       a.download = 'familytree.db';
       a.click();
       URL.revokeObjectURL(url);
-      showToast('Database downloaded');
+      showToast('Sinsear backup downloaded');
     } catch (err) {
       showToast('Download failed: ' + err.message);
     }
@@ -209,36 +209,11 @@
     await proceedWithMigrations();
   }
 
-  function uploadDB() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.db,.sqlite,.sqlite3';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      if (!confirm(`Replace the current database with "${file.name}"? This cannot be undone.`)) return;
-      try {
-        uploadStatus = 'Reading file\u2026';
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        uploadStatus = 'Restoring database\u2026';
-        const result = await bulk.importDatabase(bytes);
-        if (result.pendingMigrations?.length > 0) {
-          uploadStatus = null;
-          migrationFromUpload = true;
-          migrationPrompt = result.pendingMigrations;
-          return;
-        }
-        emit(PERSON_DESELECTED);
-        emit(DATA_CHANGED);
-        showToast('Database restored from ' + file.name);
-      } catch (err) {
-        showToast('Upload failed: ' + err.message);
-      } finally {
-        uploadStatus = null;
-      }
-    };
-    input.click();
+  function handleImport() {
+    openImportModal(
+      (status) => { uploadStatus = status; },
+      (pending) => { migrationFromUpload = true; migrationPrompt = pending; }
+    );
   }
 
   function startWizard() {
@@ -401,17 +376,11 @@
             {/if}
             <hr class="menu-divider" />
             {#if collabMode === 'local'}
-              <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
+              <button class="menu-item" onclick={() => menuAction(handleImport)}>Import</button>
             {/if}
             {#if hasAnyData}
               <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
-            {/if}
-            <hr class="menu-divider" />
-            {#if hasAnyData}
-              <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download DB</button>
-            {/if}
-            {#if collabMode === 'local'}
-              <button class="menu-item" onclick={() => menuAction(uploadDB)}>Upload DB</button>
+              <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download Sinsear Backup</button>
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
@@ -436,7 +405,7 @@
         <p>Create your first person or import a GEDCOM file to get started.</p>
         <div class="empty-actions">
           <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Add First Person</button>
-          <button class="btn" onclick={() => triggerImport()}>Import GEDCOM</button>
+          <button class="btn" onclick={handleImport}>Import</button>
         </div>
       </div>
     {/if}
