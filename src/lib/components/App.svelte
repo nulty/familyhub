@@ -356,8 +356,10 @@
             {#if hasData}
               <button class="menu-item" onclick={() => menuAction(startWizard)}>Data Entry Wizard</button>
             {/if}
-            <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
-            <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
+            {#if hasAnyData}
+              <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
+              <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
+            {/if}
             {#if authenticated && collabMode === 'local' && !collabState?.treeId}
               {#if hasAnyData}
                 <button class="menu-item" onclick={() => menuAction(handleShareTree)}>Share This Tree</button>
@@ -382,10 +384,12 @@
               <button class="menu-item" onclick={() => menuAction(triggerExport)}>Export GEDCOM</button>
               <button class="menu-item" onclick={() => menuAction(downloadDB)}>Download Sinsear Backup</button>
             {/if}
-            <hr class="menu-divider" />
-            <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
-              {collabMode === 'collab' ? 'Clear Local Cache' : 'Delete All Data'}
-            </button>
+            {#if hasAnyData}
+              <hr class="menu-divider" />
+              <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
+                {collabMode === 'collab' ? 'Clear Local Cache' : 'Delete All Data'}
+              </button>
+            {/if}
           </div>
         {/if}
       </div>
