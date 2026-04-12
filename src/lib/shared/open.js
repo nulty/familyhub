@@ -13,6 +13,7 @@ import CitationForm from '../forms/CitationForm.svelte';
 import SourcesPage from '../components/SourcesPage.svelte';
 import PlacesPage from '../components/PlacesPage.svelte';
 import GedcomImport from '../components/GedcomImport.svelte';
+import ImportModal from '../components/ImportModal.svelte';
 
 export function openPersonForm(personId, onCreated) {
   pushModal(PersonForm, { personId, oncreated: onCreated });
@@ -52,4 +53,8 @@ export function openPlacesPage() {
 
 export function openGedcomImport(filename, data, stats, warnings) {
   pushModal(GedcomImport, { filename, data, stats, warnings });
+}
+
+export function openImportModal(onUploadStatus, onMigration) {
+  pushModal(ImportModal, { onuploadstatus: onUploadStatus, onmigration: onMigration });
 }
