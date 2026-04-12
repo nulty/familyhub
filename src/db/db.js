@@ -54,10 +54,10 @@ export async function initDB(dbName = 'familytree-local.db') {
   readyPromise = call('init', schemaBaseUrl, dbName);
   const result = await readyPromise;
 
-  // Background sweep: remove any orphaned per-tree cache files from OPFS.
+  // Sweep orphaned per-tree cache files from OPFS before returning.
   // A cache file is orphaned if it does not match the currently-open DB.
-  // Swallows all errors — this is a best-effort safety net.
-  sweepOrphanedCollabCaches(dbName).catch(() => {});
+  // Awaited so a concurrent join/reopen can't race the removal.
+  await sweepOrphanedCollabCaches(dbName).catch(() => {});
 
   return result;
 }

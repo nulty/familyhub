@@ -36,6 +36,7 @@
   let authenticated = $state(isAuthenticated());
   let currentUser = $state(getCurrentUser());
   let syncStatus = $state('online');
+  let collabState = $state(getCollabState());
 
   const modalStack = getStack;
 
@@ -56,9 +57,9 @@
       }
     }
 
-    const collabState = getCollabState();
-    const dbName = collabState?.mode === 'collab' && collabState?.treeId
-      ? `familytree-collab-${collabState.treeId}.db`
+    const initState = getCollabState();
+    const dbName = initState?.mode === 'collab' && initState?.treeId
+      ? `familytree-collab-${initState.treeId}.db`
       : 'familytree-local.db';
 
     initDB(dbName).then(async (result) => {
@@ -69,7 +70,7 @@
       await boot();
 
       // If collab mode, sync down after boot
-      if (collabState?.mode === 'collab') {
+      if (initState?.mode === 'collab') {
         await syncDown();
         emit(DATA_CHANGED);
       }
@@ -134,6 +135,7 @@
 
     on(COLLAB_MODE_CHANGED, (mode) => {
       collabMode = mode;
+      collabState = getCollabState();
       authenticated = isAuthenticated();
       currentUser = getCurrentUser();
     });
@@ -164,7 +166,6 @@
 
     // Start polling for real-time updates when in collab mode
     if (getMode() === 'collab') {
-      const collabState = getCollabState();
       if (collabState?.treeId) {
         startPolling(collabState.treeId);
       }
@@ -340,7 +341,9 @@
   <header id="header">
     <span class="logo">Sinsear</span>
 
-    <Search />
+    {#if hasData}
+      <Search />
+    {/if}
 
     <div class="header-actions">
       {#if hasData}
@@ -372,10 +375,12 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div class="menu-backdrop" onclick={() => menuOpen = false} onkeydown={handleMenuKeydown}></div>
           <div class="menu-dropdown">
-            <button class="menu-item" onclick={() => menuAction(startWizard)}>Data Entry Wizard</button>
+            {#if hasData}
+              <button class="menu-item" onclick={() => menuAction(startWizard)}>Data Entry Wizard</button>
+            {/if}
             <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
             <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
-            {#if authenticated && collabMode === 'local' && !getCollabState()?.treeId}
+            {#if authenticated && collabMode === 'local' && !collabState?.treeId}
               {#if hasAnyData}
                 <button class="menu-item" onclick={() => menuAction(handleShareTree)}>Share This Tree</button>
               {/if}
@@ -387,8 +392,10 @@
             {#if authenticated}
               <button class="menu-item" onclick={() => menuAction(handleSignOut)}>Sign Out</button>
             {/if}
-            <hr class="menu-divider" />
-            <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
+            {#if hasData}
+              <hr class="menu-divider" />
+              <button class="menu-item" onclick={() => menuAction(openTreeConfig)}>Settings</button>
+            {/if}
             <hr class="menu-divider" />
             {#if collabMode === 'local'}
               <button class="menu-item" onclick={() => menuAction(triggerImport)}>Import GEDCOM</button>
