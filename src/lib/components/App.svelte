@@ -327,7 +327,9 @@
           <button class:active={viewMode === 'map'} onclick={() => setViewMode('map')}>Map</button>
         </div>
       {/if}
-      <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Person</button>
+      {#if hasData}
+        <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Person</button>
+      {/if}
       {#if authenticated}
         <span class="user-badge" title={currentUser?.email}>
           {currentUser?.name || currentUser?.email}
