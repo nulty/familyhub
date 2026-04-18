@@ -2,7 +2,7 @@
  * places-organize.js — Wizard to structure flat imported places into a hierarchy
  */
 
-import { places } from '../db/db.js';
+import { places, placeTypes } from '../db/db.js';
 import { emit, DATA_CHANGED } from '../state.js';
 import { openPlaceForm } from '../lib/shared/open.js';
 import { showToast } from '../lib/shared/toast-store.js';
@@ -32,7 +32,6 @@ function openModal({ title, content }) {
   window.addEventListener('keydown', onKey);
   return { close, body };
 }
-import { placeTypeOptions } from '../util/place-types.js';
 import { getConfig, setConfig } from '../config.js';
 
 // Persist resolved segments across wizard sessions
@@ -58,7 +57,7 @@ function saveSkippedSegment(name) {
 }
 
 export async function openOrganizeWizard(onComplete) {
-  const allPlaces = await places.list();
+  const [allPlaces, fetchedTypes] = await Promise.all([places.list(), placeTypes.list()]);
 
   // Places that need organizing: comma-separated (not yet split) OR no type set
   const unorganizedPlaces = allPlaces.filter(p => p.name.includes(',') || !p.type);
@@ -216,7 +215,8 @@ export async function openOrganizeWizard(onComplete) {
         <div class="form-group">
           <label>Type</label>
           <select id="org-type">
-            ${placeTypeOptions('', '(skip — not a place)')}
+            <option value="">(skip — not a place)</option>
+            ${[...fetchedTypes].sort((a, b) => a.label.localeCompare(b.label)).map(t => `<option value="${t.key}">${t.label}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">

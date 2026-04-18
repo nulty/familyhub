@@ -1,15 +1,14 @@
 <script>
-  import { places } from '../../db/db.js';
+  import { places, placeTypes } from '../../db/db.js';
   import { emit, DATA_CHANGED, PICK_LOCATION } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
   import Modal from './Modal.svelte';
   import PlacePicker from '../pickers/PlacePicker.svelte';
   import { openPlaceForm } from '../shared/open.js';
-  import { PLACE_TYPES, formatPlaceType } from '../../util/place-types.js';
 
   let { placeId = null, prefill = null, onclose, oncomplete } = $props();
 
-  const sortedTypes = [...PLACE_TYPES].sort((a, b) => !a ? 1 : !b ? -1 : formatPlaceType(a).localeCompare(formatPlaceType(b)));
+  let typeOptions = $state([]);
 
   let name = $state(prefill?.name || '');
   let type = $state(prefill?.type || '');
@@ -25,6 +24,10 @@
   let geocodeOpen = $state(false);
   let geocodeLoading = $state(false);
   let original = null;
+
+  $effect(() => {
+    placeTypes.list().then(types => { typeOptions = types; });
+  });
 
   $effect(() => {
     if (!placeId && prefill?.parent_id) {
@@ -179,8 +182,9 @@
     <div class="form-group">
       <label for="plf-type">Type</label>
       <select id="plf-type" bind:value={type}>
-        {#each sortedTypes as t}
-          <option value={t}>{t ? formatPlaceType(t) : '(none)'}</option>
+        <option value="">(none)</option>
+        {#each typeOptions.slice().sort((a, b) => a.label.localeCompare(b.label)) as t (t.key)}
+          <option value={t.key}>{t.label}</option>
         {/each}
       </select>
     </div>
