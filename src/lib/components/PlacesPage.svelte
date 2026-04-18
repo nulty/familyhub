@@ -14,6 +14,8 @@
   import { showConfirm } from '../shared/confirm.js';
   import GeocodeReview from './GeocodeReview.svelte';
   import PlaceTypeSettings from './PlaceTypeSettings.svelte';
+  import GeocodeBatchPicker from './GeocodeBatchPicker.svelte';
+  import { pushModal } from '../shared/modal-stack.svelte.js';
 
   let { onclose, openReview = false } = $props();
 
@@ -173,29 +175,42 @@
     input.click();
   }
 
-  async function handleGeocode() {
+  function handleGeocode() {
     if (geocoding) {
       abortController?.abort();
       return;
     }
-
-    const autoAccept = await showConfirm({
-      title: 'Geocode mode',
-      message: 'Choose how to handle the results:\n\nAuto-accept = trust the top match for every place (fast, no review).\nReview = queue results for you to confirm one by one.',
-      confirm: 'Auto-accept',
+    pushModal(GeocodeBatchPicker, {
+      treeId: getTreeId(),
+      hasQueueEntry: (id) => geocodeQueue?.hasPlace(id),
+      onstart: startBatch,
     });
+  }
 
+  async function startBatch({ selectedIds, bias, mode }) {
+    const selectedSet = new Set(selectedIds);
+    const autoAccept = mode === 'auto';
     geocoding = true;
     abortController = new AbortController();
     const toastId = showToast('Starting geocode…', 0);
 
     try {
       const allPlaces = await places.list();
+      const targetPlaces = allPlaces.filter((p) => selectedSet.has(p.id));
+
+      // Inject bias into query by shallow-copying the place objects with modified .name.
+      // We don't mutate the DB — we mutate a shallow copy.
+      const biased = bias ? targetPlaces.map((p) => {
+        const contains = p.name.toLowerCase().includes(bias.toLowerCase());
+        return contains ? p : { ...p, name: `${p.name}, ${bias}` };
+      }) : targetPlaces;
 
       const result = await batchGeocode({
-        places: allPlaces,
+        places: biased,
         hasQueueEntry: (id) => geocodeQueue.hasPlace(id),
         onResult: async (place, results) => {
+          // `place` here is the biased version; recover the original DB record
+          const original = allPlaces.find((p) => p.id === place.id);
           if (autoAccept && results.length > 0) {
             const evts = await places.events(place.id);
             await decomposeAddress({
@@ -208,8 +223,8 @@
           } else {
             geocodeQueue.addItem({
               place_id: place.id,
-              place_name: place.name,
-              query: place.name,
+              place_name: original?.name ?? place.name,
+              query: place.name,  // the biased query
               status: results.length > 0 ? 'ready' : 'no_results',
               results: results.map((r) => ({
                 lat: parseFloat(r.lat),
