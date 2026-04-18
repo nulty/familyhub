@@ -48,8 +48,8 @@ export function openSourcesPage() {
   pushModal(SourcesPage, {});
 }
 
-export function openPlacesPage() {
-  pushModal(PlacesPage, {});
+export function openPlacesPage(options = {}) {
+  pushModal(PlacesPage, { openReview: options.openReview });
 }
 
 export function openGedcomImport(filename, data, stats, warnings) {

@@ -15,7 +15,7 @@
   import GeocodeReview from './GeocodeReview.svelte';
   import PlaceTypeSettings from './PlaceTypeSettings.svelte';
 
-  let { onclose } = $props();
+  let { onclose, openReview = false } = $props();
 
   let allPlaces = $state([]);
   let byParent = $state({});
@@ -37,6 +37,9 @@
     if (!geocodeQueue) {
       geocodeQueue = new GeocodeQueue(getTreeId());
       queueCount = geocodeQueue.count();
+      if (openReview && queueCount > 0) {
+        showReview = true;
+      }
     }
   });
 

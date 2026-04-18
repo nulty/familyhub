@@ -4,7 +4,9 @@
   import { showToast } from '../shared/toast-store.js';
   import Modal from './Modal.svelte';
   import PlacePicker from '../pickers/PlacePicker.svelte';
-  import { openPlaceForm } from '../shared/open.js';
+  import { openPlaceForm, openPlacesPage } from '../shared/open.js';
+  import { GeocodeQueue } from '../../util/geocode-queue.js';
+  import { getCollabState } from '../../config.js';
 
   let { placeId = null, prefill = null, onclose, oncomplete } = $props();
 
@@ -67,6 +69,11 @@
     }
   });
 
+  function getTreeId() {
+    const collab = getCollabState();
+    return collab?.treeId || 'local';
+  }
+
   function focusOnMount(node) {
     requestAnimationFrame(() => node.focus());
   }
@@ -100,20 +107,63 @@
 
   async function runGeocode() {
     if (!geocodeQuery.trim()) return;
+    if (!name.trim()) {
+      showToast('Place needs a name before geocoding');
+      return;
+    }
     geocodeLoading = true;
     try {
-      const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: geocodeQuery.trim(), format: 'json', limit: '1' })}`;
+      const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
+        q: geocodeQuery.trim(), format: 'json', limit: '3', addressdetails: '1',
+      })}`;
       const res = await fetch(url, { headers: { 'User-Agent': 'Sinsear/0.2.0' } });
       if (!res.ok) { showToast('Geocode request failed'); return; }
       const data = await res.json();
-      if (data.length > 0) {
-        latitude = String(parseFloat(data[0].lat));
-        longitude = String(parseFloat(data[0].lon));
-        geocodeOpen = false;
-        showToast('Coordinates found');
-      } else {
-        showToast('No results — try editing the query');
+
+      // Ensure we have a saved place to queue against
+      let targetPlaceId = placeId;
+      if (!targetPlaceId) {
+        const parentIdValue = selectedParentId || null;
+        const created = await places.create({
+          name: name.trim(),
+          type: type || '',
+          parent_id: parentIdValue,
+          notes: notes || '',
+        });
+        targetPlaceId = created.id;
+      } else if (isEdit) {
+        // Save any pending field edits so the user doesn't lose them
+        await places.update(targetPlaceId, {
+          name: name.trim(),
+          type: type || '',
+          parent_id: selectedParentId || null,
+          notes: notes || '',
+        });
       }
+
+      // Add to queue
+      const queue = new GeocodeQueue(getTreeId());
+      queue.addItem({
+        place_id: targetPlaceId,
+        place_name: name.trim(),
+        query: geocodeQuery.trim(),
+        status: data.length > 0 ? 'ready' : 'no_results',
+        results: data.map(r => ({
+          lat: parseFloat(r.lat),
+          lon: parseFloat(r.lon),
+          display_name: r.display_name,
+          address: r.address,
+          importance: r.importance,
+          addresstype: r.addresstype,
+        })),
+      });
+
+      emit(DATA_CHANGED);
+      showToast(data.length > 0 ? 'Queued for review' : 'No results — queued for retry');
+
+      // Close PlaceForm and open PlacesPage with review panel
+      onclose?.();
+      openPlacesPage({ openReview: true });
     } catch (err) {
       showToast('Geocode error: ' + err.message);
     } finally {
