@@ -149,6 +149,28 @@ CREATE TABLE IF NOT EXISTS place_types (
   source TEXT NOT NULL
 );
 
+INSERT OR IGNORE INTO place_types (key, label, source) VALUES
+  ('borough',           'Borough',           'nominatim'),
+  ('city',              'City',              'nominatim'),
+  ('city_district',     'City District',     'nominatim'),
+  ('country',           'Country',           'nominatim'),
+  ('county',            'County',            'nominatim'),
+  ('farm',              'Farm',              'nominatim'),
+  ('hamlet',            'Hamlet',            'nominatim'),
+  ('house_name',        'House Name',        'nominatim'),
+  ('house_number',      'House Number',      'nominatim'),
+  ('isolated_dwelling', 'Isolated Dwelling', 'nominatim'),
+  ('municipality',      'Municipality',      'nominatim'),
+  ('neighbourhood',     'Neighbourhood',     'nominatim'),
+  ('quarter',           'Quarter',           'nominatim'),
+  ('region',            'Region',            'nominatim'),
+  ('road',              'Road',              'nominatim'),
+  ('state',             'State',             'nominatim'),
+  ('state_district',    'State District',    'nominatim'),
+  ('suburb',            'Suburb',            'nominatim'),
+  ('town',              'Town',              'nominatim'),
+  ('village',           'Village',           'nominatim');
+
 CREATE TABLE IF NOT EXISTS person_names (
   id          TEXT PRIMARY KEY,
   person_id   TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,

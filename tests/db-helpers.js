@@ -6,9 +6,11 @@
 import Database from 'better-sqlite3';
 import { readFileSync } from 'fs';
 import { createHandlers } from '../src/db/handlers.js';
+import { applyMigrations } from '../src/db/migrations.js';
 
 /**
- * Creates a test DB with the current schema — loads schema.sql directly.
+ * Creates a test DB with the current schema — loads schema.sql directly,
+ * then applies any pending migrations so seed data is present.
  */
 export function setupTestDB() {
   const db = new Database(':memory:');
@@ -18,6 +20,7 @@ export function setupTestDB() {
   db.exec(schema);
 
   const helpers = createBetterSqliteHelpers(db);
+  applyMigrations(helpers);
   const handlers = createHandlers(helpers);
 
   return { db, handlers, helpers };

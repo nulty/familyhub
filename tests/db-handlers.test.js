@@ -1032,3 +1032,61 @@ describe('searchCitations', () => {
     expect(results[0].event_summary).toContain('John Smith');
   });
 });
+
+describe('place type handlers', () => {
+  it('listPlaceTypes returns seeded types', async () => {
+    const types = await h.listPlaceTypes();
+    expect(types.length).toBeGreaterThan(0);
+    expect(types.find(t => t.key === 'country')).toBeTruthy();
+  });
+
+  it('getPlaceType returns a single type', async () => {
+    const t = await h.getPlaceType('country');
+    expect(t).toEqual({ key: 'country', label: 'Country', source: 'nominatim' });
+  });
+
+  it('getPlaceType returns null for missing key', async () => {
+    const t = await h.getPlaceType('nonexistent');
+    expect(t).toBeNull();
+  });
+
+  it('updatePlaceTypeLabel renames a type label', async () => {
+    await h.updatePlaceTypeLabel('county', 'Département');
+    const t = await h.getPlaceType('county');
+    expect(t.label).toBe('Département');
+  });
+
+  it('createPlaceType adds a custom type', async () => {
+    await h.createPlaceType({ key: 'poor_law_union', label: 'Poor Law Union' });
+    const t = await h.getPlaceType('poor_law_union');
+    expect(t).toEqual({ key: 'poor_law_union', label: 'Poor Law Union', source: 'custom' });
+  });
+
+  it('createPlaceType rejects duplicate keys', async () => {
+    await expect(h.createPlaceType({ key: 'country', label: 'Duplicate' }))
+      .rejects.toThrow();
+  });
+
+  it('deletePlaceType removes custom types', async () => {
+    await h.createPlaceType({ key: 'temp_type', label: 'Temp' });
+    await h.deletePlaceType('temp_type');
+    const t = await h.getPlaceType('temp_type');
+    expect(t).toBeNull();
+  });
+
+  it('deletePlaceType refuses to delete nominatim types', async () => {
+    await expect(h.deletePlaceType('country')).rejects.toThrow();
+  });
+
+  it('ensurePlaceType adds unknown nominatim keys', async () => {
+    await h.ensurePlaceType('archipelago');
+    const t = await h.getPlaceType('archipelago');
+    expect(t).toEqual({ key: 'archipelago', label: 'Archipelago', source: 'nominatim' });
+  });
+
+  it('ensurePlaceType is no-op for existing keys', async () => {
+    await h.ensurePlaceType('country');
+    const t = await h.getPlaceType('country');
+    expect(t.label).toBe('Country');
+  });
+});

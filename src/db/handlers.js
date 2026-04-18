@@ -756,6 +756,42 @@ export function createHandlers(h, opts = {}) {
       return await all('SELECT * FROM places WHERE parent_id = ? ORDER BY name', [parentId]);
     },
 
+    // ── Place types ──────────────────────────────────────────────────────────
+
+    async listPlaceTypes() {
+      return await all('SELECT * FROM place_types ORDER BY key');
+    },
+
+    async getPlaceType(key) {
+      return await get('SELECT * FROM place_types WHERE key = ?', [key]);
+    },
+
+    async updatePlaceTypeLabel(key, label) {
+      await run('UPDATE place_types SET label = ? WHERE key = ?', [label, key]);
+      return await get('SELECT * FROM place_types WHERE key = ?', [key]);
+    },
+
+    async createPlaceType({ key, label }) {
+      await run('INSERT INTO place_types (key, label, source) VALUES (?, ?, ?)', [key, label, 'custom']);
+      return await get('SELECT * FROM place_types WHERE key = ?', [key]);
+    },
+
+    async deletePlaceType(key) {
+      const t = await get('SELECT * FROM place_types WHERE key = ?', [key]);
+      if (!t) return { ok: true };
+      if (t.source === 'nominatim') throw new Error('Cannot delete built-in Nominatim type');
+      await run('DELETE FROM place_types WHERE key = ?', [key]);
+      return { ok: true };
+    },
+
+    async ensurePlaceType(key) {
+      const existing = await get('SELECT * FROM place_types WHERE key = ?', [key]);
+      if (existing) return existing;
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      await run('INSERT OR IGNORE INTO place_types (key, label, source) VALUES (?, ?, ?)', [key, label, 'nominatim']);
+      return await get('SELECT * FROM place_types WHERE key = ?', [key]);
+    },
+
     // ── Temporal queries ─────────────────────────────────────────────────────
 
     async findEventsNearDate(targetMs, windowMs, options = {}) {

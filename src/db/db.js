@@ -345,6 +345,29 @@ export const places = {
   },
 };
 
+// ─── Place Types ────────────────────────────────────────────────────────────
+
+export const placeTypes = {
+  list() {
+    return call('listPlaceTypes');
+  },
+  get(key) {
+    return call('getPlaceType', key);
+  },
+  updateLabel(key, label) {
+    return call('updatePlaceTypeLabel', key, label);
+  },
+  create(data) {
+    return call('createPlaceType', data);
+  },
+  delete(key) {
+    return call('deletePlaceType', key);
+  },
+  ensure(key) {
+    return call('ensurePlaceType', key);
+  },
+};
+
 // ─── Temporal ─────────────────────────────────────────────────────────────────
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
