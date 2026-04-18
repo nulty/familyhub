@@ -13,6 +13,7 @@
   import Modal from '../forms/Modal.svelte';
   import { showConfirm } from '../shared/confirm.js';
   import GeocodeReview from './GeocodeReview.svelte';
+  import PlaceTypeSettings from './PlaceTypeSettings.svelte';
 
   let { onclose } = $props();
 
@@ -25,6 +26,7 @@
   let geocodeQueue = $state(null);
   let queueCount = $state(0);
   let showReview = $state(false);
+  let showTypeSettings = $state(false);
 
   function getTreeId() {
     const collab = getCollabState();
@@ -281,6 +283,9 @@
         </button>
         <button class="btn btn-sm" onclick={resetQueue}>Reset Queue</button>
       {/if}
+      <button class="btn btn-sm" onclick={() => showTypeSettings = !showTypeSettings}>
+        {showTypeSettings ? 'Hide Types' : 'Types'}
+      </button>
     </div>
 
     {#if showReview && geocodeQueue}
@@ -292,6 +297,10 @@
         }}
         onClose={() => { showReview = false; }}
       />
+    {/if}
+
+    {#if showTypeSettings}
+      <PlaceTypeSettings onClose={() => { showTypeSettings = false; }} />
     {/if}
 
     <div class="form-group" style="margin-bottom:12px">
