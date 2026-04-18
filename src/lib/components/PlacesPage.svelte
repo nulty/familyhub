@@ -1,8 +1,12 @@
 <script>
-  import { places } from '../../db/db.js';
+  import { places, events, placeTypes } from '../../db/db.js';
   import { emit, PERSON_SELECTED, DATA_CHANGED } from '../../state.js';
   import { showToast, updateToast, dismissToast } from '../shared/toast-store.js';
-  import { geocodePlaces } from '../../util/geocode.js';
+  import { batchGeocode } from '../../util/geocode.js';
+  import { GeocodeQueue } from '../../util/geocode-queue.js';
+  import { decomposeAddress } from '../../util/decompose.js';
+  import { ulid } from '../../util/ulid.js';
+  import { getCollabState } from '../../config.js';
   import { openPlaceForm } from '../shared/open.js';
   import { openOrganizeWizard } from '../../ui/places-organize.js';
   import { focusPerson } from '../../ui/tree.js';
@@ -17,6 +21,30 @@
   let collapsed = $state({});
   let geocoding = $state(false);
   let abortController = null;
+  let geocodeQueue = $state(null);
+  let queueCount = $state(0);
+
+  function getTreeId() {
+    const collab = getCollabState();
+    return collab?.treeId || 'local';
+  }
+
+  $effect(() => {
+    if (!geocodeQueue) {
+      geocodeQueue = new GeocodeQueue(getTreeId());
+      queueCount = geocodeQueue.count();
+    }
+  });
+
+  const decompositionHandlers = {
+    findPlaceByNameTypeParent: (name, type, parentId) => places.findByNameTypeParent(name, type, parentId),
+    createPlace: (data) => places.create(data),
+    ensurePlaceType: (key) => placeTypes.ensure(key),
+    updatePlace: (id, fields) => places.update(id, fields),
+    updateEvent: (id, fields) => events.update(id, fields),
+    deletePlace: (id) => places.delete(id),
+  };
+
   let filterText = $state('');
   let matchingIds = $derived.by(() => {
     const q = filterText.trim().toLowerCase();
@@ -144,17 +172,52 @@
       return;
     }
 
+    const autoAccept = await showConfirm({
+      title: 'Geocode mode',
+      message: 'Choose how to handle the results:\n\nAuto-accept = trust the top match for every place (fast, no review).\nReview = queue results for you to confirm one by one.',
+      confirm: 'Auto-accept',
+    });
+
     geocoding = true;
     abortController = new AbortController();
-    const toastId = showToast('Starting geocoding...', 0);
+    const toastId = showToast('Starting geocode…', 0);
 
     try {
-      const result = await geocodePlaces({
-        getPlaces: () => places.list(),
-        getHierarchy: (id) => places.hierarchy(id),
-        updatePlace: (id, fields) => places.update(id, fields),
+      const allPlaces = await places.list();
+
+      const result = await batchGeocode({
+        places: allPlaces,
+        hasQueueEntry: (id) => geocodeQueue.hasPlace(id),
+        onResult: async (place, results) => {
+          if (autoAccept && results.length > 0) {
+            const evts = await places.events(place.id);
+            await decomposeAddress({
+              nominatimResult: results[0],
+              originalPlaceId: place.id,
+              eventIds: evts.map((e) => e.id),
+              handlers: decompositionHandlers,
+              generateId: ulid,
+            });
+          } else {
+            geocodeQueue.addItem({
+              place_id: place.id,
+              place_name: place.name,
+              query: place.name,
+              status: results.length > 0 ? 'ready' : 'no_results',
+              results: results.map((r) => ({
+                lat: parseFloat(r.lat),
+                lon: parseFloat(r.lon),
+                display_name: r.display_name,
+                address: r.address,
+                importance: r.importance,
+                addresstype: r.addresstype,
+              })),
+            });
+            queueCount = geocodeQueue.count();
+          }
+        },
         onProgress: (current, total) => {
-          updateToast(toastId, `Geocoding ${current}/${total}...`);
+          updateToast(toastId, `Geocoding ${current}/${total}…`);
         },
         signal: abortController.signal,
       });
@@ -162,11 +225,16 @@
       dismissToast(toastId);
 
       if (result.total === 0) {
-        showToast('All places already geocoded');
-      } else {
-        const parts = [`Geocoded ${result.geocoded}/${result.total} places`];
-        if (result.notFound > 0) parts.push(`${result.notFound} not found`);
+        showToast('No places to geocode');
+      } else if (autoAccept) {
+        const parts = [`Auto-geocoded ${result.fetched}/${result.total} places`];
+        if (result.noResults > 0) parts.push(`${result.noResults} not found`);
         showToast(parts.join(', '));
+      } else {
+        const parts = [`Fetched results for ${result.fetched} places`];
+        if (result.noResults > 0) parts.push(`${result.noResults} not found`);
+        parts.push('— click Review to triage');
+        showToast(parts.join(' '));
       }
 
       await loadData();
@@ -179,6 +247,13 @@
       geocoding = false;
       abortController = null;
     }
+  }
+
+  function resetQueue() {
+    if (!geocodeQueue) return;
+    geocodeQueue.clear();
+    queueCount = 0;
+    showToast('Queue cleared');
   }
 
   function formatName(ev) {
@@ -198,6 +273,10 @@
       <button class="btn btn-sm" onclick={handleGeocode}>
         {geocoding ? 'Stop Geocoding' : 'Geocode'}
       </button>
+      {#if queueCount > 0}
+        <button class="btn btn-sm" onclick={() => alert('Review UI coming in Task 9')}>Review ({queueCount})</button>
+        <button class="btn btn-sm" onclick={resetQueue}>Reset Queue</button>
+      {/if}
     </div>
 
     <div class="form-group" style="margin-bottom:12px">
