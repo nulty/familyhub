@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseGEDCOM } from '../src/gedcom/import.js';
+import { parseGEDCOM, normalizePlaceName } from '../src/gedcom/import.js';
 import { setupTestDB } from './db-helpers.js';
 
 // ─── Parser ──────────────────────────────────────────────────────────────────
@@ -172,6 +172,44 @@ describe('parseGEDCOM', () => {
     const { data, stats } = parseGEDCOM(ged);
     expect(stats.places).toBe(1);
     expect(data.events[0].place_id).toBe(data.events[1].place_id);
+  });
+
+  it('dedups place variants with different whitespace and casing', () => {
+    const ged = `0 HEAD
+1 GEDC
+2 VERS 5.5.1
+0 @I1@ INDI
+1 NAME John /Smith/
+1 BIRT
+2 DATE 1 JAN 1900
+2 PLAC Dublin, Ireland
+0 @I2@ INDI
+1 NAME Jane /Smith/
+1 BIRT
+2 DATE 1 JAN 1902
+2 PLAC Dublin,Ireland
+0 @I3@ INDI
+1 NAME Joe /Smith/
+1 BIRT
+2 DATE 1 JAN 1904
+2 PLAC DUBLIN , IRELAND
+0 TRLR
+`;
+    const { data, stats } = parseGEDCOM(ged);
+    expect(stats.places).toBe(1);
+    expect(stats.placeVariantsMerged).toBe(2);
+    // All three events should share the same place_id
+    const placeIds = data.events.map(e => e.place_id);
+    expect(new Set(placeIds).size).toBe(1);
+  });
+
+  it('normalizePlaceName trims, lowercases, collapses whitespace and normalizes comma spacing', () => {
+    expect(normalizePlaceName('Dublin, Ireland')).toBe('dublin, ireland');
+    expect(normalizePlaceName('Dublin,Ireland')).toBe('dublin, ireland');
+    expect(normalizePlaceName('DUBLIN , IRELAND')).toBe('dublin, ireland');
+    expect(normalizePlaceName('  Dublin  ,  Ireland  ')).toBe('dublin, ireland');
+    expect(normalizePlaceName('')).toBe('');
+    expect(normalizePlaceName(null)).toBe('');
   });
 
   it('parses notes with continuations', () => {

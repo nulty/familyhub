@@ -7,6 +7,20 @@
 import { ulid } from '../util/ulid.js';
 import { parseSortDate } from '../util/dates.js';
 
+/**
+ * Normalize a place name for deduplication:
+ * trim, lowercase, collapse whitespace, normalize comma spacing.
+ * "Dublin, Ireland" | "Dublin,Ireland" | "DUBLIN , IRELAND" → "dublin, ireland"
+ */
+export function normalizePlaceName(s) {
+  if (!s) return '';
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*,\s*/g, ', ');
+}
+
 // Map GEDCOM event tags to our event types
 const EVENT_TYPE_MAP = {
   BIRT: 'birth',
@@ -427,18 +441,22 @@ export function parseGEDCOM(text) {
     }
   }
 
-  // Build place records from distinct event place strings
+  // Build place records from distinct event place strings (normalized dedup)
   const outPlaces = [];
-  const placeMap = {};
+  const placeMap = {};  // normalized name -> placeId
+  let mergedVariants = 0;
   for (const ev of outEvents) {
-    if (ev.place && !placeMap[ev.place]) {
+    if (!ev.place) continue;
+    const key = normalizePlaceName(ev.place);
+    if (!placeMap[key]) {
       const placeId = ulid();
-      placeMap[ev.place] = placeId;
+      placeMap[key] = placeId;
+      // Keep the first variant seen as the display name
       outPlaces.push({ id: placeId, name: ev.place, type: '', parent_id: null, notes: '' });
+    } else {
+      mergedVariants++;
     }
-    if (ev.place) {
-      ev.place_id = placeMap[ev.place] || null;
-    }
+    ev.place_id = placeMap[key];
   }
 
   const warnings = [];
@@ -465,6 +483,7 @@ export function parseGEDCOM(text) {
       citations: outCitations.length,
       participants: outParticipants.length,
       places: outPlaces.length,
+      placeVariantsMerged: mergedVariants,
     }
   };
 }

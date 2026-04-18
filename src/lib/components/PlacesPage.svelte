@@ -15,6 +15,7 @@
   import GeocodeReview from './GeocodeReview.svelte';
   import PlaceTypeSettings from './PlaceTypeSettings.svelte';
   import GeocodeBatchPicker from './GeocodeBatchPicker.svelte';
+  import MergePlacesPicker from './MergePlacesPicker.svelte';
   import { pushModal } from '../shared/modal-stack.svelte.js';
 
   let { onclose, openReview = false } = $props();
@@ -290,18 +291,19 @@
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-primary btn-sm" onclick={() => openPlaceForm(null, () => loadData())}>+ Add Place</button>
       <button class="btn btn-sm" onclick={() => openOrganizeWizard(() => loadData())}>Organize</button>
+      <button class="btn btn-sm" onclick={() => pushModal(MergePlacesPicker, { onclose: () => loadData() })}>Merge Duplicates</button>
       <button class="btn btn-sm" onclick={handleExport}>Export</button>
       <button class="btn btn-sm" onclick={handleImport}>Import</button>
       <button class="btn btn-sm" onclick={handleGeocode}>
         {geocoding ? 'Stop Geocoding' : 'Geocode'}
       </button>
       {#if queueCount > 0}
-        <button class="btn btn-sm" onclick={() => showReview = !showReview}>
+        <button class="btn btn-sm" class:btn-toggle-on={showReview} onclick={() => showReview = !showReview}>
           {showReview ? 'Hide Review' : `Review (${queueCount})`}
         </button>
         <button class="btn btn-sm" onclick={resetQueue}>Reset Queue</button>
       {/if}
-      <button class="btn btn-sm" onclick={() => showTypeSettings = !showTypeSettings}>
+      <button class="btn btn-sm" class:btn-toggle-on={showTypeSettings} onclick={() => showTypeSettings = !showTypeSettings}>
         {showTypeSettings ? 'Hide Types' : 'Types'}
       </button>
     </div>
@@ -377,3 +379,15 @@
     {/if}
   </div>
 </Modal>
+
+<style>
+  .btn-toggle-on {
+    background: var(--accent-color, #3498db);
+    color: #fff;
+    border-color: var(--accent-color, #3498db);
+  }
+  .btn-toggle-on:hover {
+    background: var(--accent-color-dark, #2980b9);
+    border-color: var(--accent-color-dark, #2980b9);
+  }
+</style>

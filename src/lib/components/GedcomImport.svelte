@@ -35,6 +35,7 @@
     <dt>Repositories:</dt><dd>{stats.repositories}</dd>
     <dt>Sources:</dt><dd>{stats.sources}</dd>
     <dt>Citations:</dt><dd>{stats.citations}</dd>
+    <dt>Places:</dt><dd>{stats.places}{stats.placeVariantsMerged > 0 ? ` (${stats.placeVariantsMerged} variant${stats.placeVariantsMerged === 1 ? '' : 's'} merged)` : ''}</dd>
   </dl>
   {#if warnings.length > 0}
     <div class="import-warnings">
