@@ -72,6 +72,23 @@ export const migrations = [
         run('CREATE INDEX IF NOT EXISTS idx_places_type ON places(type)');
         run('PRAGMA foreign_keys=ON');
       }
+
+      // 3. Backfill place_types from existing places.type values
+      const nominatimKeys = new Set([
+        'country','region','state','state_district','county','municipality',
+        'city','city_district','borough','suburb','quarter','neighbourhood',
+        'town','village','hamlet','isolated_dwelling',
+        'road','house_number','house_name','farm',
+      ]);
+      const distinctTypes = all("SELECT DISTINCT type FROM places WHERE type != ''");
+      for (const row of distinctTypes) {
+        const type = row.type;
+        const existing = get('SELECT key FROM place_types WHERE key = ?', [type]);
+        if (existing) continue;
+        const source = nominatimKeys.has(type) ? 'nominatim' : 'custom';
+        const label = type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        run('INSERT INTO place_types (key, label, source) VALUES (?, ?, ?)', [type, label, source]);
+      }
     },
   },
 ];

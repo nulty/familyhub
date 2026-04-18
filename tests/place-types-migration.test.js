@@ -121,4 +121,38 @@ describe('migration v8 — place_types table and CHECK removal', () => {
     const row = helpers.get("SELECT value FROM meta WHERE key = 'schema_version'");
     expect(row.value).toBe('8');
   });
+
+  it('backfills place_types with existing place types (nominatim + custom)', async () => {
+    const db = setupPreV8DB();
+    const helpers = createHelpers(db);
+
+    // Insert some places with types that include one Nominatim key and two legacy custom keys
+    const now = Date.now();
+    helpers.run(
+      `INSERT INTO places (id, name, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      ['p1', 'Dublin', 'city', now, now]
+    );
+    helpers.run(
+      `INSERT INTO places (id, name, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      ['p2', 'Rathmines', 'civil_parish', now, now]
+    );
+    helpers.run(
+      `INSERT INTO places (id, name, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      ['p3', 'Ballyknockan', 'townland', now, now]
+    );
+
+    const { applyMigrations } = await import('../src/db/migrations.js');
+    applyMigrations(helpers);
+
+    // 'city' is a Nominatim key — already seeded, unchanged
+    const city = helpers.get('SELECT * FROM place_types WHERE key = ?', ['city']);
+    expect(city).toEqual({ key: 'city', label: 'City', source: 'nominatim' });
+
+    // 'civil_parish' and 'townland' are NOT Nominatim keys — added as custom
+    const civilParish = helpers.get('SELECT * FROM place_types WHERE key = ?', ['civil_parish']);
+    expect(civilParish).toEqual({ key: 'civil_parish', label: 'Civil Parish', source: 'custom' });
+
+    const townland = helpers.get('SELECT * FROM place_types WHERE key = ?', ['townland']);
+    expect(townland).toEqual({ key: 'townland', label: 'Townland', source: 'custom' });
+  });
 });
