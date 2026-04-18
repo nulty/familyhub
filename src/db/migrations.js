@@ -20,6 +20,60 @@ export const migrations = [
       }
     },
   },
+  {
+    version: 8,
+    description: 'Add place_types table, remove CHECK constraint from places.type',
+    up({ all, get, run }) {
+      // 1. Create place_types if not exists
+      const exists = get("SELECT name FROM sqlite_master WHERE type='table' AND name='place_types'");
+      if (!exists) {
+        run(`CREATE TABLE place_types (
+          key    TEXT PRIMARY KEY,
+          label  TEXT NOT NULL,
+          source TEXT NOT NULL
+        )`);
+        const seeds = [
+          ['country','Country','nominatim'],['region','Region','nominatim'],
+          ['state','State','nominatim'],['state_district','State District','nominatim'],
+          ['county','County','nominatim'],['municipality','Municipality','nominatim'],
+          ['city','City','nominatim'],['city_district','City District','nominatim'],
+          ['borough','Borough','nominatim'],['suburb','Suburb','nominatim'],
+          ['quarter','Quarter','nominatim'],['neighbourhood','Neighbourhood','nominatim'],
+          ['town','Town','nominatim'],['village','Village','nominatim'],
+          ['hamlet','Hamlet','nominatim'],['isolated_dwelling','Isolated Dwelling','nominatim'],
+          ['road','Road','nominatim'],['house_number','House Number','nominatim'],
+          ['house_name','House Name','nominatim'],['farm','Farm','nominatim'],
+        ];
+        for (const [key, label, source] of seeds) {
+          run('INSERT OR IGNORE INTO place_types (key, label, source) VALUES (?, ?, ?)', [key, label, source]);
+        }
+      }
+
+      // 2. Remove CHECK constraint by recreating places table
+      const tableSql = get("SELECT sql FROM sqlite_master WHERE type='table' AND name='places'");
+      if (tableSql && tableSql.sql.includes('CHECK')) {
+        run('PRAGMA foreign_keys=OFF');
+        run(`CREATE TABLE places_new (
+          id         TEXT PRIMARY KEY,
+          name       TEXT NOT NULL DEFAULT '',
+          type       TEXT NOT NULL DEFAULT '',
+          parent_id  TEXT REFERENCES places(id) ON DELETE SET NULL,
+          latitude   REAL,
+          longitude  REAL,
+          notes      TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`);
+        run('INSERT INTO places_new (id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at) SELECT id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at FROM places');
+        run('DROP TABLE places');
+        run('ALTER TABLE places_new RENAME TO places');
+        run('CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id)');
+        run('CREATE INDEX IF NOT EXISTS idx_places_name ON places(name)');
+        run('CREATE INDEX IF NOT EXISTS idx_places_type ON places(type)');
+        run('PRAGMA foreign_keys=ON');
+      }
+    },
+  },
 ];
 
 /**

@@ -130,8 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_ce_event    ON citation_events(event_id);
 CREATE TABLE IF NOT EXISTS places (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL DEFAULT '',
-  type       TEXT NOT NULL DEFAULT ''
-    CHECK(type IN ('','country','province','county','barony','civil_parish','church_parish','parish','townland','city','town','suburb','village','street','address','cemetery')),
+  type       TEXT NOT NULL DEFAULT '',
   parent_id  TEXT REFERENCES places(id) ON DELETE SET NULL,
   latitude   REAL,
   longitude  REAL,
@@ -143,6 +142,12 @@ CREATE TABLE IF NOT EXISTS places (
 CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id);
 CREATE INDEX IF NOT EXISTS idx_places_name   ON places(name);
 CREATE INDEX IF NOT EXISTS idx_places_type   ON places(type);
+
+CREATE TABLE IF NOT EXISTS place_types (
+  key    TEXT PRIMARY KEY,
+  label  TEXT NOT NULL,
+  source TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS person_names (
   id          TEXT PRIMARY KEY,

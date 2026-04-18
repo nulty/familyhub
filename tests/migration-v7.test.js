@@ -42,11 +42,11 @@ function createV6DB() {
 }
 
 describe('Migration v7: Add latitude/longitude to places', () => {
-  it('detects pending migration from v6', () => {
+  it('detects pending migrations from v6 (v7 + v8)', () => {
     const { helpers } = createV6DB();
     const { currentVersion, pending } = getPendingMigrations(helpers);
     expect(currentVersion).toBe(6);
-    expect(pending).toHaveLength(1);
+    expect(pending.length).toBeGreaterThanOrEqual(2);
     expect(pending[0].version).toBe(7);
     expect(pending[0].description).toContain('latitude');
   });
@@ -62,11 +62,11 @@ describe('Migration v7: Add latitude/longitude to places', () => {
     expect(colNames).toContain('longitude');
   });
 
-  it('updates schema version to 7', () => {
+  it('updates schema version past 7', () => {
     const { helpers } = createV6DB();
     applyMigrations(helpers);
     const row = helpers.get("SELECT value FROM meta WHERE key = 'schema_version'");
-    expect(row.value).toBe('7');
+    expect(parseInt(row.value, 10)).toBeGreaterThanOrEqual(7);
   });
 
   it('preserves existing place data', () => {
@@ -88,17 +88,14 @@ describe('Migration v7: Add latitude/longitude to places', () => {
   it('is idempotent — running twice does not fail', () => {
     const { helpers } = createV6DB();
     applyMigrations(helpers);
-    // Running again should be a no-op (columns already exist)
+    // Running again should be a no-op (all migrations already applied)
     expect(() => applyMigrations(helpers)).not.toThrow();
-    const row = helpers.get("SELECT value FROM meta WHERE key = 'schema_version'");
-    expect(row.value).toBe('7');
   });
 
-  it('no pending migrations when already at v7', () => {
+  it('no pending migrations after full migration from v6', () => {
     const { helpers } = createV6DB();
     applyMigrations(helpers);
-    const { currentVersion, pending } = getPendingMigrations(helpers);
-    expect(currentVersion).toBe(7);
+    const { pending } = getPendingMigrations(helpers);
     expect(pending).toHaveLength(0);
   });
 });
