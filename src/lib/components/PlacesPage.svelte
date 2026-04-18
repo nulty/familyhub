@@ -12,6 +12,7 @@
   import { focusPerson } from '../../ui/tree.js';
   import Modal from '../forms/Modal.svelte';
   import { showConfirm } from '../shared/confirm.js';
+  import GeocodeReview from './GeocodeReview.svelte';
 
   let { onclose } = $props();
 
@@ -23,6 +24,7 @@
   let abortController = null;
   let geocodeQueue = $state(null);
   let queueCount = $state(0);
+  let showReview = $state(false);
 
   function getTreeId() {
     const collab = getCollabState();
@@ -274,10 +276,23 @@
         {geocoding ? 'Stop Geocoding' : 'Geocode'}
       </button>
       {#if queueCount > 0}
-        <button class="btn btn-sm" onclick={() => alert('Review UI coming in Task 9')}>Review ({queueCount})</button>
+        <button class="btn btn-sm" onclick={() => showReview = !showReview}>
+          {showReview ? 'Hide Review' : `Review (${queueCount})`}
+        </button>
         <button class="btn btn-sm" onclick={resetQueue}>Reset Queue</button>
       {/if}
     </div>
+
+    {#if showReview && geocodeQueue}
+      <GeocodeReview
+        queue={geocodeQueue}
+        onUpdate={() => {
+          queueCount = geocodeQueue.count();
+          loadData();
+        }}
+        onClose={() => { showReview = false; }}
+      />
+    {/if}
 
     <div class="form-group" style="margin-bottom:12px">
       <input type="text" placeholder="Filter places…" bind:value={filterText}>
