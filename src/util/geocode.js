@@ -2,80 +2,74 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'Sinsear/0.2.0';
 const DELAY_MS = 1100;
 
-// Type-specific query formatting to help Nominatim disambiguate
-const TYPE_PREFIX = { county: 'County' };
-
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Batch-geocode places missing lat/lng using Nominatim.
+ * Batch-geocode places via Nominatim, returning results via onResult callback.
+ *
+ * Eligibility: places with no coordinates and not already in the queue.
+ * Untyped places are eligible (the type filter from the original implementation
+ * has been dropped — the new decomposition flow assigns types from results).
  *
  * @param {Object} opts
- * @param {Function} opts.getPlaces    - async () => Place[]
- * @param {Function} opts.getHierarchy - async (id) => Place[] (root-first array)
- * @param {Function} opts.updatePlace  - async (id, { latitude, longitude }) => void
- * @param {Function} opts.onProgress   - (current, total) => void
- * @param {AbortSignal} opts.signal    - AbortController signal for cancellation
- * @returns {Promise<{ geocoded: number, notFound: number, total: number }>}
+ * @param {Array} opts.places — all places (will be filtered to eligible)
+ * @param {Function} opts.hasQueueEntry — (placeId) => boolean — skip if already queued
+ * @param {Function} opts.onResult — (place, results) => void — called per place
+ * @param {Function} opts.onProgress — (current, total) => void
+ * @param {AbortSignal} [opts.signal]
+ * @returns {Promise<{ fetched: number, noResults: number, total: number }>}
  */
-export async function geocodePlaces({ getPlaces, getHierarchy, updatePlace, onProgress, signal }) {
-  const allPlaces = await getPlaces();
-  const eligible = allPlaces.filter(
-    (p) => p.latitude == null && p.longitude == null && p.type !== ''
+export async function batchGeocode({ places, hasQueueEntry, onResult, onProgress, signal }) {
+  const eligible = places.filter(
+    (p) => p.latitude == null && p.longitude == null && !hasQueueEntry(p.id)
   );
 
-  const total = eligible.length;
-  if (total === 0) return { geocoded: 0, notFound: 0, total: 0 };
+  if (signal?.aborted) return { fetched: 0, noResults: 0, total: 0 };
 
-  let geocoded = 0;
-  let notFound = 0;
+  const total = eligible.length;
+  if (total === 0) return { fetched: 0, noResults: 0, total: 0 };
+
+  let fetched = 0;
+  let noResults = 0;
 
   for (let i = 0; i < eligible.length; i++) {
     if (signal?.aborted) break;
 
     const place = eligible[i];
     try {
-      const chain = await getHierarchy(place.id);
-      // chain is root-first; reverse to most-specific-first for Nominatim
-      const query = chain.map((p) => {
-        const prefix = TYPE_PREFIX[p.type];
-        return prefix ? `${prefix} ${p.name}` : p.name;
-      }).reverse().join(', ');
-      const url = `${NOMINATIM_URL}?${new URLSearchParams({ q: query, format: 'json', limit: '1' })}`;
+      const query = place.name;
+      const url = `${NOMINATIM_URL}?${new URLSearchParams({ q: query, format: 'json', limit: '3', addressdetails: '1' })}`;
       const res = await fetch(url, {
         headers: { 'User-Agent': USER_AGENT },
         signal,
       });
 
       if (!res.ok) {
-        notFound++;
+        onResult(place, []);
+        noResults++;
       } else {
         const data = await res.json();
+        onResult(place, data);
         if (data.length > 0) {
-          const { lat, lon } = data[0];
-          await updatePlace(place.id, {
-            latitude: parseFloat(lat),
-            longitude: parseFloat(lon),
-          });
-          geocoded++;
+          fetched++;
         } else {
-          notFound++;
+          noResults++;
         }
       }
     } catch (err) {
       if (err.name === 'AbortError') break;
-      notFound++;
+      onResult(place, []);
+      noResults++;
     }
 
     onProgress?.(i + 1, total);
 
-    // Rate limit: wait before next request (skip delay after last item)
     if (i < eligible.length - 1 && !signal?.aborted) {
       await delay(DELAY_MS);
     }
   }
 
-  return { geocoded, notFound, total };
+  return { fetched, noResults, total };
 }
