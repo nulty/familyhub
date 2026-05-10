@@ -16,7 +16,9 @@
   import PlaceTypeSettings from './PlaceTypeSettings.svelte';
   import GeocodeBatchPicker from './GeocodeBatchPicker.svelte';
   import MergePlacesPicker from './MergePlacesPicker.svelte';
+  import PlacesHelp from './PlacesHelp.svelte';
   import { pushModal } from '../shared/modal-stack.svelte.js';
+  import ClearableInput from '../shared/ClearableInput.svelte';
 
   let { onclose, openReview = false } = $props();
 
@@ -30,6 +32,31 @@
   let queueCount = $state(0);
   let showReview = $state(false);
   let showTypeSettings = $state(false);
+  let openMenu = $state(null);          // 'process' | 'edit' | 'backup'
+  let expandedActionsId = $state(null); // place id whose actions are open
+
+  $effect(() => {
+    function onDocClick(e) {
+      if (openMenu && !e.target.closest('.toolbar-menu')) openMenu = null;
+      if (expandedActionsId && !e.target.closest('.place-tree-item')) expandedActionsId = null;
+    }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  });
+
+  function runFromMenu(action) {
+    openMenu = null;
+    action?.();
+  }
+
+  function toggleActions(placeId) {
+    expandedActionsId = expandedActionsId === placeId ? null : placeId;
+  }
+
+  function runRowAction(action) {
+    expandedActionsId = null;
+    action?.();
+  }
 
   function getTreeId() {
     const collab = getCollabState();
@@ -234,6 +261,9 @@
                 address: r.address,
                 importance: r.importance,
                 addresstype: r.addresstype,
+                name: r.name,
+                class: r.class,
+                type: r.type,
               })),
             });
             queueCount = geocodeQueue.count();
@@ -288,24 +318,93 @@
 
 <Modal title="Places" wide={true} onclose={onclose}>
   <div class="places-page">
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn btn-primary btn-sm" onclick={() => openPlaceForm(null, () => loadData())}>+ Add Place</button>
-      <button class="btn btn-sm" onclick={() => openOrganizeWizard(() => loadData())}>Organize</button>
-      <button class="btn btn-sm" onclick={() => pushModal(MergePlacesPicker, { onclose: () => loadData() })}>Merge Duplicates</button>
-      <button class="btn btn-sm" onclick={handleExport}>Export</button>
-      <button class="btn btn-sm" onclick={handleImport}>Import</button>
-      <button class="btn btn-sm" onclick={handleGeocode}>
-        {geocoding ? 'Stop Geocoding' : 'Geocode'}
-      </button>
-      {#if queueCount > 0}
-        <button class="btn btn-sm" class:btn-toggle-on={showReview} onclick={() => showReview = !showReview}>
-          {showReview ? 'Hide Review' : `Review (${queueCount})`}
+    <div class="places-toolbar">
+      <div class="toolbar-menu" class:open={openMenu === 'process'}>
+        <button
+          class="btn btn-sm menu-trigger"
+          aria-haspopup="menu"
+          aria-expanded={openMenu === 'process'}
+          onclick={(e) => { e.stopPropagation(); openMenu = openMenu === 'process' ? null : 'process'; }}
+        >
+          Process{queueCount > 0 ? ` (${queueCount})` : ''}{geocoding ? ' …' : ''} <span class="caret" aria-hidden="true">▾</span>
         </button>
-        <button class="btn btn-sm" onclick={resetQueue}>Reset Queue</button>
-      {/if}
-      <button class="btn btn-sm" class:btn-toggle-on={showTypeSettings} onclick={() => showTypeSettings = !showTypeSettings}>
-        {showTypeSettings ? 'Hide Types' : 'Types'}
-      </button>
+        {#if openMenu === 'process'}
+          <div class="menu-panel" role="menu">
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => pushModal(MergePlacesPicker, { oncomplete: () => loadData() }))}>
+              <span class="menu-item-label">Merge duplicates</span>
+              <span class="menu-item-hint">Find and combine duplicate place names</span>
+            </button>
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(handleGeocode)}>
+              <span class="menu-item-label">{geocoding ? 'Stop geocoding' : 'Geocode'}</span>
+              <span class="menu-item-hint">Look up coordinates &amp; build hierarchy from Nominatim</span>
+            </button>
+            {#if queueCount > 0}
+              <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => { showReview = !showReview; })}>
+                <span class="menu-item-label">{showReview ? 'Hide review' : `Review (${queueCount})`}</span>
+                <span class="menu-item-hint">Triage geocoded results</span>
+              </button>
+              <button class="menu-item subtle" role="menuitem" onclick={() => runFromMenu(resetQueue)}>
+                <span class="menu-item-label">Reset queue</span>
+                <span class="menu-item-hint">Discard pending review items</span>
+              </button>
+            {/if}
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => openOrganizeWizard(() => loadData()))}>
+              <span class="menu-item-label">Manual structure</span>
+              <span class="menu-item-hint">For historic / non-standard addresses</span>
+            </button>
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => pushModal(PlacesHelp, {}))}>
+              <span class="menu-item-label">Help</span>
+              <span class="menu-item-hint">Step-by-step guide for the places workflow</span>
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="toolbar-menu" class:open={openMenu === 'edit'}>
+        <button
+          class="btn btn-sm menu-trigger"
+          aria-haspopup="menu"
+          aria-expanded={openMenu === 'edit'}
+          onclick={(e) => { e.stopPropagation(); openMenu = openMenu === 'edit' ? null : 'edit'; }}
+        >
+          Edit <span class="caret" aria-hidden="true">▾</span>
+        </button>
+        {#if openMenu === 'edit'}
+          <div class="menu-panel" role="menu">
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => openPlaceForm(null, () => loadData()))}>
+              <span class="menu-item-label">Add place</span>
+              <span class="menu-item-hint">Create a new place record</span>
+            </button>
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => { showTypeSettings = !showTypeSettings; })}>
+              <span class="menu-item-label">{showTypeSettings ? 'Hide types' : 'Types'}</span>
+              <span class="menu-item-hint">Manage place type labels</span>
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="toolbar-menu" class:open={openMenu === 'backup'}>
+        <button
+          class="btn btn-sm menu-trigger"
+          aria-haspopup="menu"
+          aria-expanded={openMenu === 'backup'}
+          onclick={(e) => { e.stopPropagation(); openMenu = openMenu === 'backup' ? null : 'backup'; }}
+        >
+          Backup <span class="caret" aria-hidden="true">▾</span>
+        </button>
+        {#if openMenu === 'backup'}
+          <div class="menu-panel" role="menu">
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(handleExport)}>
+              <span class="menu-item-label">Export</span>
+              <span class="menu-item-hint">Download places as JSON</span>
+            </button>
+            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(handleImport)}>
+              <span class="menu-item-label">Import</span>
+              <span class="menu-item-hint">Restore from a JSON file</span>
+            </button>
+          </div>
+        {/if}
+      </div>
     </div>
 
     {#if showReview && geocodeQueue}
@@ -324,7 +423,7 @@
     {/if}
 
     <div class="form-group" style="margin-bottom:12px">
-      <input type="text" placeholder="Filter places…" bind:value={filterText}>
+      <ClearableInput placeholder="Filter places…" bind:value={filterText} />
     </div>
 
     {#if allPlaces.length === 0}
@@ -335,23 +434,34 @@
           {#each getChildren(parentKey) as place}
             <li class="place-tree-item">
               <div class="place-tree-row">
-                {#if hasChildren(place.id)}
-                  <span class="place-toggle" onclick={() => toggleCollapse(place.id)}>
-                    {collapsed[place.id] ? '\u25B6' : '\u25BC'}
-                  </span>
-                {:else}
-                  <span class="place-toggle-spacer"></span>
-                {/if}
-                <span class="place-tree-name">{place.name}</span>
-                {#if place.latitude != null}<span class="place-geocoded" title="Geocoded">&#x1F4CD;</span>{/if}
-                {#if place.type}<span class="place-type-badge">{place.type}</span>{/if}
-                <button class="btn-link btn-sm place-events-toggle" onclick={(e) => { e.stopPropagation(); toggleEvents(place.id); }}>events</button>
-                <span class="place-tree-actions">
-                  <button class="btn-link btn-sm" onclick={(e) => { e.stopPropagation(); openPlaceForm(null, () => loadData(), { parent_id: place.id }); }}>+ add</button>
-                  <button class="btn-link btn-sm" onclick={(e) => { e.stopPropagation(); openPlaceForm(place.id, () => loadData()); }}>edit</button>
-                  <button class="btn-link btn-sm" style="color:var(--danger)" onclick={(e) => { e.stopPropagation(); deletePlace(place); }}>delete</button>
-                </span>
+                <div class="place-row-main">
+                  {#if hasChildren(place.id)}
+                    <span class="place-toggle" onclick={() => toggleCollapse(place.id)}>
+                      {collapsed[place.id] ? '\u25B6' : '\u25BC'}
+                    </span>
+                  {:else}
+                    <span class="place-toggle-spacer"></span>
+                  {/if}
+                  <span class="place-tree-name">{place.name}</span>
+                  {#if place.type}<span class="place-type-badge">{place.type}</span>{/if}
+                  {#if place.latitude != null}<span class="place-geocoded" title="Geocoded">&#x1F4CD;</span>{/if}
+                </div>
+                <button
+                  class="row-kebab"
+                  class:open={expandedActionsId === place.id}
+                  aria-label="Actions"
+                  aria-expanded={expandedActionsId === place.id}
+                  onclick={(e) => { e.stopPropagation(); toggleActions(place.id); }}
+                >&#x22EF;</button>
               </div>
+              {#if expandedActionsId === place.id}
+                <div class="row-actions-panel">
+                  <button class="row-action" onclick={() => runRowAction(() => toggleEvents(place.id))}>Events</button>
+                  <button class="row-action" onclick={() => runRowAction(() => openPlaceForm(null, () => loadData(), { parent_id: place.id }))}>+ Add child</button>
+                  <button class="row-action" onclick={() => runRowAction(() => openPlaceForm(place.id, () => loadData()))}>Edit</button>
+                  <button class="row-action danger" onclick={() => runRowAction(() => deletePlace(place))}>Delete</button>
+                </div>
+              {/if}
               {#if expandedEvents[place.id]}
                 <div class="place-events-list">
                   {#if expandedEvents[place.id].length === 0}
@@ -381,13 +491,126 @@
 </Modal>
 
 <style>
-  .btn-toggle-on {
+  .places-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .toolbar-menu {
+    position: relative;
+  }
+  .menu-trigger {
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .toolbar-menu.open .menu-trigger {
     background: var(--accent-color, #3498db);
     color: #fff;
     border-color: var(--accent-color, #3498db);
   }
-  .btn-toggle-on:hover {
-    background: var(--accent-color-dark, #2980b9);
-    border-color: var(--accent-color-dark, #2980b9);
+  .caret {
+    font-size: 0.7rem;
+    opacity: 0.7;
+  }
+  .menu-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 50;
+    min-width: 240px;
+    max-width: 320px;
+    background: var(--bg, #fff);
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+  }
+  .menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text, #333);
+    width: 100%;
+  }
+  .menu-item:hover,
+  .menu-item:focus-visible {
+    background: var(--bg-hover, #f3f6fa);
+    outline: none;
+  }
+  .menu-item.subtle .menu-item-label {
+    color: var(--text-muted, #888);
+  }
+  .menu-item-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .menu-item-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted, #888);
+  }
+
+  .row-kebab {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    color: var(--text-muted, #888);
+    font-size: 18px;
+    line-height: 1;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .row-kebab:hover,
+  .row-kebab.open {
+    background: var(--bg-hover, #eef2f6);
+    color: var(--text, #333);
+    border-color: var(--border-color, #ddd);
+  }
+  .row-actions-panel {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 10px 8px 32px;
+    background: var(--bg-elevated, #fafbfd);
+    border-radius: 0 0 4px 4px;
+    margin: -2px 0 4px;
+  }
+  .row-action {
+    background: var(--bg, #fff);
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text, #333);
+    min-height: 32px;
+  }
+  .row-action:hover,
+  .row-action:focus-visible {
+    background: var(--bg-hover, #f0f4f8);
+    outline: none;
+  }
+  .row-action.danger {
+    color: var(--danger, #c0392b);
+    border-color: var(--danger, #c0392b);
+  }
+  .row-action.danger:hover {
+    background: var(--danger, #c0392b);
+    color: #fff;
   }
 </style>

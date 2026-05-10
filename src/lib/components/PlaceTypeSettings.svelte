@@ -1,12 +1,15 @@
 <script>
   import { placeTypes } from '../../db/db.js';
   import { showToast } from '../shared/toast-store.js';
+  import { groupTypes } from '../../util/place-type-seeds.js';
 
   let { onClose } = $props();
 
   let types = $state([]);
   let newKey = $state('');
   let newLabel = $state('');
+
+  let grouped = $derived(groupTypes(types));
 
   async function load() {
     types = await placeTypes.list();
@@ -61,23 +64,28 @@
       <tr><th>Key</th><th>Label</th><th>Source</th><th></th></tr>
     </thead>
     <tbody>
-      {#each types as t (t.key)}
-        <tr>
-          <td><code>{t.key}</code></td>
-          <td>
-            <input
-              type="text"
-              value={t.label}
-              onchange={(e) => renameLabel(t.key, e.target.value)}
-            />
-          </td>
-          <td><span class="source-badge source-{t.source}">{t.source}</span></td>
-          <td>
-            {#if t.source === 'custom'}
-              <button class="btn-link btn-sm danger" onclick={() => removeType(t.key)}>Delete</button>
-            {/if}
-          </td>
+      {#each grouped as group (group.label)}
+        <tr class="group-header">
+          <th colspan="4">{group.label}</th>
         </tr>
+        {#each group.types as t (t.key)}
+          <tr>
+            <td><code>{t.key}</code></td>
+            <td>
+              <input
+                type="text"
+                value={t.label}
+                onchange={(e) => renameLabel(t.key, e.target.value)}
+              />
+            </td>
+            <td><span class="source-badge source-{t.source}">{t.source}</span></td>
+            <td>
+              {#if t.source === 'custom'}
+                <button class="btn-link btn-sm danger" onclick={() => removeType(t.key)}>Delete</button>
+              {/if}
+            </td>
+          </tr>
+        {/each}
       {/each}
     </tbody>
   </table>
@@ -114,6 +122,14 @@
     border-bottom: 1px solid var(--border-color, #eee);
   }
   .type-table th { font-weight: 500; color: var(--text-muted, #666); }
+  .type-table .group-header th {
+    background: var(--bg-elevated, #f0f3f7);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #666);
+    padding: 6px 8px;
+  }
   .type-table input {
     width: 100%;
     border: 1px solid transparent;

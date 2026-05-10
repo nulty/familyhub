@@ -2,6 +2,7 @@
   import Modal from '../forms/Modal.svelte';
   import { places } from '../../db/db.js';
   import { getConfig, setConfig } from '../../config.js';
+  import ClearableInput from '../shared/ClearableInput.svelte';
 
   let { treeId, hasQueueEntry, onstart, onclose } = $props();
   // onstart({ selectedIds: string[], bias: string, mode: 'auto' | 'review' })
@@ -12,6 +13,7 @@
   let bias = $state(getConfig(`geocode_bias_${treeId}`, '') || '');
   let mode = $state('review');
   let loading = $state(true);
+  let anchorId = $state(null);
 
   $effect(() => {
     places.list().then((all) => {
@@ -35,6 +37,42 @@
     if (next.has(id)) next.delete(id);
     else next.add(id);
     selected = next;
+    anchorId = id;
+  }
+
+  function rangeSelect(targetId) {
+    if (!anchorId || anchorId === targetId) {
+      toggle(targetId);
+      return;
+    }
+    const ids = filteredPlaces.map((p) => p.id);
+    const anchorIdx = ids.indexOf(anchorId);
+    const targetIdx = ids.indexOf(targetId);
+    if (anchorIdx === -1 || targetIdx === -1) {
+      toggle(targetId);
+      return;
+    }
+    const [lo, hi] = anchorIdx < targetIdx ? [anchorIdx, targetIdx] : [targetIdx, anchorIdx];
+    const next = new Set(selected);
+    for (let i = lo; i <= hi; i++) next.add(ids[i]);
+    selected = next;
+  }
+
+  function handleRowClick(e, id) {
+    if (e.shiftKey) {
+      e.preventDefault();
+      rangeSelect(id);
+    } else {
+      toggle(id);
+    }
+  }
+
+  function handleRowKey(e, id) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (e.shiftKey) rangeSelect(id);
+      else toggle(id);
+    }
   }
 
   function selectAllVisible() {
@@ -68,8 +106,7 @@
       <p class="empty">No places need geocoding.</p>
     {:else}
       <div class="picker-controls">
-        <input
-          type="text"
+        <ClearableInput
           class="filter-input"
           placeholder="Filter places…"
           bind:value={filterText}
@@ -89,11 +126,11 @@
           <li
             class="picker-row"
             class:selected={selected.has(place.id)}
-            onclick={() => toggle(place.id)}
+            onclick={(e) => handleRowClick(e, place.id)}
             role="option"
             aria-selected={selected.has(place.id)}
             tabindex="0"
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(place.id); } }}
+            onkeydown={(e) => handleRowKey(e, place.id)}
           >
             <input
               type="checkbox"

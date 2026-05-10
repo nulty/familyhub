@@ -19,6 +19,7 @@
   import Panel from './Panel.svelte';
   import Wizard from './Wizard.svelte';
   import Toast from '../shared/Toast.svelte';
+  import PlacesHelp from './PlacesHelp.svelte';
 
   let hasData = $state(false);
   let hasAnyData = $state(false);
@@ -437,6 +438,11 @@
             <button class="btn btn-primary btn-lg" onclick={() => openPersonForm()}>+ Add First Person</button>
             <button class="btn btn-lg" onclick={handleImport}>Import</button>
           </div>
+
+          <p class="welcome-help">
+            New to the app?
+            <button type="button" class="welcome-help-link" onclick={() => pushModal(PlacesHelp, {})}>Read the places guide first →</button>
+          </p>
         </div>
       </div>
     {/if}

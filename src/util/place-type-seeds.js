@@ -39,3 +39,58 @@ export const ADDRESS_RANK = [
   'town', 'village', 'hamlet', 'isolated_dwelling',
   'road', 'house_number', 'house_name', 'farm',
 ];
+
+/**
+ * Display groups for type pickers — most specific → most general.
+ * Most user-added places are leaves (buildings, streets, settlements);
+ * higher-level types (country, state) are usually created automatically
+ * by geocoding, so the common picks live at the top of the picker.
+ * Within a group, keys are listed most specific first.
+ * Types not listed here fall into "Facility / POI" (nominatim source) or
+ * "Custom" (user-created types).
+ */
+export const TYPE_GROUPS = [
+  { label: 'Building',          keys: ['house_number', 'house_name', 'farm'] },
+  { label: 'Street',            keys: ['road'] },
+  { label: 'Within settlement', keys: ['neighbourhood', 'quarter', 'suburb'] },
+  { label: 'Settlement',        keys: ['isolated_dwelling', 'hamlet', 'village', 'town'] },
+  { label: 'Municipal',         keys: ['borough', 'city_district', 'city', 'municipality'] },
+  { label: 'Subdivision',       keys: ['county', 'state_district', 'state'] },
+  { label: 'National',          keys: ['region', 'country'] },
+];
+
+/**
+ * Group an array of place types by specificity.
+ * Returns: [{ label: string, types: PlaceType[] }, ...] in display order.
+ *
+ * @param {Array<{key: string, label: string, source: string}>} types
+ */
+export function groupTypes(types) {
+  const byKey = new Map(types.map(t => [t.key, t]));
+  const placed = new Set();
+  const groups = [];
+
+  for (const g of TYPE_GROUPS) {
+    const items = [];
+    for (const k of g.keys) {
+      const t = byKey.get(k);
+      if (t) {
+        items.push(t);
+        placed.add(k);
+      }
+    }
+    if (items.length > 0) groups.push({ label: g.label, types: items });
+  }
+
+  const others = types
+    .filter(t => !placed.has(t.key) && t.source === 'nominatim')
+    .sort((a, b) => a.label.localeCompare(b.label));
+  if (others.length > 0) groups.push({ label: 'Facility / POI', types: others });
+
+  const custom = types
+    .filter(t => !placed.has(t.key) && t.source !== 'nominatim')
+    .sort((a, b) => a.label.localeCompare(b.label));
+  if (custom.length > 0) groups.push({ label: 'Custom', types: custom });
+
+  return groups;
+}

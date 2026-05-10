@@ -1,10 +1,14 @@
 <script>
   import { places, placeTypes, events } from '../../db/db.js';
-  import { decomposeAddress } from '../../util/decompose.js';
+  import { decomposeAddress, getResultChain } from '../../util/decompose.js';
   import { showToast } from '../shared/toast-store.js';
   import { ulid } from '../../util/ulid.js';
 
   let { queue, onUpdate, onClose } = $props();
+
+  function getAddressParts(result) {
+    return getResultChain(result);
+  }
 
   let items = $state([]);
   let editQueries = $state({});
@@ -28,7 +32,7 @@
     deletePlace: (id) => places.delete(id),
   };
 
-  async function accept(item, resultIndex) {
+  async function accept(item, resultIndex, stopAtKey = null) {
     const result = item.results[resultIndex];
     try {
       const evts = await places.events(item.place_id);
@@ -40,6 +44,7 @@
         eventIds,
         handlers: decompositionHandlers,
         generateId: ulid,
+        stopAtKey,
       });
 
       queue.removeItem(item.place_id);
@@ -91,6 +96,7 @@
           lat: parseFloat(r.lat), lon: parseFloat(r.lon),
           display_name: r.display_name, address: r.address,
           importance: r.importance, addresstype: r.addresstype,
+          name: r.name, class: r.class, type: r.type,
         })),
       });
       refresh();
@@ -128,16 +134,43 @@
         </div>
         <ul class="review-results">
           {#each item.results as result, idx}
-            <li>
-              <button class="btn-accept" onclick={() => accept(item, idx)}>
-                {result.display_name}
-              </button>
-              {#if result.importance != null}
-                <span class="importance">{(result.importance * 100).toFixed(0)}%</span>
+            {@const parts = getAddressParts(result)}
+            <li class="result-row">
+              <div class="result-meta">
+                <span class="result-display" title={result.display_name}>{result.display_name}</span>
+                {#if result.importance != null}
+                  <span class="importance">{(result.importance * 100).toFixed(0)}%</span>
+                {/if}
+              </div>
+              {#if parts.length > 0}
+                <div class="level-chips" aria-label="Click a level to accept truncated there">
+                  {#each parts as part, pIdx}
+                    <button
+                      class="level-chip"
+                      class:full={pIdx === parts.length - 1}
+                      title={`Accept at ${part.type} level`}
+                      onclick={() => accept(item, idx, part.type)}
+                    >{part.name}</button>
+                    {#if pIdx < parts.length - 1}<span class="chip-sep" aria-hidden="true">›</span>{/if}
+                  {/each}
+                </div>
+              {:else}
+                <button class="btn-accept" onclick={() => accept(item, idx)}>
+                  Accept (no address breakdown)
+                </button>
               {/if}
             </li>
           {/each}
         </ul>
+        <div class="retry-row">
+          <input
+            type="text"
+            value={editQueries[item.place_id] ?? item.query}
+            oninput={(e) => editQueries = { ...editQueries, [item.place_id]: e.target.value }}
+            placeholder="Edit query and press Retry"
+          />
+          <button class="btn btn-sm" onclick={() => retry(item)}>Retry</button>
+        </div>
       </div>
     {/each}
   {/if}
@@ -204,11 +237,52 @@
     padding: 0;
     margin: 0;
   }
-  .review-results li {
+  .result-row {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border-color, #eee);
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-meta {
+    display: flex;
+    align-items: baseline;
     gap: 8px;
-    padding: 2px 0;
+  }
+  .result-display {
+    flex: 1;
+    font-size: 0.8rem;
+    color: var(--text-muted, #666);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .level-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+  .level-chip {
+    background: none;
+    border: 1px solid var(--accent-color, #3498db);
+    border-radius: 3px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text, #333);
+  }
+  .level-chip:hover {
+    background: var(--accent-color, #3498db);
+    color: #fff;
+  }
+  .level-chip.full {
+    border-style: solid;
+  }
+  .chip-sep {
+    color: var(--text-muted, #888);
+    font-size: 0.85rem;
   }
   .btn-accept {
     background: none;

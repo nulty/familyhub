@@ -4,6 +4,7 @@
   import { showToast } from '../shared/toast-store.js';
   import { emit, DATA_CHANGED } from '../../state.js';
   import { normalizePlaceName } from '../../gedcom/import.js';
+  import ClearableInput from '../shared/ClearableInput.svelte';
 
   let { onclose, oncomplete } = $props();
 
@@ -317,8 +318,7 @@
         <p class="hint">Multi-select places to merge that aren't auto-grouped. Click rows to toggle; shift-click for range.</p>
 
         <div class="flat-controls">
-          <input
-            type="text"
+          <ClearableInput
             class="filter-input"
             placeholder="Filter…"
             bind:value={filterText}

@@ -1,6 +1,32 @@
 import { ADDRESS_RANK } from './place-type-seeds.js';
 
 /**
+ * Compute the parent → specific chain for a Nominatim result.
+ * Returns ranked address parts (per ADDRESS_RANK), then appends the result's
+ * named POI (e.g. "Otis Air National Guard Base" with type "military") if it
+ * isn't already represented in the ranked parts.
+ *
+ * @param {Object} nominatimResult
+ * @returns {Array<{type: string, name: string}>}
+ */
+export function getResultChain(nominatimResult) {
+  const { address = {}, name, class: cls, addresstype } = nominatimResult || {};
+
+  const parts = ADDRESS_RANK
+    .filter(key => address[key] != null)
+    .map(key => ({ type: key, name: String(address[key]) }));
+
+  if (name) {
+    const leafType = cls || addresstype;
+    if (leafType && !parts.some(p => p.name === name)) {
+      parts.push({ type: leafType, name: String(name) });
+    }
+  }
+
+  return parts;
+}
+
+/**
  * Decompose a Nominatim result into a parent→child place chain.
  *
  * Walks the Nominatim address object in general → specific order (per ADDRESS_RANK),
@@ -14,15 +40,18 @@ import { ADDRESS_RANK } from './place-type-seeds.js';
  * @param {string[]} opts.eventIds — events referencing the original place
  * @param {Object} opts.handlers — { findPlaceByNameTypeParent, createPlace, ensurePlaceType, updatePlace, updateEvent, deletePlace }
  * @param {Function} opts.generateId — () => string — ULID/UUID generator
+ * @param {string} [opts.stopAtKey] — optional ADDRESS_RANK key to stop at; everything more specific is dropped
  * @returns {Promise<string|null>} ID of most-specific place, or null if address had no ranked keys
  */
-export async function decomposeAddress({ nominatimResult, originalPlaceId, eventIds, handlers, generateId }) {
-  const { lat, lon, address } = nominatimResult;
+export async function decomposeAddress({ nominatimResult, originalPlaceId, eventIds, handlers, generateId, stopAtKey }) {
+  const { lat, lon } = nominatimResult;
 
-  // Extract ranked parts in general → specific order
-  const parts = ADDRESS_RANK
-    .filter(key => address[key] != null)
-    .map(key => ({ type: key, name: String(address[key]) }));
+  let parts = getResultChain(nominatimResult);
+
+  if (stopAtKey) {
+    const stopIdx = parts.findIndex(p => p.type === stopAtKey);
+    if (stopIdx >= 0) parts = parts.slice(0, stopIdx + 1);
+  }
 
   if (parts.length === 0) return null;
 

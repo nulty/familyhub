@@ -131,6 +131,76 @@ describe('decomposeAddress', () => {
     expect(h.deletePlace).toHaveBeenCalledWith('orig1');
   });
 
+  it('appends a leaf POI when result.name has a class not in ADDRESS_RANK', async () => {
+    const h = mockHandlers();
+    await decomposeAddress({
+      nominatimResult: {
+        lat: 41.65, lon: -70.52,
+        name: 'Otis Air National Guard Base',
+        class: 'military',
+        addresstype: 'military',
+        address: {
+          country: 'United States', state: 'Massachusetts',
+          county: 'Barnstable County', town: 'Mashpee',
+        },
+      },
+      originalPlaceId: 'orig1',
+      eventIds: ['e1'],
+      handlers: h,
+      generateId: makeIdGenerator(),
+    });
+    const names = h._created.map(p => p.name);
+    expect(names).toEqual([
+      'United States', 'Massachusetts', 'Barnstable County', 'Mashpee',
+      'Otis Air National Guard Base',
+    ]);
+    const types = h._created.map(p => p.type);
+    expect(types[types.length - 1]).toBe('military');
+    expect(h.ensurePlaceType).toHaveBeenCalledWith('military');
+  });
+
+  it('does not duplicate the leaf POI if its name already appears as a ranked part', async () => {
+    const h = mockHandlers();
+    await decomposeAddress({
+      nominatimResult: {
+        lat: 53.35, lon: -6.26,
+        name: 'Dublin',
+        class: 'place',
+        address: { city: 'Dublin', country: 'Ireland' },
+      },
+      originalPlaceId: 'orig1',
+      eventIds: ['e1'],
+      handlers: h,
+      generateId: makeIdGenerator(),
+    });
+    expect(h._created.length).toBe(2); // Ireland + Dublin only
+  });
+
+  it('truncates the chain at stopAtKey', async () => {
+    const h = mockHandlers();
+    await decomposeAddress({
+      nominatimResult: {
+        lat: 41.65, lon: -70.52,
+        name: 'Otis Air National Guard Base',
+        class: 'military',
+        address: {
+          country: 'United States', state: 'Massachusetts',
+          county: 'Barnstable County', town: 'Mashpee',
+        },
+      },
+      originalPlaceId: 'orig1',
+      eventIds: ['e1'],
+      handlers: h,
+      generateId: makeIdGenerator(),
+      stopAtKey: 'town',
+    });
+    const names = h._created.map(p => p.name);
+    expect(names).toEqual(['United States', 'Massachusetts', 'Barnstable County', 'Mashpee']);
+    expect(h.updatePlace).toHaveBeenCalledWith(h._created[h._created.length - 1].id, {
+      latitude: 41.65, longitude: -70.52,
+    });
+  });
+
   it('calls ensurePlaceType for each key', async () => {
     const h = mockHandlers();
     await decomposeAddress({

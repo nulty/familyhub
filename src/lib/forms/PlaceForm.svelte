@@ -7,6 +7,7 @@
   import { openPlaceForm, openPlacesPage } from '../shared/open.js';
   import { GeocodeQueue } from '../../util/geocode-queue.js';
   import { getCollabState } from '../../config.js';
+  import { groupTypes } from '../../util/place-type-seeds.js';
 
   let { placeId = null, prefill = null, onclose, oncomplete } = $props();
 
@@ -155,6 +156,9 @@
           address: r.address,
           importance: r.importance,
           addresstype: r.addresstype,
+          name: r.name,
+          class: r.class,
+          type: r.type,
         })),
       });
 
@@ -233,8 +237,12 @@
       <label for="plf-type">Type</label>
       <select id="plf-type" bind:value={type}>
         <option value="">(none)</option>
-        {#each typeOptions.slice().sort((a, b) => a.label.localeCompare(b.label)) as t (t.key)}
-          <option value={t.key}>{t.label}</option>
+        {#each groupTypes(typeOptions) as group (group.label)}
+          <optgroup label={group.label}>
+            {#each group.types as t (t.key)}
+              <option value={t.key}>{t.label}</option>
+            {/each}
+          </optgroup>
         {/each}
       </select>
     </div>

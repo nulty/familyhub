@@ -6,9 +6,12 @@ import { places, placeTypes } from '../db/db.js';
 import { emit, DATA_CHANGED } from '../state.js';
 import { openPlaceForm } from '../lib/shared/open.js';
 import { showToast } from '../lib/shared/toast-store.js';
+import { groupTypes } from '../util/place-type-seeds.js';
+import TomSelect from 'tom-select';
+import 'tom-select/dist/css/tom-select.css';
 
 /** Minimal imperative modal for the organize wizard (last vanilla consumer). */
-function openModal({ title, content }) {
+function openModal({ title, content, onclose }) {
   const root = document.getElementById('modal-root');
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
@@ -25,12 +28,41 @@ function openModal({ title, content }) {
   backdrop.appendChild(modal);
   root.appendChild(backdrop);
 
-  function close() { backdrop.remove(); }
+  let closed = false;
+  function close() {
+    if (closed) return;
+    closed = true;
+    onclose?.();
+    backdrop.remove();
+    window.removeEventListener('keydown', onKey);
+  }
   header.querySelector('.modal-close').onclick = close;
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
-  function onKey(e) { if (e.key === 'Escape') { close(); window.removeEventListener('keydown', onKey); } }
+  function onKey(e) { if (e.key === 'Escape') close(); }
   window.addEventListener('keydown', onKey);
   return { close, body };
+}
+
+/**
+ * Vanilla confirm dialog backed by openModal — stacks correctly above the
+ * wizard backdrop in #modal-root. Returns a Promise<boolean>.
+ */
+function openVanillaConfirm({ title, message, confirm = 'Confirm', cancel = 'Cancel', danger = false }) {
+  return new Promise((resolve) => {
+    let result = false;
+    const content = document.createElement('div');
+    content.className = 'inline-confirm';
+    content.innerHTML = `
+      <p class="inline-confirm-message">${esc(message)}</p>
+      <div class="form-actions">
+        <button type="button" class="btn btn-sm" data-act="cancel">${esc(cancel)}</button>
+        <button type="button" class="btn btn-sm ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok">${esc(confirm)}</button>
+      </div>
+    `;
+    const { close } = openModal({ title, content, onclose: () => resolve(result) });
+    content.querySelector('[data-act="cancel"]').onclick = () => { result = false; close(); };
+    content.querySelector('[data-act="ok"]').onclick = () => { result = true; close(); };
+  });
 }
 import { getConfig, setConfig } from '../config.js';
 
@@ -56,6 +88,25 @@ function saveSkippedSegment(name) {
   }
 }
 
+/**
+ * @returns {{ resolved: number, skipped: number }} progress counts.
+ */
+export function getManualStructureProgress() {
+  return {
+    resolved: Object.keys(getResolvedSegments()).length,
+    skipped: getSkippedSegments().length,
+  };
+}
+
+/**
+ * Clear the wizard's persisted resolved and skipped segments, so the next run
+ * starts from scratch. Does not touch the place records themselves.
+ */
+export function resetManualStructure() {
+  setConfig('resolvedPlaceSegments', {});
+  setConfig('skippedPlaceSegments', []);
+}
+
 export async function openOrganizeWizard(onComplete) {
   const [allPlaces, fetchedTypes] = await Promise.all([places.list(), placeTypes.list()]);
 
@@ -63,7 +114,7 @@ export async function openOrganizeWizard(onComplete) {
   const unorganizedPlaces = allPlaces.filter(p => p.name.includes(',') || !p.type);
 
   if (unorganizedPlaces.length === 0) {
-    showToast('No places to organize — all places are already structured');
+    showToast('No places to structure — all places are already typed and split');
     return;
   }
 
@@ -172,9 +223,23 @@ export async function openOrganizeWizard(onComplete) {
   const content = document.createElement('div');
   content.className = 'organize-wizard';
 
-  const { close } = openModal({ title: 'Organize Places', content });
+  let parentTS = null;
+  let mergeTS = null;
+  function destroyTomSelects() {
+    parentTS?.destroy();
+    mergeTS?.destroy();
+    parentTS = null;
+    mergeTS = null;
+  }
+
+  const { close } = openModal({
+    title: 'Manual structure',
+    content,
+    onclose: destroyTomSelects,
+  });
 
   async function render() {
+    destroyTomSelects();
     // Filter out already-categorized segments
     const remaining = segments.filter(s => !categorized[s.name]);
 
@@ -198,9 +263,20 @@ export async function openOrganizeWizard(onComplete) {
     // and see which other segments co-occur at a higher level
     const coOccurring = findCoOccurring(seg, allPlaces);
 
+    const persistedCount = Object.values(categorized).filter(c => c.resolved || c.skipped).length;
     content.innerHTML = `
-      <div class="organize-progress">
-        ${Object.keys(categorized).length} of ${segments.length} segments categorized
+      <p class="organize-intro">
+        Use this for places Geocode couldn't find — historic addresses, defunct townlands,
+        old farms, or anything Nominatim doesn't know about. For each segment found in your
+        flat place names, set its type and parent so it joins the hierarchy correctly.
+      </p>
+      <div class="organize-progress-row">
+        <span class="organize-progress">
+          ${Object.keys(categorized).length} of ${segments.length} segments categorized
+        </span>
+        ${persistedCount > 0
+          ? `<button type="button" id="org-reset" class="btn btn-sm btn-subtle">Reset progress</button>`
+          : ''}
       </div>
       <div class="organize-card">
         ${peopleHtml}
@@ -216,13 +292,17 @@ export async function openOrganizeWizard(onComplete) {
           <label>Type</label>
           <select id="org-type">
             <option value="">(skip — not a place)</option>
-            ${[...fetchedTypes].sort((a, b) => a.label.localeCompare(b.label)).map(t => `<option value="${t.key}">${t.label}</option>`).join('')}
+            ${groupTypes(fetchedTypes).map(g =>
+              `<optgroup label="${esc(g.label)}">` +
+              g.types.map(t => `<option value="${t.key}">${esc(t.label)}</option>`).join('') +
+              `</optgroup>`
+            ).join('')}
           </select>
         </div>
         <div class="form-group">
           <label>Parent place</label>
-          <div style="display:flex;gap:6px;align-items:center">
-            <select id="org-parent" style="flex:1">
+          <div class="organize-select-row">
+            <select id="org-parent">
               <option value="">(none — top level)</option>
               ${buildPlaceOptions().map(c => `<option value="${c.id || c.name}" data-name="${c.name}">${c.name}${c.type ? ' (' + c.type.replace(/_/g, ' ') + ')' : ''}</option>`).join('')}
             </select>
@@ -231,8 +311,8 @@ export async function openOrganizeWizard(onComplete) {
         </div>
         <div class="form-group">
           <label>Or match to existing place</label>
-          <div style="display:flex;gap:6px;align-items:center">
-            <select id="org-merge" style="flex:1">
+          <div class="organize-select-row">
+            <select id="org-merge">
               <option value="">(don't merge)</option>
               ${buildPlaceOptions().map(c => `<option value="${c.id || c.name}" data-name="${c.name}">${c.name}${c.type ? ' (' + c.type.replace(/_/g, ' ') + ')' : ''}</option>`).join('')}
             </select>
@@ -246,23 +326,72 @@ export async function openOrganizeWizard(onComplete) {
       ${renderHistory()}
     `;
 
+    const tsCommonOpts = {
+      maxItems: 1,
+      allowEmptyOption: true,
+      searchField: ['text'],
+      maxOptions: 200,
+    };
+    parentTS = new TomSelect(content.querySelector('#org-parent'), tsCommonOpts);
+    mergeTS = new TomSelect(content.querySelector('#org-merge'), tsCommonOpts);
+
+    const placeOptionsList = buildPlaceOptions();
+    const idToName = new Map();
+    for (const c of placeOptionsList) {
+      idToName.set(c.id || c.name, c.name);
+    }
+
+    const resetBtn = content.querySelector('#org-reset');
+    if (resetBtn) {
+      resetBtn.onclick = async () => {
+        if (resetBtn.disabled) return;
+        resetBtn.disabled = true;
+        try {
+          const ok = await openVanillaConfirm({
+            title: 'Reset manual structure progress?',
+            message: 'This forgets which segments you\'ve already categorized or skipped, so the wizard will re-ask about all of them. Place records you\'ve already created or edited are not affected.',
+            confirm: 'Reset',
+            danger: true,
+          });
+          if (!ok) return;
+          doReset();
+        } finally {
+          resetBtn.disabled = false;
+        }
+      };
+
+      function doReset() {
+        resetManualStructure();
+        // Wipe in-memory wizard state
+        for (const k of Object.keys(categorized)) delete categorized[k];
+        history.length = 0;
+        // Re-derive the entries that come from real DB places (still typed, still valid)
+        for (const seg of Object.values(segmentCounts)) {
+          const match = organizedPlaces.find(p => p.name === seg.name);
+          if (match) {
+            categorized[seg.name] = { editedName: match.name, type: match.type, parentName: null };
+          }
+        }
+        currentIndex = 0;
+        showToast('Manual structure progress cleared');
+        render();
+      };
+    }
+
     content.querySelector('#org-create-parent').onclick = () => {
       openPlaceForm(null, (newPlace) => {
-        // Add to categorized and segmentToPlaceId
         categorized[newPlace.name] = {
           editedName: newPlace.name,
           type: newPlace.type || '',
           parentName: null,
         };
         segmentToPlaceId[newPlace.name] = newPlace.id;
-        // Add to the dropdown immediately
-        const select = content.querySelector('#org-parent');
-        const option = document.createElement('option');
-        option.value = newPlace.id;
-        option.dataset.name = newPlace.name;
-        option.textContent = newPlace.name + (newPlace.type ? ` (${newPlace.type.replace(/_/g, ' ')})` : '');
-        option.selected = true;
-        select.appendChild(option);
+        organizedPlaces.push({ id: newPlace.id, name: newPlace.name, type: newPlace.type || '' });
+        idToName.set(newPlace.id, newPlace.name);
+        const text = newPlace.name + (newPlace.type ? ` (${newPlace.type.replace(/_/g, ' ')})` : '');
+        parentTS?.addOption({ value: newPlace.id, text });
+        parentTS?.refreshOptions(false);
+        parentTS?.addItem(newPlace.id);
       });
     };
 
@@ -275,9 +404,8 @@ export async function openOrganizeWizard(onComplete) {
     };
 
     content.querySelector('#org-categorize').onclick = async () => {
-      const mergeSelect = content.querySelector('#org-merge');
-      const mergeValue = mergeSelect ? mergeSelect.value : '';
-      const mergeName = mergeSelect?.selectedOptions[0]?.dataset.name || '';
+      const mergeValue = mergeTS?.getValue() || '';
+      const mergeName = mergeValue ? (idToName.get(mergeValue) || mergeValue) : '';
 
       // If merge target selected, map this segment to that place
       if (mergeValue) {
@@ -306,9 +434,8 @@ export async function openOrganizeWizard(onComplete) {
       // No merge — create/update as a new place
       const editedName = content.querySelector('#org-name').value.trim();
       const type = content.querySelector('#org-type').value;
-      const parentSelect = content.querySelector('#org-parent');
-      const parentValue = parentSelect ? parentSelect.value : '';
-      const parentName = parentSelect?.selectedOptions[0]?.dataset.name || parentValue;
+      const parentValue = parentTS?.getValue() || '';
+      const parentName = parentValue ? (idToName.get(parentValue) || parentValue) : '';
 
       if (!type) {
         // Skip — no type selected
