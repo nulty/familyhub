@@ -12,7 +12,7 @@ Forward-only migrations for evolving the SQLite schema over time.
 
 ## Adding a new migration
 
-The current schema version is **7**. New migrations start at **8**.
+The current schema version is **8**. New migrations start at **9**.
 
 ### 1. Update `schema.sql`
 
@@ -24,10 +24,10 @@ Add an entry to the `migrations` array in `src/db/migrations.js`:
 
 ```js
 {
-  version: 8,
+  version: 9,
   description: 'Short description of what this does',
   async up(helpers) {
-    const { run, all, get } = helpers;
+    const { run, all, get, migrate } = helpers;
     // migration logic here — use await on all helper calls
   },
 },
@@ -38,10 +38,11 @@ The `helpers` object provides (all async-compatible for Turso):
 - `all(sql, params)` — returns array of row objects
 - `get(sql, params)` — returns first row or null
 - `transaction(fn)` — wraps `fn` in BEGIN/COMMIT/ROLLBACK (supports async callbacks)
+- `migrate(statements)` — runs an array of SQL statements with foreign-key enforcement disabled for the duration. Use this for table recreation (drop/rename) instead of toggling `PRAGMA foreign_keys` by hand — see the FK pitfall under Rules.
 
 ### 3. Write tests
 
-Add a test file `tests/migration-v8.test.js` that:
+Add a test file `tests/migration-v9.test.js` that:
 - Creates a DB at the previous schema version
 - Runs the migration
 - Verifies the schema and data are correct
@@ -52,7 +53,7 @@ Add a test file `tests/migration-v8.test.js` that:
 - **Migrations must be idempotent.** Inspect actual table state (`PRAGMA table_info`, `sqlite_master` queries) rather than assuming a starting point. This allows recovery from partial failures.
 - **Migrations run independently**, not wrapped in a single transaction. SQLite DDL like `ALTER TABLE RENAME` is not truly transactional — a wrapping transaction gives false safety.
 - **Both paths must produce the same schema.** A fresh install (via `schema.sql`) and an upgraded install (via migrations) must end up identical. This is the most important invariant.
-- **SQLite FK pitfall:** With `PRAGMA foreign_keys=ON`, you cannot `ALTER TABLE RENAME` a table that is referenced as a parent by foreign keys. Disable FKs first (`PRAGMA foreign_keys=OFF`) and re-enable after.
+- **SQLite FK pitfall:** Recreating a table that is referenced as a parent by foreign keys (e.g. `places`, referenced by `events.place_id`) requires foreign-key enforcement to be off for the whole drop/rename sequence. Use the `migrate(statements)` helper for this — **do not** rely on a standalone `PRAGMA foreign_keys=OFF` followed by separate statements. On Turso each statement is a separate request, so the pragma does not persist and the recreation fails; `migrate()` disables FKs across the batch in a single libSQL stream (and toggles the pragma on single-connection WASM). This is also why migrations are not wrapped in a transaction — `PRAGMA foreign_keys` is a no-op inside one.
 
 ## nukeDatabase
 
