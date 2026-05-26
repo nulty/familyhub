@@ -41,6 +41,14 @@ function createHelpers(db) {
     all: (sql, params = []) => db.prepare(sql).all(...params),
     get: (sql, params = []) => db.prepare(sql).get(...params) ?? null,
     run: (sql, params = []) => db.prepare(sql).run(...params).changes,
+    migrate: (statements) => {
+      db.exec('PRAGMA foreign_keys=OFF');
+      try {
+        for (const s of statements) db.exec(typeof s === 'string' ? s : s.sql);
+      } finally {
+        db.exec('PRAGMA foreign_keys=ON');
+      }
+    },
   };
 }
 

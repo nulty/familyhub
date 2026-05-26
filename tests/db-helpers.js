@@ -39,6 +39,17 @@ function createBetterSqliteHelpers(db) {
     return db.prepare(sql).run(...params).changes;
   }
 
+  // Mirror the worker's migrate() helper: run a batch of statements with FK
+  // enforcement disabled. Single-connection, so a plain PRAGMA toggle works.
+  function migrate(statements) {
+    db.exec('PRAGMA foreign_keys=OFF');
+    try {
+      for (const s of statements) db.exec(typeof s === 'string' ? s : s.sql);
+    } finally {
+      db.exec('PRAGMA foreign_keys=ON');
+    }
+  }
+
   async function transaction(fn) {
     db.exec('BEGIN');
     try {
@@ -51,5 +62,5 @@ function createBetterSqliteHelpers(db) {
     }
   }
 
-  return { all, get, run, transaction };
+  return { all, get, run, migrate, transaction };
 }

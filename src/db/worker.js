@@ -293,6 +293,19 @@ function createWasmHelpers(db) {
     return db.changes();
   }
 
+  // Run a batch of DDL/DML statements with foreign-key enforcement disabled
+  // for the duration — used by table-recreation migrations. WASM SQLite runs
+  // on a single connection, so a plain PRAGMA toggle is sufficient here. The
+  // collab/Turso build implements this via libSQL's client.migrate() instead.
+  function migrate(statements) {
+    db.exec('PRAGMA foreign_keys=OFF');
+    try {
+      for (const s of statements) db.exec(typeof s === 'string' ? s : s.sql);
+    } finally {
+      db.exec('PRAGMA foreign_keys=ON');
+    }
+  }
+
   async function transaction(fn) {
     db.exec('BEGIN');
     try {
@@ -305,7 +318,7 @@ function createWasmHelpers(db) {
     }
   }
 
-  return { all, get, run, transaction };
+  return { all, get, run, migrate, transaction };
 }
 
 // ─── Queue & Message Handler ──────────────────────────────────────────────────

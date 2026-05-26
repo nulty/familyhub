@@ -23,7 +23,7 @@ export const migrations = [
   {
     version: 8,
     description: 'Add place_types table, remove CHECK constraint from places.type',
-    up({ all, get, run }) {
+    up({ all, get, run, migrate }) {
       // 1. Create place_types if not exists
       const exists = get("SELECT name FROM sqlite_master WHERE type='table' AND name='place_types'");
       if (!exists) {
@@ -49,28 +49,32 @@ export const migrations = [
         }
       }
 
-      // 2. Remove CHECK constraint by recreating places table
+      // 2. Remove CHECK constraint by recreating places table.
+      //    The recreation must run with FK enforcement disabled (events.place_id
+      //    references places). migrate() does this atomically — on Turso a
+      //    standalone `PRAGMA foreign_keys=OFF` does not persist across the
+      //    separate execute() requests this would otherwise need.
       const tableSql = get("SELECT sql FROM sqlite_master WHERE type='table' AND name='places'");
       if (tableSql && tableSql.sql.includes('CHECK')) {
-        run('PRAGMA foreign_keys=OFF');
-        run(`CREATE TABLE places_new (
-          id         TEXT PRIMARY KEY,
-          name       TEXT NOT NULL DEFAULT '',
-          type       TEXT NOT NULL DEFAULT '',
-          parent_id  TEXT REFERENCES places(id) ON DELETE SET NULL,
-          latitude   REAL,
-          longitude  REAL,
-          notes      TEXT NOT NULL DEFAULT '',
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL
-        )`);
-        run('INSERT INTO places_new (id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at) SELECT id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at FROM places');
-        run('DROP TABLE places');
-        run('ALTER TABLE places_new RENAME TO places');
-        run('CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id)');
-        run('CREATE INDEX IF NOT EXISTS idx_places_name ON places(name)');
-        run('CREATE INDEX IF NOT EXISTS idx_places_type ON places(type)');
-        run('PRAGMA foreign_keys=ON');
+        migrate([
+          `CREATE TABLE places_new (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL DEFAULT '',
+            type       TEXT NOT NULL DEFAULT '',
+            parent_id  TEXT REFERENCES places(id) ON DELETE SET NULL,
+            latitude   REAL,
+            longitude  REAL,
+            notes      TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )`,
+          'INSERT INTO places_new (id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at) SELECT id, name, type, parent_id, latitude, longitude, notes, created_at, updated_at FROM places',
+          'DROP TABLE places',
+          'ALTER TABLE places_new RENAME TO places',
+          'CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id)',
+          'CREATE INDEX IF NOT EXISTS idx_places_name ON places(name)',
+          'CREATE INDEX IF NOT EXISTS idx_places_type ON places(type)',
+        ]);
       }
 
       // 3. Backfill place_types from existing places.type values

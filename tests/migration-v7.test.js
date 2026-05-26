@@ -35,6 +35,14 @@ function createV6DB() {
     all(sql, params = []) { return db.prepare(sql).all(...params); },
     get(sql, params = []) { return db.prepare(sql).get(...params) ?? null; },
     run(sql, params = []) { return db.prepare(sql).run(...params).changes; },
+    migrate(statements) {
+      db.exec('PRAGMA foreign_keys=OFF');
+      try {
+        for (const s of statements) db.exec(typeof s === 'string' ? s : s.sql);
+      } finally {
+        db.exec('PRAGMA foreign_keys=ON');
+      }
+    },
     transaction(fn) { return db.transaction(fn)(); },
   };
 
