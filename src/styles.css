@@ -2018,7 +2018,7 @@ a:hover { text-decoration: underline; }
   }
 
   /* Add bottom padding to main so content isn't hidden behind the bar */
-  #main { padding-bottom: 56px; }
+  #main { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
 
   /* Panel: full-screen overlay instead of side column */
   #main.has-panel {
