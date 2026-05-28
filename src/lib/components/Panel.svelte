@@ -203,7 +203,8 @@
 
   <div class="panel-section-title">
     Events{#if allEvents.length > 0} ({allEvents.length}){/if}
-    <button class="btn-link btn-sm" style="margin-left:auto" onclick={() => emit(SHOW_ON_MAP, personId)}>Show on map</button>
+    <button class="btn-link btn-sm" style="margin-left:auto" onclick={setRoot}>Set as root</button>
+    <button class="btn-link btn-sm" onclick={() => emit(SHOW_ON_MAP, personId)}>Show on map</button>
   </div>
   <div class="panel-events-list">
     {#if allEvents.length === 0}
@@ -348,7 +349,6 @@
 
   {#if editing}
     <div style="padding: 8px 20px 20px; border-top: 1px solid var(--border);">
-      <button class="btn btn-sm" onclick={setRoot}>Set as root</button>
       <button class="btn btn-sm btn-danger" onclick={deletePerson}>Delete Person</button>
     </div>
   {/if}
