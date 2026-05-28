@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { initDB, getStats, nukeDatabase, clearDatabase, bulk, runMigrations, syncDown, switchDatabase } from '../../db/db.js';
-  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP, COLLAB_MODE_CHANGED, COLLAB_SYNC_STATUS } from '../../state.js';
+  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP, COLLAB_MODE_CHANGED, COLLAB_SYNC_STATUS, canWrite } from '../../state.js';
   import { initTree, refreshTree } from '../../ui/tree.js';
   import { initMap, invalidateSize, clearAllMarkers, startPicking, stopPicking } from '../../ui/map.js';
   import MapPanel from './MapPanel.svelte';
@@ -39,6 +39,12 @@
   let currentUser = $state(getCurrentUser());
   let syncStatus = $state('online');
   let collabState = $state(getCollabState());
+
+  let writable = $state(true);
+  $effect(() => {
+    const unsub = canWrite.subscribe(v => { writable = v; });
+    return unsub;
+  });
 
   const modalStack = getStack;
 
@@ -330,7 +336,7 @@
           <button class:active={viewMode === 'map'} onclick={() => setViewMode('map')}>Map</button>
         </div>
       {/if}
-      {#if hasData}
+      {#if hasData && writable}
         <button class="btn btn-primary" onclick={() => openPersonForm()}>+ Person</button>
       {/if}
       {#if authenticated}
@@ -361,7 +367,7 @@
             {#if hasData}
               <button class="menu-item" onclick={() => menuAction(startWizard)}>Data Entry Wizard</button>
             {/if}
-            {#if hasAnyData}
+            {#if hasAnyData && writable}
               <button class="menu-item" onclick={() => menuAction(openSourcesPage)}>Sources</button>
               <button class="menu-item" onclick={() => menuAction(openPlacesPage)}>Places</button>
             {/if}
@@ -380,7 +386,7 @@
             {#if hasAnyData}
               <hr class="menu-divider" />
             {/if}
-            {#if collabMode === 'local' && hasAnyData}
+            {#if collabMode === 'local' && hasAnyData && writable}
               <button class="menu-item" onclick={() => menuAction(handleImport)}>Import</button>
             {/if}
             {#if hasAnyData}
