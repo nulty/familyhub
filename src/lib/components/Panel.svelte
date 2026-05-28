@@ -1,6 +1,6 @@
 <script>
   import { people, relationships, events as eventsApi, personNames } from '../../db/db.js';
-  import { emit, PERSON_DESELECTED, PERSON_SELECTED, DATA_CHANGED, SHOW_ON_MAP } from '../../state.js';
+  import { emit, PERSON_DESELECTED, PERSON_SELECTED, DATA_CHANGED, SHOW_ON_MAP, canWrite } from '../../state.js';
   import { openPersonForm, openEventForm, openRelationshipForm, openCitationForm } from '../shared/open.js';
   import { focusPerson } from '../../ui/tree.js';
   import { showToast } from '../shared/toast-store.js';
@@ -8,6 +8,12 @@
   import { showConfirm } from '../shared/confirm.js';
 
   let { personId, onEditChange } = $props();
+
+  let writable = $state(true);
+  $effect(() => {
+    const unsub = canWrite.subscribe(v => { writable = v; });
+    return unsub;
+  });
 
   let person = $state(null);
   let names = $state([]);
@@ -174,13 +180,13 @@
         {#if lifeYears}<div class="panel-life-dates">{lifeYears}</div>{/if}
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="panel-edit-toggle" class:active={editing} onclick={toggleEdit}>{editing ? 'Done' : 'Edit'}</button>
+        {#if writable}<button class="panel-edit-toggle" class:active={editing} onclick={toggleEdit}>{editing ? 'Done' : 'Edit'}</button>{/if}
         {#if !editing}<button class="panel-close" onclick={close}>&times;</button>{/if}
       </div>
     </div>
   </div>
 
-  {#if editing}
+  {#if writable && editing}
     <div style="padding: 4px 20px 0">
       <button class="btn btn-sm btn-link" onclick={() => openPersonForm(person.id)}>Edit Person</button>
     </div>
@@ -192,10 +198,10 @@
         <span class="alt-name-pill">
           <span class="alt-name-type">{n.type || 'name'}</span>
           {[n.given_name, n.surname].filter(Boolean).join(' ')}
-          {#if editing}<button class="alt-name-remove" onclick={() => deleteName(n.id)}>&times;</button>{/if}
+          {#if writable && editing}<button class="alt-name-remove" onclick={() => deleteName(n.id)}>&times;</button>{/if}
         </span>
       {/each}
-      {#if editing}
+      {#if writable && editing}
         <button class="btn btn-sm btn-link" onclick={() => openPersonForm(person.id)}>+ Add Name</button>
       {/if}
     </div>
@@ -243,7 +249,7 @@
               {/each}
             </div>
           {/if}
-          {#if editing}
+          {#if writable && editing}
             {#if !ev.date}
               <div class="ev-card-gap" onclick={() => openEventForm(ev._shared ? null : person.id, ev.id)}>+ add date</div>
             {/if}
@@ -261,7 +267,7 @@
         </div>
       </div>
     {/each}
-    {#if editing}
+    {#if writable && editing}
       <button class="btn btn-sm btn-link section-add-btn" onclick={() => openEventForm(person.id)}>+ Add Event</button>
     {/if}
   </div>
@@ -276,10 +282,10 @@
             <span class="gender-dot {p.gender}"></span>
             {formatName(p)}
             {#if formatLifeDates(p)}<span class="family-chip-dates">{formatLifeDates(p)}</span>{/if}
-            {#if editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(p.rel_id); }}>&times;</button>{/if}
+            {#if writable && editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(p.rel_id); }}>&times;</button>{/if}
           </span>
         {/each}
-        {#if editing}
+        {#if writable && editing}
           <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'parent')}>+ Add Parent</button>
         {/if}
       </div>
@@ -294,7 +300,7 @@
               <span class="gender-dot {group.partner.gender}"></span>
               {formatName(group.partner)}
               {#if formatLifeDates(group.partner)}<span class="family-chip-dates">{formatLifeDates(group.partner)}</span>{/if}
-              {#if editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(group.partner.rel_id); }}>&times;</button>{/if}
+              {#if writable && editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(group.partner.rel_id); }}>&times;</button>{/if}
             </span>
           </div>
         {:else if familyGroups.length > 1}
@@ -307,17 +313,17 @@
               {formatName(c)}
               {#if formatLifeDates(c)}<span class="family-chip-dates">{formatLifeDates(c)}</span>{/if}
               {#if ageAtChildBirth(c) != null}<span class="family-chip-age">age {ageAtChildBirth(c)}</span>{/if}
-              {#if editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(c.rel_id); }}>&times;</button>{/if}
+              {#if writable && editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(c.rel_id); }}>&times;</button>{/if}
             </span>
           {/each}
         </div>
       </div>
     {/each}
 
-    {#if partners.length === 0 && editing}
+    {#if writable && partners.length === 0 && editing}
       <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'partner')}>+ Add Partner</button>
     {/if}
-    {#if editing}
+    {#if writable && editing}
       <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'child')}>+ Add Child</button>
     {/if}
   </div>
@@ -347,7 +353,7 @@
     </div>
   {/if}
 
-  {#if editing}
+  {#if writable && editing}
     <div style="padding: 8px 20px 20px; border-top: 1px solid var(--border);">
       <button class="btn btn-sm btn-danger" onclick={deletePerson}>Delete Person</button>
     </div>
