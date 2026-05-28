@@ -53,7 +53,7 @@ A browser-based family tree application. All data is stored locally in your brow
 - Export your tree as a GEDCOM file for use in other genealogy software
 
 ### Search
-- Search across all people by name from the header search bar
+- Fuzzy people search from the header bar — handles typos, transposed letters, and fragment-concatenated queries like `tomgaf` for "Thomas Gaffney"
 - Click a result to focus on that person in the tree
 
 ### Display Settings

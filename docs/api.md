@@ -28,7 +28,9 @@ await people.update(person.id, { notes: 'Born in Dublin' });
 const p = await people.get(person.id);
 await people.delete(person.id);
 
-const results = await people.search('kav');  // up to 50 results
+const results = await people.search('kav');     // fuzzy match across given/surname/full name
+const results2 = await people.search('marykav'); // splits at every interior position, so concatenated fragments still match
+const results3 = await people.search('');        // empty query → top 100 alphabetical
 
 // Full person with events, participating events, and family
 const full = await people.getWithEvents(person.id);
