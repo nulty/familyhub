@@ -50,11 +50,12 @@
     const color = getColor(personId);
 
     // Gather all events (owned + shared + participating)
+    // Merge the three pre-sorted lists by sort_date so the rendered timeline is chronological.
     const allEvents = [
       ...(data.events || []).map(e => ({ ...e, _kind: 'owned' })),
       ...(data.sharedEvents || []).map(e => ({ ...e, _kind: 'shared' })),
       ...(data.participatingEvents || []).map(e => ({ ...e, _kind: 'participating' })),
-    ];
+    ].sort((a, b) => (a.sort_date ?? Number.MAX_SAFE_INTEGER) - (b.sort_date ?? Number.MAX_SAFE_INTEGER));
 
     // Resolve place coordinates for events with place_id
     const mappedEvents = [];
