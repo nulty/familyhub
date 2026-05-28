@@ -5,6 +5,7 @@
   import { people, places } from '../../db/db.js';
   import { on, SHOW_ON_MAP } from '../../state.js';
   import { addMarkers, removeMarkers, zoomToMarker, fitBounds } from '../../ui/map.js';
+  import { mapPanelState, colorMap, placeCache } from './mapPanelState.svelte.js';
 
   let { initialPersonId = null, onconsumed } = $props();
 
@@ -13,21 +14,14 @@
   let selectEl;
   let tomSelect;
 
-  // { personId: { person, color, events: [{eventId, lat, lng, type, date, place, personName}] } }
-  let selected = $state({});
-
-  // Synchronous color map — shared between TomSelect render and addPerson
-  // TomSelect's render.item fires before onItemAdd, so color must be assigned in render
-  const colorMap = new Map();
+  // Synchronous color map — shared between TomSelect render and addPerson.
+  // TomSelect's render.item fires before onItemAdd, so color must be assigned in render.
   function getColor(personId) {
     if (!colorMap.has(personId)) {
       colorMap.set(personId, COLORS[colorMap.size % COLORS.length]);
     }
     return colorMap.get(personId);
   }
-
-  // Cache place lookups to avoid repeated fetches
-  const placeCache = new Map();
 
   async function getPlace(placeId) {
     if (placeCache.has(placeId)) return placeCache.get(placeId);
@@ -47,7 +41,7 @@
   }
 
   async function addPerson(personId) {
-    if (selected[personId]) return;
+    if (mapPanelState.selected[personId]) return;
 
     const data = await people.getWithEvents(personId);
     if (!data) return;
@@ -94,10 +88,7 @@
     const deathYear = extractYear(allEvents.find(e => e.type === 'death')?.date);
     const years = [birthYear, deathYear].filter(Boolean).join(' - ');
 
-    selected = {
-      ...selected,
-      [personId]: { person: data.person, color, events: mappedEvents, years },
-    };
+    mapPanelState.selected[personId] = { person: data.person, color, events: mappedEvents, years };
 
     addMarkers(personId, color, mappedEvents);
     fitBounds();
@@ -105,9 +96,7 @@
 
   function removePerson(personId) {
     removeMarkers(personId);
-    const next = { ...selected };
-    delete next[personId];
-    selected = next;
+    delete mapPanelState.selected[personId];
     fitBounds();
   }
 
@@ -115,11 +104,11 @@
     zoomToMarker(personId, eventId);
   }
 
-  let selectedEntries = $derived(Object.entries(selected));
+  let selectedEntries = $derived(Object.entries(mapPanelState.selected));
   let totalMarkers = $derived(selectedEntries.reduce((sum, [, v]) => sum + v.events.length, 0));
 
   async function addPersonWithTag(personId) {
-    if (selected[personId]) { fitBounds(); return; }
+    if (mapPanelState.selected[personId]) { fitBounds(); return; }
     await addPerson(personId);
     fitBounds();
   }
