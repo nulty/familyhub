@@ -130,6 +130,11 @@ export function createHandlers(h, opts = {}) {
       );
     },
 
+    async listPeopleForSearch() {
+      const birthYearSub = `(SELECT SUBSTR(e.date, -4) FROM events e WHERE e.person_id = p.id AND e.type = 'birth' LIMIT 1)`;
+      return await all(`SELECT p.*, ${birthYearSub} AS birth_year FROM people p ORDER BY p.surname, p.given_name`);
+    },
+
     // ── Person Names ──────────────────────────────────────────────────────
 
     async createPersonName({ id, person_id, given_name = '', surname = '', type = '', date = '', sort_order = 0 }) {

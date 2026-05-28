@@ -9,7 +9,8 @@ import { ulid } from '../util/ulid.js';
 import { parseSortDate } from '../util/dates.js';
 import { getMode } from '../config.js';
 import { remoteCall } from './remote.js';
-import { emit, COLLAB_SYNC_STATUS } from '../state.js';
+import { emit, on, COLLAB_SYNC_STATUS, DATA_CHANGED } from '../state.js';
+import { createPersonSearchIndex, searchPersonIndex } from '../util/fuzzy-people.js';
 
 const WRITE_METHODS = new Set([
   'createPerson', 'updatePerson', 'deletePerson',
@@ -129,6 +130,29 @@ async function call(method, ...args) {
 
 // ─── People ───────────────────────────────────────────────────────────────────
 
+// Fuzzy search keeps a cached Fuse index over the full people list. The index
+// is rebuilt lazily on next query after any DATA_CHANGED event.
+let fuseIndexPromise = null;
+let fuseCacheInvalidator = false;
+
+function invalidateFuseIndex() {
+  fuseIndexPromise = null;
+}
+
+function ensureFuseInvalidator() {
+  if (fuseCacheInvalidator) return;
+  fuseCacheInvalidator = true;
+  on(DATA_CHANGED, invalidateFuseIndex);
+}
+
+function getFuseIndex() {
+  ensureFuseInvalidator();
+  if (!fuseIndexPromise) {
+    fuseIndexPromise = call('listPeopleForSearch').then(createPersonSearchIndex);
+  }
+  return fuseIndexPromise;
+}
+
 export const people = {
   create(data) {
     return call('createPerson', { id: ulid(), ...data });
@@ -142,8 +166,11 @@ export const people = {
   delete(id) {
     return call('deletePerson', id);
   },
-  search(query) {
-    return call('searchPeople', query);
+  async search(query) {
+    const trimmed = (query || '').trim();
+    if (trimmed === '') return call('searchPeople', '');
+    const fuse = await getFuseIndex();
+    return searchPersonIndex(fuse, trimmed);
   },
   getWithEvents(id) {
     return call('getPersonWithEvents', id);

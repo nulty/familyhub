@@ -81,6 +81,28 @@ describe('People', () => {
     const results = await h.searchPeople('');
     expect(results).toHaveLength(2);
   });
+
+  it('listPeopleForSearch returns every person with birth_year', async () => {
+    await h.createPerson({ id: 'P1', given_name: 'John', surname: 'Smith' });
+    await h.createPerson({ id: 'P2', given_name: 'Mary', surname: 'Jones' });
+    await h.createEvent({ id: 'E1', person_id: 'P1', type: 'birth', date: '12 Mar 1890' });
+    const results = await h.listPeopleForSearch();
+    expect(results).toHaveLength(2);
+    const john = results.find(p => p.id === 'P1');
+    expect(john.birth_year).toBe('1890');
+    expect(john.given_name).toBe('John');
+    expect(john.surname).toBe('Smith');
+  });
+
+  it('listPeopleForSearch returns more than the searchPeople empty-query limit', async () => {
+    for (let i = 0; i < 120; i++) {
+      await h.createPerson({ id: `P${i}`, given_name: `Person${i}`, surname: 'X' });
+    }
+    const capped = await h.searchPeople('');
+    const full = await h.listPeopleForSearch();
+    expect(capped).toHaveLength(100);
+    expect(full).toHaveLength(120);
+  });
 });
 
 // ─── Relationships ────────────────────────────────────────────────────────────
