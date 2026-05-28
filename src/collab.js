@@ -7,7 +7,7 @@ import { getCollabState, setCollabState, clearCollabState, getMode } from './con
 import { switchDatabase, syncDown, bulk, removeOpfsFile } from './db/db.js';
 import { apiFetch, remoteCall } from './db/remote.js';
 import { isAuthenticated, signOut as authSignOut, getCurrentUser, getAccessToken } from './auth.js';
-import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED } from './state.js';
+import { emit, COLLAB_MODE_CHANGED, DATA_CHANGED, setCurrentRole } from './state.js';
 import { createPoller } from './poll.js';
 import { showToast } from './lib/shared/toast-store.js';
 
@@ -68,6 +68,7 @@ export async function shareTree(name) {
 
     startPolling(tree.id);
 
+    setCurrentRole('owner');
     emit(COLLAB_MODE_CHANGED, 'collab');
     emit(DATA_CHANGED);
   } catch (e) {
@@ -86,7 +87,7 @@ export async function joinTree(code) {
   if (!isAuthenticated()) throw new Error('Not authenticated');
 
   const state = getCollabState();
-  const { tree } = await apiFetch('/trees/_/join', {
+  const { tree, role } = await apiFetch('/trees/_/join', {
     method: 'POST',
     body: JSON.stringify({ code }),
   });
@@ -104,6 +105,7 @@ export async function joinTree(code) {
 
   startPolling(tree.id);
 
+  setCurrentRole(role);
   emit(COLLAB_MODE_CHANGED, 'collab');
   emit(DATA_CHANGED);
 
@@ -152,6 +154,7 @@ export async function disconnectFromTree() {
   });
   setLastTreeRemote(null);
 
+  setCurrentRole(null);
   emit(COLLAB_MODE_CHANGED, 'local');
   emit(DATA_CHANGED);
 }
@@ -159,11 +162,50 @@ export async function disconnectFromTree() {
 /**
  * Generate an invite code for the current tree.
  */
-export async function generateInviteCode() {
+export async function generateInviteCode(role = 'viewer') {
   const state = getCollabState();
   if (!state?.treeId) throw new Error('No collaborative tree');
-  const { code } = await apiFetch(`/trees/${state.treeId}/invite`, { method: 'POST' });
+  const { code } = await apiFetch(`/trees/${state.treeId}/invite`, {
+    method: 'POST',
+    body: JSON.stringify({ role }),
+  });
   return code;
+}
+
+/**
+ * Change a member's role in the current tree.
+ */
+export async function setMemberRole(userId, role) {
+  const state = getCollabState();
+  if (!state) throw new Error('Not in a collaborative tree');
+  return apiFetch(`/trees/${state.treeId}/members/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  });
+}
+
+/**
+ * Transfer ownership of the current tree to another member.
+ * The caller becomes an editor after the transfer.
+ */
+export async function transferOwnership(newOwnerUserId) {
+  const state = getCollabState();
+  if (!state) throw new Error('Not in a collaborative tree');
+  const result = await apiFetch(`/trees/${state.treeId}/transfer-ownership`, {
+    method: 'POST',
+    body: JSON.stringify({ to: newOwnerUserId }),
+  });
+  setCurrentRole('editor'); // caller is no longer owner after transfer
+  return result;
+}
+
+/**
+ * Delete the current shared tree (owner only).
+ */
+export async function deleteSharedTree() {
+  const state = getCollabState();
+  if (!state) throw new Error('Not in a collaborative tree');
+  return apiFetch(`/trees/${state.treeId}`, { method: 'DELETE' });
 }
 
 /**
@@ -200,6 +242,13 @@ export async function getActivity() {
  */
 export async function listTrees() {
   const { trees } = await apiFetch('/trees');
+  const activeTreeId = getCollabState()?.treeId;
+  if (activeTreeId) {
+    const activeTree = trees.find((t) => t.id === activeTreeId);
+    setCurrentRole(activeTree ? activeTree.role : null);
+  } else {
+    setCurrentRole(null);
+  }
   return trees;
 }
 

@@ -49,6 +49,7 @@ vi.mock('../src/state.js', () => ({
   DATA_CHANGED: mocks.DATA_CHANGED,
   COLLAB_SYNC_STATUS: 'COLLAB_SYNC_STATUS',
   on: vi.fn(),
+  setCurrentRole: vi.fn(),
 }));
 
 vi.mock('../src/poll.js', () => ({

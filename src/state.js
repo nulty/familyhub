@@ -30,3 +30,11 @@ export const COLLAB_SYNC_STATUS = 'COLLAB_SYNC_STATUS';
 export const state = {
   selectedPersonId: null,
 };
+
+import { writable, derived } from 'svelte/store';
+
+export const currentRole = writable(null);
+export function setCurrentRole(role) { currentRole.set(role); }
+
+export const canWrite = derived(currentRole, (r) => r === null || r === 'owner' || r === 'editor');
+export const canManage = derived(currentRole, (r) => r === null || r === 'owner');
