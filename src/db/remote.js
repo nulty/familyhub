@@ -38,6 +38,21 @@ export async function remoteCall(method, ...args) {
     throw new Error(err.error || 'Bad request');
   }
 
+  if (res.status === 403) {
+    const err = await res.json().catch(() => ({}));
+    // Best-effort UX: notify and trigger a sync so the role state catches up.
+    // Dynamic imports avoid circular deps.
+    try {
+      const { showToast } = await import('../lib/shared/toast-store.js');
+      showToast('Your role may have changed. Refresh the page to see the current state.');
+    } catch {}
+    try {
+      const { syncDown } = await import('./db.js');
+      syncDown().catch(() => {});
+    } catch {}
+    throw new Error(err.error || 'You do not have permission to do this');
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `API error: ${res.status}`);
