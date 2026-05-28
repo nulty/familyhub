@@ -550,6 +550,35 @@ a:hover { text-decoration: underline; }
 .map-panel-picker {
   padding: 12px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-panel-picker > .ts-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.map-panel-clear {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.map-panel-clear:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.map-panel-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .map-panel-list {

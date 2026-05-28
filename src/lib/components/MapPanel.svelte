@@ -4,7 +4,7 @@
   import 'tom-select/dist/css/tom-select.css';
   import { people, places } from '../../db/db.js';
   import { on, SHOW_ON_MAP } from '../../state.js';
-  import { addMarkers, removeMarkers, zoomToMarker, fitBounds } from '../../ui/map.js';
+  import { addMarkers, removeMarkers, clearAllMarkers, zoomToMarker, fitBounds } from '../../ui/map.js';
   import { mapPanelState, colorMap, placeCache } from './mapPanelState.svelte.js';
 
   let { initialPersonId = null, onconsumed } = $props();
@@ -100,6 +100,15 @@
     fitBounds();
   }
 
+  function clearAll() {
+    clearAllMarkers();
+    for (const id of Object.keys(mapPanelState.selected)) {
+      delete mapPanelState.selected[id];
+    }
+    colorMap.clear();
+    fitBounds();
+  }
+
   function handleEventClick(personId, eventId) {
     zoomToMarker(personId, eventId);
   }
@@ -166,6 +175,13 @@
 <div class="map-panel">
   <div class="map-panel-picker">
     <select bind:this={selectEl}></select>
+    <button
+      type="button"
+      class="map-panel-clear"
+      onclick={clearAll}
+      disabled={selectedEntries.length === 0}
+      title="Clear all people from the map"
+    >Clear</button>
   </div>
 
   <div class="map-panel-list">
