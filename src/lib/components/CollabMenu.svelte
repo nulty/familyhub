@@ -1,11 +1,12 @@
 <script>
   import { getCollabState } from '../../config.js';
-  import { getMembers, generateInviteCode, removeMember, disconnectFromTree, getActivity } from '../../collab.js';
+  import { getMembers, generateInviteCode, removeMember, disconnectFromTree, getActivity, setMemberRole, transferOwnership, deleteSharedTree } from '../../collab.js';
   import { getCurrentUser } from '../../auth.js';
   import { showToast } from '../shared/toast-store.js';
   import { showConfirm } from '../shared/confirm.js';
   import { openExportModal } from '../shared/open.js';
   import Modal from '../forms/Modal.svelte';
+  import { currentRole, canManage } from '../../state.js';
 
   let { onclose } = $props();
   const close = onclose;
@@ -15,6 +16,17 @@
   let inviteCode = $state(null);
   let loading = $state(true);
   let offline = $state(false);
+
+  let role = $state(null);
+  let manageable = $state(false);
+  $effect(() => {
+    const u1 = currentRole.subscribe(v => { role = v; });
+    const u2 = canManage.subscribe(v => { manageable = v; });
+    return () => { u1(); u2(); };
+  });
+
+  let inviteRole = $state('viewer');
+  let transferTarget = $state(null);
 
   const collabState = getCollabState();
   const currentUser = getCurrentUser();
@@ -37,11 +49,9 @@
       });
   });
 
-  const isSolo = $derived(members.length > 0 && members.length === 1);
-
   async function handleInvite() {
     try {
-      inviteCode = await generateInviteCode();
+      inviteCode = await generateInviteCode(inviteRole);
     } catch (e) {
       showToast('Failed to generate invite: ' + e.message);
     }
@@ -65,6 +75,33 @@
     }
   }
 
+  async function handleRoleChange(userId, newRole, name) {
+    try {
+      await setMemberRole(userId, newRole);
+      members = members.map(m => m.id === userId ? { ...m, role: newRole } : m);
+      showToast(`${name || 'Member'} is now ${newRole}`);
+    } catch (e) {
+      showToast('Failed to change role: ' + e.message);
+    }
+  }
+
+  async function handleTransfer() {
+    if (!transferTarget) return;
+    const target = members.find(m => m.id === transferTarget);
+    if (!await showConfirm({
+      title: `Transfer ownership to ${target?.name || 'this member'}?`,
+      message: 'You will become an editor. The new owner can change roles, invite people, and delete the tree.',
+      confirm: 'Transfer',
+    })) return;
+    try {
+      await transferOwnership(transferTarget);
+      showToast(`Ownership transferred to ${target?.name || 'new owner'}`);
+      close();
+    } catch (e) {
+      showToast('Failed to transfer: ' + e.message);
+    }
+  }
+
   function handleExport() {
     close();
     openExportModal();
@@ -74,13 +111,13 @@
     const treeName = collabState?.treeName || 'this tree';
     const confirmed = await showConfirm({
       title: `Delete "${treeName}"?`,
-      message: `This permanently deletes the cloud copy. It cannot be undone.\n\nYour local data will not be kept. Use Export to download a copy first.`,
+      message: `This permanently deletes the cloud copy for everyone. It cannot be undone.\n\nUse Export to download a copy first.`,
       confirm: 'Delete',
       danger: true,
     });
     if (!confirmed) return;
     try {
-      await disconnectFromTree();
+      await deleteSharedTree();
       showToast('Tree deleted');
       close();
     } catch (e) {
@@ -124,6 +161,10 @@
   {:else if offline}
     <p class="offline-msg">You're offline. Collaboration details will be available when you reconnect.</p>
   {:else}
+    {#if role}
+      <p class="own-role">Viewing as: <strong>{role}</strong></p>
+    {/if}
+
     <section>
       <h3>Members</h3>
       <ul class="member-list">
@@ -135,7 +176,15 @@
                 <span class="member-you">(you)</span>
               {/if}
             </span>
-            {#if member.id !== currentUser?.id}
+            <span class="role-badge">{member.role}</span>
+            {#if manageable && member.id !== currentUser?.id && member.role !== 'owner'}
+              <select
+                value={member.role}
+                onchange={(e) => handleRoleChange(member.id, e.target.value, member.name)}
+              >
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+              </select>
               <button class="btn-small btn-remove" onclick={() => handleRemove(member.id, member.name)}>Remove</button>
             {/if}
           </li>
@@ -143,18 +192,40 @@
       </ul>
     </section>
 
-    <section>
-      <h3>Invite</h3>
-      {#if inviteCode}
-        <div class="invite-code">
-          <code>{inviteCode}</code>
-          <button class="btn-small" onclick={copyCode}>Copy</button>
+    {#if manageable}
+      <section>
+        <h3>Invite</h3>
+        {#if inviteCode}
+          <div class="invite-code">
+            <code>{inviteCode}</code>
+            <button class="btn-small" onclick={copyCode}>Copy</button>
+          </div>
+          <p class="form-hint">Single-use. Share this code with someone to invite them as {inviteRole}.</p>
+        {:else}
+          <div class="invite-role-picker">
+            <label><input type="radio" bind:group={inviteRole} value="viewer" /> Viewer (read-only)</label>
+            <label><input type="radio" bind:group={inviteRole} value="editor" /> Editor (can write)</label>
+          </div>
+          <button class="btn" onclick={handleInvite}>Generate Invite Code</button>
+        {/if}
+      </section>
+    {/if}
+
+    {#if manageable && members.filter(m => m.id !== currentUser?.id).length > 0}
+      <section>
+        <h3>Transfer Ownership</h3>
+        <p class="form-hint">Make another member the owner. You become an editor.</p>
+        <div class="transfer-row">
+          <select bind:value={transferTarget}>
+            <option value={null}>Choose member…</option>
+            {#each members.filter(m => m.id !== currentUser?.id && m.role !== 'owner') as m}
+              <option value={m.id}>{m.name || m.email}</option>
+            {/each}
+          </select>
+          <button class="btn" disabled={!transferTarget} onclick={handleTransfer}>Transfer</button>
         </div>
-        <p class="form-hint">Single-use. Share this code with someone to invite them.</p>
-      {:else}
-        <button class="btn" onclick={handleInvite}>Generate Invite Code</button>
-      {/if}
-    </section>
+      </section>
+    {/if}
 
     {#if activity.length > 0}
       <section>
@@ -172,8 +243,8 @@
     {/if}
 
     <section class="section-danger">
-      {#if isSolo}
-        <p class="form-hint">You're the only member. You can <button class="btn-link" onclick={handleExport}>export a copy</button> before deleting.</p>
+      {#if manageable}
+        <p class="form-hint">Delete the entire shared tree. This affects all members and cannot be undone.</p>
         <button class="btn btn-danger" onclick={handleDelete}>Delete tree</button>
       {:else}
         <p class="form-hint">Leave this tree? Other members will continue editing. You can rejoin with a new invite.</p>
@@ -185,19 +256,28 @@
 
 <style>
   .offline-msg { color: var(--text-muted); font-size: 14px; padding: 1rem 0; }
+  .own-role { font-size: 13px; color: var(--text-muted); margin-bottom: 1rem; }
   section { margin-bottom: 1.5rem; }
   .section-danger { border-top: 1px solid var(--border); padding-top: 1rem; }
   h3 { font-size: 14px; font-weight: 600; margin-bottom: 0.5rem; }
   .member-list { list-style: none; padding: 0; margin: 0; }
-  .member-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
-  .member-name { font-size: 14px; }
+  .member-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .member-name { font-size: 14px; flex: 1; }
   .member-you { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
+  .role-badge {
+    font-size: 11px; padding: 2px 6px; border-radius: 4px;
+    background: var(--bg-alt, #f0f0f0); color: var(--text-muted);
+    text-transform: capitalize;
+  }
   .btn-small { font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px; background: transparent; cursor: pointer; }
   .btn-remove { color: var(--text-muted); }
   .btn-remove:hover { color: var(--danger); border-color: var(--danger); }
   .btn-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: inherit; padding: 0; text-decoration: underline; }
   .invite-code { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
   .invite-code code { font-size: 14px; word-break: break-all; flex: 1; }
+  .invite-role-picker { display: flex; gap: 1rem; margin-bottom: 0.5rem; font-size: 14px; }
+  .transfer-row { display: flex; gap: 8px; align-items: center; }
+  .transfer-row select { flex: 1; padding: 4px 6px; }
   .activity-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
   .activity-item { font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; gap: 4px; align-items: baseline; }
   .activity-user { font-weight: 500; white-space: nowrap; }
