@@ -5,8 +5,14 @@ import { currentRole, canWrite, canManage, setCurrentRole } from '../src/state.j
 describe('role-derived stores', () => {
   beforeEach(() => setCurrentRole(null));
 
-  it('local mode (role=null) → canWrite=true, canManage=true', () => {
+  it('undetermined role (null) → fail safe: canWrite=false, canManage=false', () => {
     expect(get(currentRole)).toBeNull();
+    expect(get(canWrite)).toBe(false);
+    expect(get(canManage)).toBe(false);
+  });
+
+  it('local mode (role="local") → canWrite=true, canManage=true', () => {
+    setCurrentRole('local');
     expect(get(canWrite)).toBe(true);
     expect(get(canManage)).toBe(true);
   });

@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { initDB, getStats, nukeDatabase, clearDatabase, bulk, runMigrations, syncDown, switchDatabase } from '../../db/db.js';
-  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP, COLLAB_MODE_CHANGED, COLLAB_SYNC_STATUS, canWrite } from '../../state.js';
+  import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP, COLLAB_MODE_CHANGED, COLLAB_SYNC_STATUS, canWrite, setCurrentRole } from '../../state.js';
   import { initTree, refreshTree } from '../../ui/tree.js';
   import { initMap, invalidateSize, clearAllMarkers, startPicking, stopPicking } from '../../ui/map.js';
   import MapPanel from './MapPanel.svelte';
@@ -9,7 +9,7 @@
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
   import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage, openImportModal, openExportModal } from '../shared/open.js';
   import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
-  import { shareTree, joinTree, collabSignOut, startPolling } from '../../collab.js';
+  import { shareTree, joinTree, collabSignOut, startPolling, refreshCurrentRole } from '../../collab.js';
   import { showToast } from '../shared/toast-store.js';
   import { showConfirm } from '../shared/confirm.js';
   import { showPrompt } from '../shared/prompt.js';
@@ -170,6 +170,15 @@
       const treeCfg = getTreeConfig();
       applyTreeColors(treeCfg);
       applyCardDisplay(treeCfg);
+    }
+
+    // Establish the permission role for gating. Default (null) grants nothing,
+    // so we must set a concrete role on every boot: 'local' for local mode,
+    // or the caller's fetched role for the active collab tree.
+    if (getMode() === 'collab') {
+      await refreshCurrentRole();
+    } else {
+      setCurrentRole('local');
     }
 
     // Start polling for real-time updates when in collab mode

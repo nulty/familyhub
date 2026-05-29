@@ -33,8 +33,15 @@ export const state = {
 
 import { writable, derived } from 'svelte/store';
 
+// currentRole values:
+//   'local'                       → local mode, full rights
+//   'owner' | 'editor' | 'viewer' → collaborative tree role
+//   null                          → role not yet determined → least privilege (fail safe)
+// null deliberately grants nothing: in collab mode a non-owner whose role
+// hasn't loaded must NOT briefly see owner/editor controls. Local mode sets
+// 'local' explicitly at boot.
 export const currentRole = writable(null);
 export function setCurrentRole(role) { currentRole.set(role); }
 
-export const canWrite = derived(currentRole, (r) => r === null || r === 'owner' || r === 'editor');
-export const canManage = derived(currentRole, (r) => r === null || r === 'owner');
+export const canWrite = derived(currentRole, (r) => r === 'local' || r === 'owner' || r === 'editor');
+export const canManage = derived(currentRole, (r) => r === 'local' || r === 'owner');
