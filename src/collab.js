@@ -154,9 +154,41 @@ export async function disconnectFromTree() {
   });
   setLastTreeRemote(null);
 
-  setCurrentRole(null);
+  setCurrentRole('local');
   emit(COLLAB_MODE_CHANGED, 'local');
   emit(DATA_CHANGED);
+}
+
+let handlingRemoval = false;
+
+/**
+ * Handle discovering that we've been removed from the active collaborative
+ * tree (server returns 403 'Forbidden', or the tree vanishes from GET /trees).
+ *
+ * Unlike disconnectFromTree(), this makes NO server call — membership is
+ * already gone — and is idempotent + re-entrancy-safe so the 403 path and the
+ * poll path can both call it without spamming toasts or looping. Stops polling
+ * and drops the client to local mode so no further /query calls are attempted.
+ */
+export async function handleRemovedFromTree() {
+  if (handlingRemoval) return;
+  if (getMode() !== 'collab') return;
+  handlingRemoval = true;
+  try {
+    stopPolling();
+    const state = getCollabState();
+    const treeName = state?.treeName;
+    await switchDatabase('familytree-local.db');
+    setCollabState({ ...state, mode: 'local', treeId: null, treeName: null });
+    setCurrentRole('local');
+    showToast(`You no longer have access to ${treeName || 'that shared tree'}.`);
+    emit(COLLAB_MODE_CHANGED, 'local');
+    emit(DATA_CHANGED);
+  } catch (e) {
+    console.error('[collab] handleRemovedFromTree failed:', e);
+  } finally {
+    handlingRemoval = false;
+  }
 }
 
 /**
@@ -245,11 +277,39 @@ export async function listTrees() {
   const activeTreeId = getCollabState()?.treeId;
   if (activeTreeId) {
     const activeTree = trees.find((t) => t.id === activeTreeId);
+    // Active tree not in the list → you've been removed → restrictive (null).
     setCurrentRole(activeTree ? activeTree.role : null);
   } else {
-    setCurrentRole(null);
+    setCurrentRole('local');
   }
   return trees;
+}
+
+/**
+ * Re-fetch the caller's role on the active tree and update the currentRole
+ * store. Called from the poll cycle so a role change made by the owner
+ * propagates to the affected member (toggling canWrite/canManage) without a
+ * full page reload. Best-effort — failures leave the existing role in place.
+ */
+export async function refreshCurrentRole() {
+  const activeTreeId = getCollabState()?.treeId;
+  if (!activeTreeId) {
+    setCurrentRole('local');
+    return;
+  }
+  try {
+    const { trees } = await apiFetch('/trees');
+    const activeTree = trees.find((t) => t.id === activeTreeId);
+    if (!activeTree) {
+      // Active tree gone from our list → we've been removed. Switch to local
+      // mode (idempotent) rather than sitting in a dead collab tree.
+      await handleRemovedFromTree();
+      return;
+    }
+    setCurrentRole(activeTree.role);
+  } catch {
+    // leave the current role untouched on transient failure
+  }
 }
 
 /**
@@ -258,6 +318,7 @@ export async function listTrees() {
 export function collabSignOut() {
   stopPolling();
   authSignOut();
+  setCurrentRole('local');
   emit(COLLAB_MODE_CHANGED, 'local');
 }
 
@@ -353,11 +414,16 @@ export function startPolling(treeId) {
   currentPollTreeId = treeId;
   currentPoller = createPoller({
     fetchVersion: (lastKnown) => fetchTreeVersion(treeId, lastKnown),
+    // Data changes (version bump) → full sync of tree data.
     onChange: async () => {
       await syncDown();
       emit(DATA_CHANGED);
       await showActivityToast();
     },
+    // Every tick → cheap membership/role refresh (GET /trees, no DB writes).
+    // Membership/role changes deliberately do NOT bump the data version, so
+    // they must be picked up here rather than via onChange/syncDown.
+    onTick: () => refreshCurrentRole(),
   });
   currentPoller.start();
 

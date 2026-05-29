@@ -22,6 +22,9 @@
  *   Fetches the current version. Must return { version } matching lastKnown
  *   when the server returns 304.
  * @param {() => void} deps.onChange  Called when the version changes after the first fetch.
+ * @param {() => void} [deps.onTick]  Called every tick (after the version check),
+ *   regardless of whether the version changed or the version fetch failed. Used
+ *   for lightweight membership/role refresh that must NOT trigger a data resync.
  * @param {number} [deps.intervalMs=15000]
  * @returns {{
  *   start: () => void,
@@ -32,7 +35,7 @@
  *   getLastVersion: () => number|null,
  * }}
  */
-export function createPoller({ fetchVersion, onChange, intervalMs = 15000 }) {
+export function createPoller({ fetchVersion, onChange, onTick, intervalMs = 15000 }) {
   let lastVersion = null;
   let timerId = null;
   let running = false;
@@ -42,22 +45,32 @@ export function createPoller({ fetchVersion, onChange, intervalMs = 15000 }) {
     if (inFlight) return;
     inFlight = true;
     try {
-      const { version } = await fetchVersion(lastVersion);
-      if (version !== lastVersion) {
-        const prev = lastVersion;
-        const wasFirst = prev === null;
-        lastVersion = version;
-        if (!wasFirst) {
-          try {
-            await onChange();
-          } catch {
-            // Roll back so the next tick retries.
-            lastVersion = prev;
+      try {
+        const { version } = await fetchVersion(lastVersion);
+        if (version !== lastVersion) {
+          const prev = lastVersion;
+          const wasFirst = prev === null;
+          lastVersion = version;
+          if (!wasFirst) {
+            try {
+              await onChange();
+            } catch {
+              // Roll back so the next tick retries.
+              lastVersion = prev;
+            }
           }
         }
+      } catch {
+        // Version fetch failed (network, or 403 after removal) — the next tick
+        // retries. Still run onTick below so role/removal is detected.
       }
-    } catch {
-      // Silent — the next tick will retry.
+      if (onTick) {
+        try {
+          await onTick();
+        } catch {
+          // best-effort; never let the role refresh break the poll loop
+        }
+      }
     } finally {
       inFlight = false;
     }

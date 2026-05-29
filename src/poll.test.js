@@ -74,6 +74,33 @@ describe('createPoller', () => {
     expect(poller.getLastVersion()).toBe(100);
   });
 
+  it('fires onTick every tick, even when the version is unchanged', async () => {
+    const fetchVersion = vi.fn().mockResolvedValue({ version: 100 });
+    const onChange = vi.fn();
+    const onTick = vi.fn();
+
+    const poller = createPoller({ fetchVersion, onChange, onTick, intervalMs: 1000 });
+    poller.start();
+    await vi.runOnlyPendingTimersAsync(); // first tick
+    await vi.advanceTimersByTimeAsync(1000); // second tick
+
+    expect(onChange).not.toHaveBeenCalled(); // version never changed
+    expect(onTick).toHaveBeenCalledTimes(2); // but onTick ran every tick
+  });
+
+  it('fires onTick even when the version fetch fails (removal detection path)', async () => {
+    const fetchVersion = vi.fn().mockRejectedValue(new Error('403 Forbidden'));
+    const onChange = vi.fn();
+    const onTick = vi.fn();
+
+    const poller = createPoller({ fetchVersion, onChange, onTick, intervalMs: 1000 });
+    poller.start();
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onTick).toHaveBeenCalledTimes(1); // runs despite the fetch throwing
+  });
+
   it('stop() cancels the interval and prevents further ticks', async () => {
     const fetchVersion = vi.fn().mockResolvedValue({ version: 100 });
     const onChange = vi.fn();
