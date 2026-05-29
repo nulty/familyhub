@@ -32,6 +32,20 @@ let msgId = 0;
 let readyPromise = null;
 
 export async function initDB(dbName = 'familytree-local.db') {
+  // Tear down any existing worker first. The OPFS SAH-pool VFS holds
+  // sync-access handles for the whole pool directory; if a prior worker is
+  // still alive (component remount, dev HMR, re-init after join) a second
+  // worker's installOpfsSAHPoolVfs fails with NoModificationAllowedError
+  // ("Access Handles cannot be created … another open Access Handle"). The
+  // browser releases the handles when the old worker is terminated.
+  if (worker) {
+    try { worker.terminate(); } catch {}
+    worker = null;
+    for (const p of pending.values()) p.reject(new Error('Database re-initialized'));
+    pending.clear();
+    readyPromise = null;
+  }
+
   // Module worker — Vite bundles imports automatically.
   // schema.sql remains in public/ and is fetched at runtime by the worker.
   const base = import.meta.env.BASE_URL || '/';
@@ -503,23 +517,37 @@ export async function removeOpfsFile(dbName) {
 
 /**
  * Full sync-down: download all data from the API and import into local cache.
+ *
+ * Guarded against re-entrancy: nukeDatabase + syncImport hold the OPFS file's
+ * sync-access handle, so two overlapping sync-downs would collide
+ * (NoModificationAllowedError / SQLITE_BUSY). If a sync is already running, the
+ * caller awaits the in-flight one instead of starting a second.
  */
-export async function syncDown() {
-  const mode = getMode();
-  if (mode !== 'collab') return;
+let syncDownInFlight = null;
 
-  emit(COLLAB_SYNC_STATUS, 'syncing');
+export async function syncDown() {
+  if (getMode() !== 'collab') return;
+  if (syncDownInFlight) return syncDownInFlight;
+
+  syncDownInFlight = (async () => {
+    emit(COLLAB_SYNC_STATUS, 'syncing');
+    try {
+      const data = await remoteCall('exportAll');
+      await workerCall('nukeDatabase');
+      if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
+        await workerCall('syncImport', data);
+      }
+      emit(COLLAB_SYNC_STATUS, 'online');
+    } catch (e) {
+      console.error('[db] Sync-down failed:', e);
+      emit(COLLAB_SYNC_STATUS, 'offline');
+    }
+  })();
 
   try {
-    const data = await remoteCall('exportAll');
-    await workerCall('nukeDatabase');
-    if (data && Object.keys(data).some(k => Array.isArray(data[k]) && data[k].length > 0)) {
-      await workerCall('syncImport', data);
-    }
-    emit(COLLAB_SYNC_STATUS, 'online');
-  } catch (e) {
-    console.error('[db] Sync-down failed:', e);
-    emit(COLLAB_SYNC_STATUS, 'offline');
+    return await syncDownInFlight;
+  } finally {
+    syncDownInFlight = null;
   }
 }
 
