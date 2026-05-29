@@ -1,4 +1,4 @@
--- Family Tree Schema v7
+-- Family Tree Schema v8
 -- All IDs are ULIDs (text, sortable, unique)
 
 PRAGMA journal_mode=WAL;
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS meta (
   value TEXT
 );
 
-INSERT OR IGNORE INTO meta VALUES ('schema_version', '7');
+INSERT OR IGNORE INTO meta VALUES ('schema_version', '8');
 INSERT OR IGNORE INTO meta VALUES ('created_at', CAST(unixepoch('now','subsec') * 1000 AS INTEGER));
 
 CREATE TABLE IF NOT EXISTS people (

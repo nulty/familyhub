@@ -107,3 +107,22 @@ describe('Migration v7: Add latitude/longitude to places', () => {
     expect(pending).toHaveLength(0);
   });
 });
+
+// Guards against schema.sql drift: the seeded schema_version must equal the
+// latest migration, so a freshly-built DB (e.g. the collab cache rebuilt by
+// nukeDatabase on every sync-down) never reports a pending migration. A
+// mismatch caused a recurring "Database Update Required" popup in collab mode.
+describe('schema.sql is stamped at the latest migration version', () => {
+  it('a fresh schema.sql DB (no migrations applied) has zero pending migrations', () => {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = OFF');
+    db.exec(readFileSync('public/schema.sql', 'utf-8'));
+    const helpers = {
+      all: (sql, p = []) => db.prepare(sql).all(...p),
+      get: (sql, p = []) => db.prepare(sql).get(...p) ?? null,
+      run: (sql, p = []) => db.prepare(sql).run(...p).changes,
+    };
+    const { pending } = getPendingMigrations(helpers);
+    expect(pending).toEqual([]);
+  });
+});
