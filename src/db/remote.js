@@ -8,6 +8,18 @@ import { getCollabState } from '../config.js';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.sinsear.org';
 
+// Debounce permission-denied toasts so a burst of blocked writes doesn't spam.
+let lastPermissionToastAt = 0;
+async function notifyPermissionDenied(message) {
+  const now = performance.now();
+  if (now - lastPermissionToastAt < 4000) return;
+  lastPermissionToastAt = now;
+  try {
+    const { showToast } = await import('../lib/shared/toast-store.js');
+    showToast(message || 'You do not have permission to do this.');
+  } catch {}
+}
+
 /**
  * Send a handler method call to the API.
  * Returns the result from the handler (same shape as the worker).
@@ -40,17 +52,28 @@ export async function remoteCall(method, ...args) {
 
   if (res.status === 403) {
     const err = await res.json().catch(() => ({}));
-    // Best-effort UX: notify and trigger a sync so the role state catches up.
-    // Dynamic imports avoid circular deps.
+    const message = err.error || 'Forbidden';
+
+    // 'Forbidden' comes from the membership check → we've been removed from the
+    // tree. Hand off to the (idempotent) removal handler, which stops polling
+    // and drops to local mode. Do NOT call syncDown here: syncDown's own
+    // exportAll is what 403s, so retrying it would loop.
+    if (message === 'Forbidden') {
+      try {
+        const { handleRemovedFromTree } = await import('../collab.js');
+        handleRemovedFromTree();
+      } catch {}
+      throw new Error('You no longer have access to this tree');
+    }
+
+    // Any other 403 is a role/permission denial (e.g. a viewer attempting a
+    // write). Refresh the role so the UI updates, and toast once (debounced).
     try {
-      const { showToast } = await import('../lib/shared/toast-store.js');
-      showToast('Your role may have changed. Refresh the page to see the current state.');
+      const { refreshCurrentRole } = await import('../collab.js');
+      refreshCurrentRole().catch(() => {});
     } catch {}
-    try {
-      const { syncDown } = await import('./db.js');
-      syncDown().catch(() => {});
-    } catch {}
-    throw new Error(err.error || 'You do not have permission to do this');
+    notifyPermissionDenied(message);
+    throw new Error(message);
   }
 
   if (!res.ok) {
