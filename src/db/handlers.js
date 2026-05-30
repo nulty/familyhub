@@ -55,8 +55,10 @@ export function createHandlers(h, opts = {}) {
   async function resolvePlaceName(ev) {
     if (!ev.place_id) return ev.place || '';
     const parts = [];
+    const visited = new Set(); // cycle-safe: a corrupt parent loop must not hang the walk
     let current = await get('SELECT * FROM places WHERE id = ?', [ev.place_id]);
-    while (current) {
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
       parts.push(current.name);
       current = current.parent_id ? await get('SELECT * FROM places WHERE id = ?', [current.parent_id]) : null;
     }
@@ -685,6 +687,23 @@ export function createHandlers(h, opts = {}) {
       const allowed = ['name', 'type', 'parent_id', 'latitude', 'longitude', 'notes'];
       const updates = Object.entries(fields).filter(([k]) => allowed.includes(k));
       if (updates.length === 0) return await get('SELECT * FROM places WHERE id = ?', [id]);
+      // Guard against hierarchy cycles when re-parenting: a place that is its own
+      // ancestor makes resolvePlaceName loop forever and freezes the app.
+      if (Object.prototype.hasOwnProperty.call(fields, 'parent_id') && fields.parent_id != null) {
+        if (fields.parent_id === id) {
+          throw new Error('A place cannot be its own parent.');
+        }
+        const visited = new Set();
+        let currentId = fields.parent_id;
+        while (currentId && !visited.has(currentId)) {
+          if (currentId === id) {
+            throw new Error('That parent would create a loop in the place hierarchy.');
+          }
+          visited.add(currentId);
+          const p = await get('SELECT parent_id FROM places WHERE id = ?', [currentId]);
+          currentId = p?.parent_id ?? null;
+        }
+      }
       const now = Date.now();
       const setClauses = [...updates.map(([k]) => `${k} = ?`), 'updated_at = ?'].join(', ');
       const values = [...updates.map(([, v]) => v), now, id];
