@@ -257,6 +257,34 @@ export function createHandlers(h, opts = {}) {
     },
 
     async addParentChild(id, parentId, childId) {
+      // Guard against ancestry cycles. A parent_child edge that makes a person
+      // their own ancestor sends the tree's recursive ancestor/progeny walk into
+      // an infinite loop (a same-named picker mistake once did exactly this).
+      // Reject a self-edge, or one whose childId is already an ancestor of
+      // parentId — adding parentId as a parent of childId would close the loop.
+      if (parentId === childId) {
+        throw new Error('A person cannot be their own parent.');
+      }
+      const visited = new Set();
+      let frontier = [parentId];
+      while (frontier.length) {
+        const next = [];
+        for (const pid of frontier) {
+          if (visited.has(pid)) continue; // cycle-safe: existing data may already loop
+          visited.add(pid);
+          const parents = await all(
+            `SELECT person_a_id FROM relationships WHERE person_b_id = ? AND type = 'parent_child'`,
+            [pid]
+          );
+          for (const { person_a_id } of parents) {
+            if (person_a_id === childId) {
+              throw new Error('That relationship would create a loop in the family tree.');
+            }
+            next.push(person_a_id);
+          }
+        }
+        frontier = next;
+      }
       const now = Date.now();
       await run(
         `INSERT OR IGNORE INTO relationships (id, person_a_id, person_b_id, type, created_at)
@@ -874,6 +902,26 @@ export function createHandlers(h, opts = {}) {
         };
       }
 
+      // Is `ancestorId` already an ancestor of `nodeId` via the parent links
+      // applied so far? Cycle-safe (visited set) so corrupt data can't hang it.
+      const isAncestor = (ancestorId, nodeId) => {
+        const seen = new Set();
+        const stack = [nodeId];
+        while (stack.length) {
+          const n = stack.pop();
+          if (seen.has(n)) continue;
+          seen.add(n);
+          const node = nodeMap[n];
+          if (!node) continue;
+          for (const p of [node.rels.father, node.rels.mother]) {
+            if (!p) continue;
+            if (p === ancestorId) return true;
+            stack.push(p);
+          }
+        }
+        return false;
+      };
+
       for (const rel of relationships) {
         if (rel.type === 'partner') {
           nodeMap[rel.person_a_id]?.rels.spouses.push(rel.person_b_id);
@@ -882,6 +930,13 @@ export function createHandlers(h, opts = {}) {
           const parent = nodeMap[rel.person_a_id];
           const child = nodeMap[rel.person_b_id];
           if (parent && child) {
+            // Defensive: drop an edge that would make the child its own ancestor.
+            // Corrupt cyclic data would otherwise send family-chart's recursive
+            // layout into an infinite loop and freeze the app.
+            if (rel.person_a_id === rel.person_b_id || isAncestor(rel.person_b_id, rel.person_a_id)) {
+              console.warn(`[getGraphData] skipping cycle-forming parent_child edge ${rel.id} (${rel.person_a_id} -> ${rel.person_b_id})`);
+              continue;
+            }
             if (parent.data.gender === 'F') {
               child.rels.mother = rel.person_a_id;
             } else {
