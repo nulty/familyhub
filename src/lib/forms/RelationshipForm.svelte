@@ -5,6 +5,7 @@
   import Modal from './Modal.svelte';
   import PersonPicker from '../pickers/PersonPicker.svelte';
   import { openPersonForm } from '../shared/open.js';
+  import { planChildRelationships } from './child-relationships.js';
 
   let { person, type, onclose } = $props();
 
@@ -19,6 +20,23 @@
   let selectedPerson = $state(null);
   let childPicker = $state(null);
 
+  // Other-parent state (child path only).
+  let partners = $state([]);
+  let otherParentChoice = $state('none'); // a partner id | 'none' | 'someone-else'
+  let otherParentPerson = $state(null);
+  let otherParentPicker = $state(null);
+
+  $effect(() => {
+    if (type !== 'child') return;
+    (async () => {
+      const fam = await relationships.getFamily(person.id);
+      partners = fam.partners || [];
+      // Default to the sole partner when there's exactly one; otherwise force
+      // an explicit choice so we never silently link the wrong co-parent.
+      if (partners.length === 1) otherParentChoice = partners[0].id;
+    })();
+  });
+
   function handleSelect(p) {
     selectedPerson = p;
   }
@@ -28,6 +46,39 @@
       selectedPerson = newPerson;
       childPicker?.setValue(nameOf(newPerson));
     });
+  }
+
+  function handleOtherParentSelect(p) {
+    otherParentPerson = p;
+  }
+
+  function handleOtherParentCreate() {
+    openPersonForm(null, (newPerson) => {
+      otherParentPerson = newPerson;
+      otherParentPicker?.setValue(nameOf(newPerson));
+    });
+  }
+
+  function resolveOtherParentId() {
+    if (otherParentChoice === 'none') return null;
+    if (otherParentChoice === 'someone-else') return otherParentPerson?.id ?? null;
+    return otherParentChoice; // a partner id
+  }
+
+  async function saveChild() {
+    const ops = planChildRelationships({
+      personId: person.id,
+      childId: selectedPerson.id,
+      otherParentId: resolveOtherParentId(),
+      partnerIds: partners.map((p) => p.id),
+    });
+    for (const op of ops) {
+      if (op.kind === 'parent_child') {
+        await relationships.addParentChild(op.parentId, op.childId);
+      } else {
+        await relationships.addPartner(op.aId, op.bId);
+      }
+    }
   }
 
   async function handleSave() {
@@ -40,7 +91,7 @@
       if (type === 'parent') {
         await relationships.addParentChild(selectedPerson.id, person.id);
       } else if (type === 'child') {
-        await relationships.addParentChild(person.id, selectedPerson.id);
+        await saveChild();
       } else if (type === 'partner') {
         await relationships.addPartner(person.id, selectedPerson.id);
       }
@@ -59,8 +110,37 @@
     <PersonPicker bind:this={childPicker} onselect={handleSelect} excludeIds={[person.id]} oncreate={handleCreate} />
     <button type="button" class="btn btn-sm btn-link" onclick={handleCreate}>+ Create New Person</button>
   </div>
+
+  {#if type === 'child'}
+    <div class="form-group">
+      <label for="rf-other-parent">Other parent</label>
+      <select id="rf-other-parent" bind:value={otherParentChoice}>
+        {#each partners as pr}
+          <option value={pr.id}>{nameOf(pr)} (partner)</option>
+        {/each}
+        <option value="none">Unknown / none</option>
+        <option value="someone-else">Someone else…</option>
+      </select>
+      {#if otherParentChoice === 'someone-else'}
+        <div class="other-parent-picker">
+          <PersonPicker
+            bind:this={otherParentPicker}
+            onselect={handleOtherParentSelect}
+            excludeIds={[person.id, selectedPerson?.id].filter(Boolean)}
+            oncreate={handleOtherParentCreate}
+          />
+          <button type="button" class="btn btn-sm btn-link" onclick={handleOtherParentCreate}>+ Create New Person</button>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   <div class="form-actions">
     <button type="button" class="btn" onclick={() => onclose?.()}>Cancel</button>
     <button type="button" class="btn btn-primary" onclick={handleSave}>Add {typeLabels[type]}</button>
   </div>
 </Modal>
+
+<style>
+  .other-parent-picker { margin-top: 8px; }
+</style>
