@@ -8,6 +8,29 @@
   let open = $state(false);
   let timer = null;
   let inputEl;
+  let resultsEl = $state(null);
+
+  // Anchor the fixed-position results list to the input's on-screen rect so it
+  // floats above the modal instead of being clipped by its overflow.
+  function positionResults() {
+    if (!inputEl || !resultsEl) return;
+    const r = inputEl.getBoundingClientRect();
+    resultsEl.style.left = `${r.left}px`;
+    resultsEl.style.top = `${r.bottom}px`;
+    resultsEl.style.width = `${r.width}px`;
+  }
+
+  $effect(() => {
+    if (!open || !resultsEl) return;
+    positionResults();
+    // Capture phase so scrolling inside the modal body (an ancestor) is caught too.
+    window.addEventListener('scroll', positionResults, true);
+    window.addEventListener('resize', positionResults);
+    return () => {
+      window.removeEventListener('scroll', positionResults, true);
+      window.removeEventListener('resize', positionResults);
+    };
+  });
 
   function doSearch(q) {
     clearTimeout(timer);
@@ -41,9 +64,13 @@
   }
 
   function handleClickOutside(e) {
-    if (inputEl && !inputEl.parentElement.contains(e.target)) {
-      open = false;
-    }
+    if (!open) return;
+    if (inputEl && inputEl.parentElement.contains(e.target)) return;
+    // Click landed outside the open dropdown. Close it and consume the click so
+    // it doesn't also dismiss an enclosing modal (its backdrop click handler).
+    // A second click then dismisses the modal as usual.
+    open = false;
+    e.stopPropagation();
   }
 
   export function focus() {
@@ -55,7 +82,7 @@
   }
 </script>
 
-<svelte:document onclick={handleClickOutside} />
+<svelte:document onclickcapture={handleClickOutside} />
 
 <div class="person-picker">
   <input
@@ -68,7 +95,7 @@
     onfocus={handleFocus}
   />
   {#if open}
-    <div class="picker-results" style="display: block">
+    <div class="picker-results" bind:this={resultsEl} style="display: block">
       {#each results as p}
         <div class="picker-result" onclick={() => select(p)}>
           {[p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed'}{p.birth_year ? ` (b. ${p.birth_year})` : ''}
@@ -94,17 +121,14 @@
   .person-picker input:focus { border-color: var(--accent); }
 
   .picker-results {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
+    position: fixed;
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-top: none;
     border-radius: 0 0 var(--radius) var(--radius);
     max-height: 200px;
     overflow-y: auto;
-    z-index: 10;
+    z-index: 1100;
     box-shadow: var(--shadow);
   }
 
