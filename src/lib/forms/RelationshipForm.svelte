@@ -12,7 +12,12 @@
   const fullName = [person.given_name, person.surname].filter(Boolean).join(' ') || 'Unnamed';
   const title = `Add ${typeLabels[type]} for ${fullName}`;
 
+  function nameOf(p) {
+    return [p.given_name, p.surname].filter(Boolean).join(' ') || 'Unnamed';
+  }
+
   let selectedPerson = $state(null);
+  let childPicker = $state(null);
 
   function handleSelect(p) {
     selectedPerson = p;
@@ -21,6 +26,7 @@
   function handleCreate() {
     openPersonForm(null, (newPerson) => {
       selectedPerson = newPerson;
+      childPicker?.setValue(nameOf(newPerson));
     });
   }
 
@@ -40,8 +46,7 @@
       }
       onclose?.();
       emit(DATA_CHANGED);
-      const relName = [selectedPerson.given_name, selectedPerson.surname].filter(Boolean).join(' ');
-      showToast(`Added ${typeLabels[type].toLowerCase()}: ${relName}`);
+      showToast(`Added ${typeLabels[type].toLowerCase()}: ${nameOf(selectedPerson)}`);
     } catch (err) {
       showToast('Error: ' + err.message);
     }
@@ -50,8 +55,9 @@
 
 <Modal {title} onclose={onclose}>
   <div class="form-group">
-    <label>Select Person</label>
-    <PersonPicker onselect={handleSelect} excludeIds={[person.id]} oncreate={handleCreate} />
+    <label>{type === 'child' ? 'Child' : 'Select Person'}</label>
+    <PersonPicker bind:this={childPicker} onselect={handleSelect} excludeIds={[person.id]} oncreate={handleCreate} />
+    <button type="button" class="btn btn-sm btn-link" onclick={handleCreate}>+ Create New Person</button>
   </div>
   <div class="form-actions">
     <button type="button" class="btn" onclick={() => onclose?.()}>Cancel</button>
