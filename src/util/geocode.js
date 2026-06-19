@@ -7,6 +7,48 @@ function delay(ms) {
 }
 
 /**
+ * Normalize a raw Nominatim result into the shape the rest of the app expects
+ * (numeric lat/lon, plus the fields decomposition reads: address/name/class/addresstype).
+ */
+function normalizeResult(r) {
+  return {
+    lat: parseFloat(r.lat),
+    lon: parseFloat(r.lon),
+    display_name: r.display_name,
+    address: r.address,
+    importance: r.importance,
+    addresstype: r.addresstype,
+    name: r.name,
+    class: r.class,
+    type: r.type,
+  };
+}
+
+/**
+ * Run a single Nominatim search and return normalized results.
+ *
+ * Used by the inline place-creation flow (search → pick → decompose) and the
+ * review screen's retry. Returns [] for an empty query or a failed request.
+ *
+ * @param {string} query
+ * @param {Object} [opts]
+ * @param {number} [opts.limit=5]
+ * @param {AbortSignal} [opts.signal]
+ * @returns {Promise<Array>} normalized results
+ */
+export async function geocodeSearch(query, { limit = 5, signal } = {}) {
+  const q = (query || '').trim();
+  if (!q) return [];
+  const url = `${NOMINATIM_URL}?${new URLSearchParams({
+    q, format: 'json', limit: String(limit), addressdetails: '1',
+  })}`;
+  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.map(normalizeResult);
+}
+
+/**
  * Batch-geocode places via Nominatim, returning results via onResult callback.
  *
  * Eligibility: places with no coordinates and not already in the queue.

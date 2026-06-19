@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { batchGeocode } from '../src/util/geocode.js';
+import { batchGeocode, geocodeSearch } from '../src/util/geocode.js';
 
 function nominatimResponse(results) {
   return { ok: true, json: () => Promise.resolve(results) };
@@ -153,5 +153,47 @@ describe('batchGeocode', () => {
     });
     await vi.runAllTimersAsync();
     expect(await p).toEqual({ fetched: 2, noResults: 1, total: 3 });
+  });
+});
+
+describe('geocodeSearch', () => {
+  beforeEach(() => { vi.useRealTimers(); });
+
+  it('returns [] for an empty query without fetching', async () => {
+    const out = await geocodeSearch('   ');
+    expect(out).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('requests addressdetails and a result limit', async () => {
+    fetch.mockResolvedValueOnce(nominatimResponse([]));
+    await geocodeSearch('Rathmines, Dublin');
+    const url = new URL(fetch.mock.calls[0][0]);
+    expect(url.searchParams.get('q')).toBe('Rathmines, Dublin');
+    expect(url.searchParams.get('format')).toBe('json');
+    expect(url.searchParams.get('addressdetails')).toBe('1');
+    expect(Number(url.searchParams.get('limit'))).toBeGreaterThanOrEqual(5);
+  });
+
+  it('normalizes results: numeric lat/lon and passes through address/name/class/addresstype', async () => {
+    fetch.mockResolvedValueOnce(nominatimResponse([{
+      lat: '53.3228', lon: '-6.2644',
+      display_name: 'Rathmines, Dublin, Leinster, Ireland',
+      address: { suburb: 'Rathmines', city: 'Dublin', country: 'Ireland' },
+      importance: 0.55, addresstype: 'suburb', name: 'Rathmines', class: 'place', type: 'suburb',
+    }]));
+    const [r] = await geocodeSearch('Rathmines');
+    expect(r.lat).toBeCloseTo(53.3228);
+    expect(r.lon).toBeCloseTo(-6.2644);
+    expect(r.display_name).toContain('Rathmines');
+    expect(r.address).toEqual({ suburb: 'Rathmines', city: 'Dublin', country: 'Ireland' });
+    expect(r.name).toBe('Rathmines');
+    expect(r.class).toBe('place');
+    expect(r.addresstype).toBe('suburb');
+  });
+
+  it('returns [] when the request is not ok', async () => {
+    fetch.mockResolvedValueOnce({ ok: false, json: () => Promise.resolve([]) });
+    expect(await geocodeSearch('Nowhere')).toEqual([]);
   });
 });

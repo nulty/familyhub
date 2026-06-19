@@ -1,32 +1,53 @@
 <script>
-  import { places, placeTypes } from '../../db/db.js';
+  import { places, placeTypes, events } from '../../db/db.js';
   import { emit, DATA_CHANGED, PICK_LOCATION } from '../../state.js';
   import { showToast } from '../shared/toast-store.js';
   import Modal from './Modal.svelte';
   import PlacePicker from '../pickers/PlacePicker.svelte';
-  import { openPlaceForm, openPlacesPage } from '../shared/open.js';
-  import { GeocodeQueue } from '../../util/geocode-queue.js';
-  import { getCollabState } from '../../config.js';
+  import { openPlaceForm } from '../shared/open.js';
   import { groupTypes } from '../../util/place-type-seeds.js';
+  import { geocodeSearch } from '../../util/geocode.js';
+  import { decomposeAddress, getResultChain } from '../../util/decompose.js';
+  import { ulid } from '../../util/ulid.js';
 
   let { placeId = null, prefill = null, onclose, oncomplete } = $props();
 
   let typeOptions = $state([]);
 
+  // ─── Manual fields ──────────────────────────────────────────────────────────
   let name = $state(prefill?.name || '');
   let type = $state(prefill?.type || '');
   let selectedParentId = $state(prefill?.parent_id || null);
-  let latitude = $state(prefill?.latitude || '');
-  let longitude = $state(prefill?.longitude || '');
+  let latitude = $state(prefill?.latitude != null ? String(prefill.latitude) : '');
+  let longitude = $state(prefill?.longitude != null ? String(prefill.longitude) : '');
   let notes = $state(prefill?.notes || '');
   let isEdit = $state(false);
   let title = $state(prefill?.title || 'New Place');
-  let parentName = $state('');
   let pickerRef;
-  let geocodeQuery = $state('');
-  let geocodeOpen = $state(false);
-  let geocodeLoading = $state(false);
   let original = null;
+
+  // Manual section is open straight away when editing, or when we're returning
+  // from a "pick on map" round-trip (prefill carries field values). For a fresh
+  // create it stays collapsed behind the disclosure.
+  let manualOpen = $state(!!placeId || !!(prefill && (prefill.name || prefill.latitude != null)));
+
+  // ─── Search (Nominatim lookup) ───────────────────────────────────────────────
+  let query = $state(prefill?.name || '');
+  let searching = $state(false);
+  let searched = $state(false);
+  let searchResults = $state([]);
+  let selectedIdx = $state(-1);
+  let committing = $state(false);
+
+  let selectedChain = $derived(
+    selectedIdx >= 0 && searchResults[selectedIdx]
+      ? getResultChain(searchResults[selectedIdx])
+      : []
+  );
+
+  const canCommit = $derived(
+    (selectedIdx >= 0) || (manualOpen && name.trim() !== '')
+  );
 
   $effect(() => {
     placeTypes.list().then(types => { typeOptions = types; });
@@ -42,7 +63,6 @@
       isEdit = true;
       places.get(placeId).then(async (p) => {
         if (!p) { onclose?.(); return; }
-        // Only set fields that weren't provided via prefill
         if (!prefill) {
           name = p.name || '';
           type = p.type || '';
@@ -58,6 +78,13 @@
           const parent = await places.get(pid);
           if (parent && pickerRef) pickerRef.setValue(parent.name);
         }
+        // Seed the search box with the full hierarchy so a re-lookup is one click.
+        const chain = await places.hierarchy(placeId);
+        const TYPE_PREFIX = { county: 'County' };
+        query = chain.map(c => {
+          const prefix = TYPE_PREFIX[c.type];
+          return prefix ? `${prefix} ${c.name}` : c.name;
+        }).reverse().join(', ');
         original = {
           name: (p.name || '').trim(),
           type: p.type || '',
@@ -69,11 +96,6 @@
       });
     }
   });
-
-  function getTreeId() {
-    const collab = getCollabState();
-    return collab?.treeId || 'local';
-  }
 
   function focusOnMount(node) {
     requestAnimationFrame(() => node.focus());
@@ -90,88 +112,113 @@
     });
   }
 
-  async function openGeocode() {
-    if (geocodeOpen) { geocodeOpen = false; return; }
-    const id = isEdit ? placeId : null;
-    if (id) {
-      const chain = await places.hierarchy(id);
-      const TYPE_PREFIX = { county: 'County' };
-      geocodeQuery = chain.map(p => {
-        const prefix = TYPE_PREFIX[p.type];
-        return prefix ? `${prefix} ${p.name}` : p.name;
-      }).reverse().join(', ');
-    } else {
-      geocodeQuery = name;
+  const decompositionHandlers = {
+    findPlaceByNameTypeParent: (n, t, p) => places.findByNameTypeParent(n, t, p),
+    createPlace: (d) => places.create(d),
+    ensurePlaceType: (k) => placeTypes.ensure(k),
+    updatePlace: (id, f) => places.update(id, f),
+    updateEvent: (id, f) => events.update(id, f),
+    deletePlace: (id) => places.delete(id),
+  };
+
+  async function runSearch() {
+    if (!query.trim() || searching) return;
+    searching = true;
+    selectedIdx = -1;
+    try {
+      searchResults = await geocodeSearch(query.trim());
+      searched = true;
+    } catch (err) {
+      showToast('Search failed: ' + err.message);
+    } finally {
+      searching = false;
     }
-    geocodeOpen = true;
   }
 
-  async function runGeocode() {
-    if (!geocodeQuery.trim()) return;
-    if (!name.trim()) {
-      showToast('Place needs a name before geocoding');
+  function selectResult(idx) {
+    selectedIdx = idx;
+    manualOpen = false; // search pick and manual entry are mutually exclusive
+  }
+
+  function openManual() {
+    manualOpen = true;
+    selectedIdx = -1;
+  }
+
+  async function commitSearchResult() {
+    const result = searchResults[selectedIdx];
+    let eventIds = [];
+    if (isEdit) {
+      const evts = await places.events(placeId);
+      eventIds = evts.map(e => e.id);
+    }
+    const lastId = await decomposeAddress({
+      nominatimResult: result,
+      originalPlaceId: isEdit ? placeId : null,
+      eventIds,
+      handlers: decompositionHandlers,
+      generateId: ulid,
+    });
+    if (!lastId) {
+      showToast('That result has no address detail — try another or enter it manually');
       return;
     }
-    geocodeLoading = true;
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
-        q: geocodeQuery.trim(), format: 'json', limit: '3', addressdetails: '1',
-      })}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'Sinsear/0.2.0' } });
-      if (!res.ok) { showToast('Geocode request failed'); return; }
-      const data = await res.json();
+    const place = await places.get(lastId);
+    onclose?.();
+    emit(DATA_CHANGED);
+    showToast(`${isEdit ? 'Updated' : 'Created'} ${place.name}`);
+    oncomplete?.(place);
+  }
 
-      // Ensure we have a saved place to queue against
-      let targetPlaceId = placeId;
-      if (!targetPlaceId) {
-        const parentIdValue = selectedParentId || null;
-        const created = await places.create({
-          name: name.trim(),
-          type: type || '',
-          parent_id: parentIdValue,
-          notes: notes || '',
-        });
-        targetPlaceId = created.id;
-      } else if (isEdit) {
-        // Save any pending field edits so the user doesn't lose them
-        await places.update(targetPlaceId, {
-          name: name.trim(),
-          type: type || '',
-          parent_id: selectedParentId || null,
-          notes: notes || '',
-        });
-      }
-
-      // Add to queue
-      const queue = new GeocodeQueue(getTreeId());
-      queue.addItem({
-        place_id: targetPlaceId,
-        place_name: name.trim(),
-        query: geocodeQuery.trim(),
-        status: data.length > 0 ? 'ready' : 'no_results',
-        results: data.map(r => ({
-          lat: parseFloat(r.lat),
-          lon: parseFloat(r.lon),
-          display_name: r.display_name,
-          address: r.address,
-          importance: r.importance,
-          addresstype: r.addresstype,
-          name: r.name,
-          class: r.class,
-          type: r.type,
-        })),
-      });
-
-      emit(DATA_CHANGED);
-      showToast(data.length > 0 ? 'Queued for review' : 'No results — queued for retry');
-
-      // Close PlaceForm and open PlacesPage with review panel
+  async function commitManual() {
+    const data = {
+      name: name.trim(),
+      type,
+      parent_id: selectedParentId,
+      latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
+      longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
+      notes: notes.trim(),
+    };
+    if (!data.name) {
+      showToast('Name is required');
+      return;
+    }
+    if (isEdit) {
+      const dirty = !original
+        || data.name !== original.name
+        || data.type !== original.type
+        || data.parent_id !== original.parent_id
+        || data.latitude !== original.latitude
+        || data.longitude !== original.longitude
+        || data.notes !== original.notes;
+      const updated = dirty ? await places.update(placeId, data) : { id: placeId, ...data };
       onclose?.();
-      openPlacesPage({ openReview: true });
+      emit(DATA_CHANGED);
+      showToast('Place updated');
+      oncomplete?.(updated);
+    } else {
+      const created = await places.create(data);
+      onclose?.();
+      emit(DATA_CHANGED);
+      showToast(`Created ${data.name}`);
+      oncomplete?.(created);
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (committing) return;
+    committing = true;
+    try {
+      if (selectedIdx >= 0 && !manualOpen) {
+        await commitSearchResult();
+      } else {
+        await commitManual();
+      }
     } catch (err) {
-      showToast('Geocode error: ' + err.message);
+      showToast('Error: ' + err.message);
     } finally {
-      geocodeLoading = false;
+      committing = false;
     }
   }
 
@@ -183,106 +230,220 @@
     emit(PICK_LOCATION, { placeId, formState, oncomplete });
     onclose?.();
   }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    const data = {
-      name: name.trim(),
-      type,
-      parent_id: selectedParentId,
-      latitude: latitude.trim() !== '' ? parseFloat(latitude) : null,
-      longitude: longitude.trim() !== '' ? parseFloat(longitude) : null,
-      notes: notes.trim(),
-    };
-
-    if (!data.name) {
-      showToast('Name is required');
-      return;
-    }
-
-    try {
-      if (isEdit) {
-        const dirty = !original
-          || data.name !== original.name
-          || data.type !== original.type
-          || data.parent_id !== original.parent_id
-          || data.latitude !== original.latitude
-          || data.longitude !== original.longitude
-          || data.notes !== original.notes;
-        const updated = dirty ? await places.update(placeId, data) : { id: placeId, ...data };
-        onclose?.();
-        emit(DATA_CHANGED);
-        showToast('Place updated');
-        oncomplete?.(updated);
-      } else {
-        const created = await places.create(data);
-        onclose?.();
-        emit(DATA_CHANGED);
-        showToast(`Created ${data.name}`);
-        oncomplete?.(created);
-      }
-    } catch (err) {
-      showToast('Error: ' + err.message);
-    }
-  }
 </script>
 
 <Modal {title} onclose={onclose}>
   <form onsubmit={handleSubmit}>
+    <!-- ─── Search: look it up ─────────────────────────────────────────────── -->
     <div class="form-group">
-      <label for="plf-name">Name</label>
-      <input id="plf-name" type="text" bind:value={name} autocomplete="off" use:focusOnMount>
-    </div>
-    <div class="form-group">
-      <label for="plf-type">Type</label>
-      <select id="plf-type" bind:value={type}>
-        <option value="">(none)</option>
-        {#each groupTypes(typeOptions) as group (group.label)}
-          <optgroup label={group.label}>
-            {#each group.types as t (t.key)}
-              <option value={t.key}>{t.label}</option>
-            {/each}
-          </optgroup>
-        {/each}
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Parent Place</label>
-      <PlacePicker
-        bind:this={pickerRef}
-        onselect={handleParentSelect}
-        excludeIds={placeId ? [placeId] : []}
-        oncreate={handleParentCreate}
-      />
-    </div>
-    <div class="form-group">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <label>Coordinates</label>
-        <div style="display:flex;gap:8px">
-          <button type="button" class="btn-link btn-sm" onclick={openGeocode}>Geocode</button>
-          <button type="button" class="btn-link btn-sm" onclick={handlePickOnMap}>Pick on map</button>
-        </div>
+      <label for="plf-search">Search for a place</label>
+      <div class="search-row">
+        <input
+          id="plf-search"
+          type="text"
+          bind:value={query}
+          autocomplete="off"
+          placeholder="e.g. Rathmines, Dublin, Ireland"
+          use:focusOnMount
+          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
+        >
+        <button type="button" class="btn btn-primary btn-sm" onclick={runSearch} disabled={searching || !query.trim()}>
+          {searching ? 'Searching…' : 'Search'}
+        </button>
       </div>
-      {#if geocodeOpen}
-        <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-          <input type="text" bind:value={geocodeQuery} placeholder="Search query…" style="flex:1" onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runGeocode(); } }}>
-          <button type="button" class="btn btn-primary btn-sm" onclick={runGeocode} disabled={geocodeLoading}>
-            {geocodeLoading ? 'Searching…' : 'Search'}
-          </button>
+      <p class="form-hint">We look it up and fill in the coordinates and region automatically.</p>
+
+      {#if searchResults.length > 0}
+        <ul class="search-results">
+          {#each searchResults as result, idx (idx)}
+            <li>
+              <button
+                type="button"
+                class="result"
+                class:selected={idx === selectedIdx}
+                onclick={() => selectResult(idx)}
+              >
+                <span class="result-main">
+                  <span class="result-name">{result.name || result.display_name}</span>
+                  <span class="result-sub">{result.display_name}</span>
+                </span>
+                {#if result.addresstype || result.type}
+                  <span class="chip">{result.addresstype || result.type}</span>
+                {/if}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {:else if searched && !searching}
+        <p class="no-results">No matches. Refine the search above, or enter it manually below.</p>
+      {/if}
+
+      {#if selectedChain.length > 0}
+        <div class="will-create">
+          <span class="tick">✓</span>
+          <span>
+            Will {isEdit ? 'set' : 'create'}
+            {#each selectedChain as part, i (i)}<b>{part.name}</b>{#if i < selectedChain.length - 1}<span class="sep"> › </span>{/if}{/each}
+          </span>
         </div>
       {/if}
-      <div style="display:flex;gap:0.5rem">
-        <input id="plf-lat" type="number" step="any" min="-90" max="90" bind:value={latitude} placeholder="Latitude">
-        <input id="plf-lng" type="number" step="any" min="-180" max="180" bind:value={longitude} placeholder="Longitude">
-      </div>
     </div>
-    <div class="form-group">
-      <label for="plf-notes">Notes</label>
-      <textarea id="plf-notes" rows="2" bind:value={notes}></textarea>
+
+    <!-- ─── Manual entry (disclosure) ──────────────────────────────────────── -->
+    <div class="disclosure">
+      {#if !manualOpen}
+        <button type="button" class="disclosure-toggle" onclick={openManual}>
+          Can't find it? Enter manually
+        </button>
+      {:else}
+        <div class="manual-fields">
+          <div class="form-group">
+            <label for="plf-name">Name</label>
+            <input id="plf-name" type="text" bind:value={name} autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="plf-type">Type</label>
+            <select id="plf-type" bind:value={type}>
+              <option value="">(none)</option>
+              {#each groupTypes(typeOptions) as group (group.label)}
+                <optgroup label={group.label}>
+                  {#each group.types as t (t.key)}
+                    <option value={t.key}>{t.label}</option>
+                  {/each}
+                </optgroup>
+              {/each}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Parent Place</label>
+            <PlacePicker
+              bind:this={pickerRef}
+              onselect={handleParentSelect}
+              excludeIds={placeId ? [placeId] : []}
+              oncreate={handleParentCreate}
+            />
+          </div>
+          <div class="form-group">
+            <div class="coord-head">
+              <label>Coordinates</label>
+              <button type="button" class="btn btn-sm" onclick={handlePickOnMap}>📍 Pick on map</button>
+            </div>
+            <details class="coord-advanced">
+              <summary>or enter coordinates manually</summary>
+              <div class="coord-grid">
+                <input type="number" step="any" min="-90" max="90" bind:value={latitude} placeholder="Latitude">
+                <input type="number" step="any" min="-180" max="180" bind:value={longitude} placeholder="Longitude">
+              </div>
+            </details>
+          </div>
+          <div class="form-group">
+            <label for="plf-notes">Notes</label>
+            <textarea id="plf-notes" rows="2" bind:value={notes}></textarea>
+          </div>
+        </div>
+      {/if}
     </div>
+
     <div class="form-actions">
       <button type="button" class="btn" onclick={() => onclose?.()}>Cancel</button>
-      <button type="submit" class="btn btn-primary">{isEdit ? 'Save' : 'Create'}</button>
+      <button type="submit" class="btn btn-primary" disabled={!canCommit || committing}>
+        {isEdit ? 'Save' : 'Create'}
+      </button>
     </div>
   </form>
 </Modal>
+
+<style>
+  .search-row { display: flex; gap: 0.5rem; }
+  .search-row input { flex: 1; }
+
+  .search-results {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .search-results li { border-bottom: 1px solid var(--border); }
+  .search-results li:last-child { border-bottom: none; }
+  .result {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 8px 10px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .result:hover { background: #f7f9ff; }
+  .result.selected { background: #eef3ff; box-shadow: inset 3px 0 0 var(--accent); }
+  .result-main { flex: 1; min-width: 0; }
+  .result-name { display: block; font-size: 14px; }
+  .result-sub {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted, #666);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chip {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--accent);
+    background: #eef2fb;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .no-results {
+    margin: 0.5rem 0 0;
+    font-size: 13px;
+    color: var(--text-muted, #666);
+  }
+  .will-create {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 0.5rem;
+    padding: 8px 10px;
+    background: #edf7ee;
+    border: 1px solid #cbe7cd;
+    border-radius: var(--radius);
+    font-size: 13px;
+  }
+  .will-create .tick { color: #3f7a44; }
+  .will-create .sep { color: #3f7a44; }
+
+  .disclosure { margin-top: 1rem; }
+  .disclosure-toggle {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    padding: 0;
+  }
+  .disclosure-toggle:hover { text-decoration: underline; }
+  .manual-fields {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+  .coord-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .coord-advanced { margin-top: 0.5rem; }
+  .coord-advanced summary {
+    font-size: 12.5px;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .coord-grid { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+  .coord-grid input { flex: 1; }
+</style>
