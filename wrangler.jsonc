@@ -1,0 +1,17 @@
+{
+  // Static-assets-only Worker for the FamilyHub web app (sinsear.org).
+  // The app is a pure client-side SPA (SQLite WASM + OPFS) that talks to the
+  // separate API Worker at api.sinsear.org — it has no server-side code, so it
+  // needs no `main` entry-point, only an assets directory to serve.
+  //
+  // `vite build` emits to ./dist (including the _headers file that sets the
+  // COOP/COEP headers required for SharedArrayBuffer/OPFS). Cloudflare's
+  // Workers static-assets runtime honors _headers, so cross-origin isolation
+  // is preserved.
+  "name": "familyhub",
+  "compatibility_date": "2026-06-20",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
