@@ -320,7 +320,7 @@
       </div>
     {/each}
 
-    {#if writable && partners.length === 0 && editing}
+    {#if writable && editing}
       <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'partner')}>+ Add Partner</button>
     {/if}
     {#if writable && editing}
