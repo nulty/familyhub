@@ -169,6 +169,59 @@ describe('Relationships', () => {
     expect(family.children[0].birth_year).toBe('1921');
     expect(family.children[0].other_parent_id).toBe('P2');
   });
+
+  it('getFamily attaches a partner marriage event (id, date, place)', async () => {
+    await h.addPartner('R1', 'P1', 'P2');
+    await h.createEvent({ id: 'M1', person_id: null, type: 'marriage', date: '1860', place: 'Co. Wicklow' });
+    await h.addParticipant({ id: 'EP1', event_id: 'M1', person_id: 'P1', role: 'spouse' });
+    await h.addParticipant({ id: 'EP2', event_id: 'M1', person_id: 'P2', role: 'spouse' });
+
+    const family = await h.getFamily('P1');
+    expect(family.partners[0].marriage_event_id).toBe('M1');
+    expect(family.partners[0].marriage_date).toBe('1860');
+    expect(family.partners[0].marriage_place).toBe('Co. Wicklow');
+  });
+
+  it('getFamily returns null marriage fields for a partner with no marriage event', async () => {
+    await h.addPartner('R1', 'P1', 'P2');
+    const family = await h.getFamily('P1');
+    expect(family.partners[0].marriage_event_id).toBeNull();
+    expect(family.partners[0].marriage_date).toBeNull();
+  });
+
+  it('getFamily ignores a marriage event that includes only one of the pair', async () => {
+    await h.addPartner('R1', 'P1', 'P2');
+    await h.createEvent({ id: 'M1', person_id: null, type: 'marriage', date: '1870' });
+    await h.addParticipant({ id: 'EP1', event_id: 'M1', person_id: 'P1', role: 'spouse' });
+    await h.addParticipant({ id: 'EP2', event_id: 'M1', person_id: 'P3', role: 'spouse' });
+
+    const family = await h.getFamily('P1');
+    expect(family.partners.find(x => x.id === 'P2').marriage_event_id).toBeNull();
+  });
+
+  it('addPartner does not duplicate a pair already linked in reverse order', async () => {
+    await h.addPartner('R1', 'P1', 'P2');   // stored as (P1, P2)
+    await h.addPartner('R2', 'P2', 'P1');   // reverse — must be a no-op
+
+    const family = await h.getFamily('P1');
+    expect(family.partners).toHaveLength(1);
+    expect(family.partners[0].id).toBe('P2');
+    expect(family.partners[0].rel_id).toBe('R1');
+  });
+
+  it('getFamily returns children ascending by birth year, undated last', async () => {
+    await h.createPerson({ id: 'C_1880', given_name: 'Late', surname: 'X' });
+    await h.createPerson({ id: 'C_1860', given_name: 'Early', surname: 'X' });
+    await h.createPerson({ id: 'C_NONE', given_name: 'Undated', surname: 'X' });
+    await h.addParentChild('RC1', 'P1', 'C_1880');
+    await h.addParentChild('RC2', 'P1', 'C_NONE');
+    await h.addParentChild('RC3', 'P1', 'C_1860');
+    await h.createEvent({ id: 'B1', person_id: 'C_1880', type: 'birth', date: '1880' });
+    await h.createEvent({ id: 'B2', person_id: 'C_1860', type: 'birth', date: '1860' });
+
+    const family = await h.getFamily('P1');
+    expect(family.children.map(c => c.id)).toEqual(['C_1860', 'C_1880', 'C_NONE']);
+  });
 });
 
 // ─── Events ───────────────────────────────────────────────────────────────────

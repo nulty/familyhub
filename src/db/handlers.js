@@ -249,9 +249,19 @@ export function createHandlers(h, opts = {}) {
     // ── Relationships ────────────────────────────────────────────────────────
 
     async addPartner(id, personAId, personBId) {
+      // partner edges are undirected, but UNIQUE(person_a_id, person_b_id, type)
+      // is order-sensitive — so dedupe by checking both directions before insert.
+      const existing = await get(
+        `SELECT * FROM relationships
+         WHERE type = 'partner'
+           AND ((person_a_id = ? AND person_b_id = ?)
+             OR (person_a_id = ? AND person_b_id = ?))`,
+        [personAId, personBId, personBId, personAId]
+      );
+      if (existing) return existing;
       const now = Date.now();
       await run(
-        `INSERT OR IGNORE INTO relationships (id, person_a_id, person_b_id, type, created_at)
+        `INSERT INTO relationships (id, person_a_id, person_b_id, type, created_at)
          VALUES (?, ?, ?, 'partner', ?)`,
         [id, personAId, personBId, now]
       );
@@ -319,16 +329,26 @@ export function createHandlers(h, opts = {}) {
            LIMIT 1) AS other_parent_id
          FROM people p
          JOIN relationships r ON r.person_b_id = p.id
-         WHERE r.person_a_id = ? AND r.type = 'parent_child'`,
+         WHERE r.person_a_id = ? AND r.type = 'parent_child'
+         ORDER BY birth_year IS NULL, birth_year, p.id`,
         [personId, personId]
       );
       const partners = await all(
-        `SELECT p.*, r.id as rel_id, ${birthYearSub} AS birth_year, ${deathYearSub} AS death_year
+        `SELECT p.*, r.id as rel_id, ${birthYearSub} AS birth_year, ${deathYearSub} AS death_year,
+           me.id AS marriage_event_id, me.date AS marriage_date, me.place AS marriage_place
          FROM people p
          JOIN relationships r ON (r.person_a_id = ? AND r.person_b_id = p.id)
                               OR (r.person_b_id = ? AND r.person_a_id = p.id)
+         LEFT JOIN events me ON me.id = (
+           SELECT m.id FROM events m
+           WHERE m.type = 'marriage'
+             AND EXISTS (SELECT 1 FROM event_participants ep  WHERE ep.event_id  = m.id AND ep.person_id  = ?)
+             AND EXISTS (SELECT 1 FROM event_participants ep2 WHERE ep2.event_id = m.id AND ep2.person_id = p.id)
+           ORDER BY m.sort_date IS NULL, m.sort_date, m.id
+           LIMIT 1
+         )
          WHERE r.type = 'partner'`,
-        [personId, personId]
+        [personId, personId, personId]
       );
       return { parents, children, partners };
     },

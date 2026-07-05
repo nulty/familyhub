@@ -64,6 +64,8 @@
     return groups;
   });
 
+  let hasPartnerGroup = $derived(familyGroups.some(g => g.partner));
+
   $effect(() => {
     if (personId) loadPerson(personId);
   });
@@ -145,6 +147,20 @@
     return `${b || '?'}-${d || ''}`;
   }
 
+  function initials(p) {
+    const a = (p.given_name || '').trim()[0] || '';
+    const b = (p.surname || '').trim()[0] || '';
+    return (a + b).toUpperCase() || '?';
+  }
+
+  function marriageLabel(p) {
+    const year = p.marriage_date?.match(/\d{4}/)?.[0] || '';
+    let s = 'Married';
+    if (year) s += ' ' + year;
+    if (p.marriage_place) s += ' · ' + p.marriage_place;
+    return s;
+  }
+
   function linkify(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -157,14 +173,6 @@
     if (ms < 0) return null;
     const years = Math.floor(ms / (365.25 * 24 * 60 * 60 * 1000));
     return years;
-  }
-
-  function ageAtChildBirth(child) {
-    const parentYear = birth?.date?.match(/\d{4}/)?.[0];
-    const childYear = child.birth_year;
-    if (!parentYear || !childYear) return null;
-    const age = parseInt(childYear) - parseInt(parentYear);
-    return age > 0 ? age : null;
   }
 
   function hasCitations(ev) {
@@ -274,57 +282,77 @@
 
   <div class="panel-section-title">Family</div>
   <div class="panel-family">
-    {#if parents.length > 0 || editing}
-      <div class="family-group">
-        <div class="family-group-label">Parents</div>
-        {#each parents as p}
-          <span class="family-chip" onclick={() => navigate(p.id)}>
-            <span class="gender-dot {p.gender}"></span>
-            {formatName(p)}
-            {#if formatLifeDates(p)}<span class="family-chip-dates">{formatLifeDates(p)}</span>{/if}
-            {#if writable && editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(p.rel_id); }}>&times;</button>{/if}
-          </span>
-        {/each}
-        {#if writable && editing}
-          <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'parent')}>+ Add Parent</button>
-        {/if}
+    {#if parents.length > 0}
+      <div class="fam-card parents">
+        <div class="fam-card-head"><span class="fam-label">Parents</span></div>
+        <div class="fam-card-body">
+          {#each parents as p}
+            <div class="fam-row" class:is-dec={p.death_year}>
+              <span class="fam-avatar {p.gender}" onclick={() => navigate(p.id)}>{initials(p)}</span>
+              <span class="fam-name" onclick={() => navigate(p.id)}>{formatName(p)}</span>
+              {#if formatLifeDates(p)}<span class="fam-date">{formatLifeDates(p)}</span>{/if}
+              {#if writable && editing}<button class="fam-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(p.rel_id); }}>&times;</button>{/if}
+            </div>
+          {/each}
+        </div>
       </div>
     {/if}
 
     {#each familyGroups as group}
-      <div class="family-group">
-        {#if group.partner}
-          <div class="family-group-with">
-            With
-            <span class="family-chip" onclick={() => navigate(group.partner.id)}>
-              <span class="gender-dot {group.partner.gender}"></span>
-              {formatName(group.partner)}
-              {#if formatLifeDates(group.partner)}<span class="family-chip-dates">{formatLifeDates(group.partner)}</span>{/if}
-              {#if writable && editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(group.partner.rel_id); }}>&times;</button>{/if}
-            </span>
+      {#if group.partner}
+        <div class="fam-card">
+          <div class="fam-card-head"><span class="fam-label">Partner</span></div>
+          <div class="fam-card-body fam-body-partner">
+            <div class="fam-row fam-partner" class:is-dec={group.partner.death_year}>
+              <span class="fam-avatar {group.partner.gender}" onclick={() => navigate(group.partner.id)}>{initials(group.partner)}</span>
+              <div class="fam-main">
+                <span class="fam-name" onclick={() => navigate(group.partner.id)}>{formatName(group.partner)}</span>
+                {#if group.partner.marriage_event_id}
+                  {#if writable && editing}
+                    <button class="fam-rel" onclick={() => openEventForm(person.id, group.partner.marriage_event_id)}>{marriageLabel(group.partner)}</button>
+                  {:else}
+                    <span class="fam-rel-static">{marriageLabel(group.partner)}</span>
+                  {/if}
+                {:else if writable && editing}
+                  <button class="fam-rel add" onclick={() => openEventForm(person.id, null, { initialType: 'marriage', presetSpouse: { id: group.partner.id, given_name: group.partner.given_name, surname: group.partner.surname } })}>+ Add marriage / union details</button>
+                {/if}
+              </div>
+              {#if formatLifeDates(group.partner)}<span class="fam-date">{formatLifeDates(group.partner)}</span>{/if}
+              {#if writable && editing}<button class="fam-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(group.partner.rel_id); }}>&times;</button>{/if}
+            </div>
+            {#each group.children as c}
+              <div class="fam-row fam-child" class:is-dec={c.death_year}>
+                <span class="fam-avatar {c.gender}" onclick={() => navigate(c.id)}>{initials(c)}</span>
+                <span class="fam-name" onclick={() => navigate(c.id)}>{formatName(c)}</span>
+                {#if formatLifeDates(c)}<span class="fam-date">{formatLifeDates(c)}</span>{/if}
+                {#if writable && editing}<button class="fam-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(c.rel_id); }}>&times;</button>{/if}
+              </div>
+            {/each}
           </div>
-        {:else if familyGroups.length > 1}
-          <div class="family-group-with">Other Children</div>
-        {/if}
-        <div class="family-children">
-          {#each group.children as c}
-            <span class="family-chip" onclick={() => navigate(c.id)}>
-              <span class="gender-dot {c.gender}"></span>
-              {formatName(c)}
-              {#if formatLifeDates(c)}<span class="family-chip-dates">{formatLifeDates(c)}</span>{/if}
-              {#if ageAtChildBirth(c) != null}<span class="family-chip-age">age {ageAtChildBirth(c)}</span>{/if}
-              {#if writable && editing}<button class="family-chip-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(c.rel_id); }}>&times;</button>{/if}
-            </span>
-          {/each}
         </div>
-      </div>
+      {:else}
+        <div class="fam-card">
+          <div class="fam-card-head"><span class="fam-label">{hasPartnerGroup ? 'Other children' : 'Children'}</span></div>
+          <div class="fam-card-body">
+            {#each group.children as c}
+              <div class="fam-row fam-child" class:is-dec={c.death_year}>
+                <span class="fam-avatar {c.gender}" onclick={() => navigate(c.id)}>{initials(c)}</span>
+                <span class="fam-name" onclick={() => navigate(c.id)}>{formatName(c)}</span>
+                {#if formatLifeDates(c)}<span class="fam-date">{formatLifeDates(c)}</span>{/if}
+                {#if writable && editing}<button class="fam-remove" onclick={(e) => { e.stopPropagation(); removeRelationship(c.rel_id); }}>&times;</button>{/if}
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     {/each}
 
     {#if writable && editing}
-      <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'partner')}>+ Add Partner</button>
-    {/if}
-    {#if writable && editing}
-      <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'child')}>+ Add Child</button>
+      <div class="fam-add-row">
+        <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'parent')}>+ Add Parent</button>
+        <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'partner')}>+ Add Partner</button>
+        <button class="btn btn-sm btn-link section-add-btn" onclick={() => openRelationshipForm(person, 'child')}>+ Add Child</button>
+      </div>
     {/if}
   </div>
 

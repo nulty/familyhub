@@ -893,63 +893,176 @@ a:hover { text-decoration: underline; }
 /* ─── Panel: Family ──────────────────────────────────────────────────── */
 
 .panel-family {
-  padding: 0 20px 8px;
+  padding: 4px 16px 8px;
 }
 
-.family-group {
-  padding: 4px 0;
+/* cards */
+.fam-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 10px;
 }
-.family-group-label {
-  font-size: 11px;
-  color: #9ca3af;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.family-group-with {
-  font-size: 12px;
-  color: #6b7280;
-  margin: 8px 0 4px;
+.fam-card-head {
   display: flex;
   align-items: center;
-  gap: 4px;
+  padding: 8px 12px;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border);
 }
+.fam-card.parents .fam-card-head { background: #fff7ed; }
+.fam-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.fam-card-body { padding: 4px 12px 8px; }
 
-.family-chip {
+/* person rows */
+.fam-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 5px 0;
+  position: relative;
+}
+.fam-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  background: #f9fafb;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #3b82f6;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #fff;
+  background: #9ca3af;
+  flex: none;
   cursor: pointer;
-  margin: 2px 4px 2px 0;
-  border: none;
+  transition: box-shadow .12s;
 }
-.family-chip:hover { background: #eff6ff; }
-.family-chip-dates {
+.fam-avatar.M { background: #3b82f6; }
+.fam-avatar.F { background: #ec4899; }
+.fam-avatar.U { background: #9ca3af; }
+.fam-avatar:hover { box-shadow: 0 0 0 3px #eff4ff; }
+.fam-name {
+  font-size: 13.5px;
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+}
+.fam-name:hover { color: var(--accent); text-decoration: underline; }
+.fam-row.is-dec .fam-name { color: var(--text-muted); }
+.fam-date {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* partner main row: name + marriage line stacked */
+.fam-partner { align-items: flex-start; }
+.fam-partner .fam-avatar { margin-top: 1px; }
+.fam-partner .fam-date { align-self: flex-start; }
+.fam-partner .fam-name { font-weight: 600; }
+.fam-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* marriage / union line */
+.fam-rel {
   font-size: 11px;
-  color: #9ca3af;
-}
-.family-chip-age {
-  font-size: 11px;
-  color: #9ca3af;
-  opacity: 0.7;
-}
-.family-chip-remove {
+  color: var(--text-muted);
   background: none;
   border: none;
-  font-size: 12px;
+  padding: 1px 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: fit-content;
+  max-width: 100%;
+}
+.fam-rel:hover { background: #eff4ff; color: var(--accent); }
+.fam-rel.add { color: var(--accent); }
+.fam-rel-static {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 1px 0;
+}
+
+/* tree-linked children */
+.fam-child { padding-left: 26px; }
+
+/* Per-child vertical spine — used in the "Other children" card, which has no
+   partner row above. In Partner cards it is disabled in favour of a single
+   card-body spine anchored to the partner avatar (see .fam-body-partner::before). */
+.fam-child::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: -12px;
+  bottom: 0;
+  width: 1.5px;
+  background: #d9dee4;
+}
+.fam-child:last-child::before { bottom: 50%; }
+.fam-child::after {           /* elbow into each child */
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 12px;
+  height: 1.5px;
+  background: #d9dee4;
+}
+
+/* Partner card: one continuous spine from the partner avatar's bottom down to the
+   last child's centre. The partner avatar is top-aligned, so its bottom sits at a
+   FIXED offset from the card-body top — card-body pad-top (4) + row pad-top (5) +
+   avatar margin (1) + avatar (28) = 38 — no matter how tall the row grows with a
+   marriage line. Anchoring here (not to the child) keeps the parent→spine join
+   consistent. bottom = pad-bottom (8) + half a 38px child row (19) = 27. */
+.fam-body-partner { position: relative; }
+.fam-body-partner .fam-child::before { display: none; }
+.fam-body-partner::before {
+  content: "";
+  position: absolute;
+  left: 26px;
+  top: 37px;
+  bottom: 27px;
+  width: 1.5px;
+  background: #d9dee4;
+}
+
+/* remove (×) button — edit mode */
+.fam-remove {
+  background: none;
+  border: none;
+  font-size: 13px;
   color: #9ca3af;
   cursor: pointer;
   padding: 0 2px;
-  margin-left: 2px;
+  margin-left: auto;   /* keep × right-aligned even when the row has no date */
+  flex: none;
 }
-.family-chip-remove:hover { color: var(--danger); }
+/* when a date is present it already pushes right — just leave a small gap before × */
+.fam-date + .fam-remove { margin-left: 6px; }
+.fam-remove:hover { color: var(--danger); }
 
-.family-children {
-  padding-left: 16px;
+/* bottom add row */
+.fam-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 2px;
 }
 
 /* ─── Panel: Notes ───────────────────────────────────────────────────── */

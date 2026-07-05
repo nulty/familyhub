@@ -20,8 +20,13 @@ export function openPersonForm(personId, onCreated, defaultGender) {
   pushModal(PersonForm, { personId, oncreated: onCreated, defaultGender });
 }
 
-export function openEventForm(personId, eventId) {
-  pushModal(EventForm, { personId, eventId });
+export function openEventForm(personId, eventId = null, options = {}) {
+  pushModal(EventForm, {
+    personId,
+    eventId,
+    initialType: options.initialType ?? null,
+    presetSpouse: options.presetSpouse ?? null,
+  });
 }
 
 export function openRelationshipForm(person, type) {
