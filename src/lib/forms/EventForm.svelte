@@ -32,9 +32,9 @@
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
-  let { personId, eventId = null, onclose } = $props();
+  let { personId, eventId = null, initialType = null, presetSpouse = null, onclose } = $props();
 
-  let type = $state('birth');
+  let type = $state(initialType ?? 'birth');
   let date = $state('');
   let placeText = $state('');
   let selectedPlaceId = $state(null);
@@ -49,7 +49,7 @@
   const SHARED_EVENT_TYPES = ['marriage', 'census'];
   let isShared = $derived(SHARED_EVENT_TYPES.includes(type));
   let isMarriage = $derived(type === 'marriage');
-  let spouse = $state(null); // { id, given_name, surname }
+  let spouse = $state(presetSpouse ?? null); // { id, given_name, surname }
   let knownPartners = $state([]);
 
   // Citations
