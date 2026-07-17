@@ -1,8 +1,8 @@
 <script>
-  import Modal from '../forms/Modal.svelte';
+  import PanelShell from '../forms/PanelShell.svelte';
   import guideMd from '../../../docs/places-user-guide.md?raw';
 
-  let { onclose } = $props();
+  let { onclose, embedded = false } = $props();
 
   let html = $state('');
   let toc = $state([]);
@@ -33,7 +33,7 @@
   }
 </script>
 
-<Modal title="Places guide" wide={true} onclose={onclose}>
+<PanelShell title="Places guide" wide={true} {embedded} onclose={onclose}>
   <div class="help-layout">
     {#if toc.length > 0}
       <nav class="help-toc" aria-label="Table of contents">
@@ -55,7 +55,7 @@
       {/if}
     </div>
   </div>
-</Modal>
+</PanelShell>
 
 <style>
   .help-layout {

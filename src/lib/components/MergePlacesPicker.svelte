@@ -1,15 +1,23 @@
 <script>
-  import Modal from '../forms/Modal.svelte';
+  import PanelShell from '../forms/PanelShell.svelte';
   import { places, events } from '../../db/db.js';
   import { showToast } from '../shared/toast-store.js';
   import { emit, DATA_CHANGED } from '../../state.js';
   import { normalizePlaceName } from '../../gedcom/import.js';
+  import { GeocodeQueue } from '../../util/geocode-queue.js';
+  import { getTreeId } from '../../config.js';
   import ClearableInput from '../shared/ClearableInput.svelte';
 
-  let { onclose, oncomplete } = $props();
+  let { onclose, oncomplete, embedded = false } = $props();
 
   let loading = $state(true);
   let groups = $state([]);  // [{ key, places: [...], keepId, dismissed, eventCounts }]
+  let typedSuggestions = $state([]);  // [{ flat, typed, label }] — flat ↔ organized pairings
+
+  // A merged-away place must also leave the geocode funnel
+  function dropFromQueue(placeId) {
+    new GeocodeQueue(getTreeId()).removeItem(placeId);
+  }
 
   // Flat multi-select state
   let allCandidates = $state([]);  // all untyped orphan places
@@ -82,6 +90,36 @@
     }));
 
     eventCountsAll = newEventCountsAll;
+
+    // Flat ↔ organized pairings: a flat record whose normalized name (or first
+    // comma segment) equals an organized place's name. These can't be geocode-
+    // converged automatically, so offer them as explicit one-click merges.
+    const typed = all.filter((p) => p.type !== '');
+    const typedByKey = new Map();
+    for (const t of typed) {
+      const key = normalizePlaceName(t.name);
+      if (!key) continue;
+      if (!typedByKey.has(key)) typedByKey.set(key, []);
+      typedByKey.get(key).push(t);
+    }
+    const suggestions = [];
+    for (const flat of candidates) {
+      const keys = new Set([
+        normalizePlaceName(flat.name),
+        normalizePlaceName(flat.name.split(',')[0]),
+      ]);
+      const matches = new Map();
+      for (const key of keys) {
+        for (const t of typedByKey.get(key) || []) matches.set(t.id, t);
+      }
+      for (const t of matches.values()) suggestions.push({ flat, typed: t, label: t.name });
+    }
+    await Promise.all(suggestions.map(async (s) => {
+      const chain = await places.hierarchy(s.typed.id);
+      s.label = chain.map(c => c.name).reverse().join(', ');
+    }));
+    typedSuggestions = suggestions;
+
     loading = false;
   }
 
@@ -132,12 +170,37 @@
         }
         // 4. Delete the other place
         await places.delete(other.id);
+        dropFromQueue(other.id);
       }
       showToast(`Merged ${others.length} into "${keep.name}"`);
       emit(DATA_CHANGED);
       oncomplete?.();
       // Dismiss this group from the view
       groups = groups.map((g2, i) => i === groupIdx ? { ...g2, dismissed: true } : g2);
+    } catch (err) {
+      showToast('Merge failed: ' + err.message);
+    }
+  }
+
+  async function mergeIntoTyped(s) {
+    try {
+      const evts = await places.events(s.flat.id);
+      for (const ev of evts) {
+        await events.update(ev.id, { place_id: s.typed.id, place: '' });
+      }
+      if (s.typed.latitude == null && s.flat.latitude != null) {
+        await places.update(s.typed.id, { latitude: s.flat.latitude, longitude: s.flat.longitude });
+      }
+      if (s.flat.notes) {
+        const merged = [s.typed.notes, s.flat.notes].filter(Boolean).join('\n---\n');
+        if (merged !== s.typed.notes) await places.update(s.typed.id, { notes: merged });
+      }
+      await places.delete(s.flat.id);
+      dropFromQueue(s.flat.id);
+      showToast(`Merged "${s.flat.name}" into ${s.label}`);
+      emit(DATA_CHANGED);
+      oncomplete?.();
+      await loadGroups();
     } catch (err) {
       showToast('Merge failed: ' + err.message);
     }
@@ -244,6 +307,7 @@
           }
         }
         await places.delete(other.id);
+        dropFromQueue(other.id);
       }
       showToast(`Merged ${others.length} into "${keep.name}"`);
       emit(DATA_CHANGED);
@@ -259,7 +323,7 @@
   }
 </script>
 
-<Modal title="Merge duplicate places" onclose={onclose}>
+<PanelShell title="Merge duplicate places" {embedded} onclose={onclose}>
   <div class="merge-picker">
     {#if loading}
       <p class="empty">Scanning places…</p>
@@ -310,6 +374,31 @@
           </div>
         </div>
       {/each}
+    {/if}
+
+    {#if !loading && typedSuggestions.length > 0}
+      <div class="typed-section">
+        <h4>Matches with organized places ({typedSuggestions.length})</h4>
+        <p class="hint">
+          Flat records whose name matches an organized place. Merging repoints their
+          events to the organized place and removes the flat record.
+        </p>
+        <ul class="merge-list">
+          {#each typedSuggestions as s (s.flat.id + ':' + s.typed.id)}
+            <li class="typed-row">
+              <div class="typed-names">
+                <span class="row-name">{s.flat.name}</span>
+                <span class="row-meta">{eventCountsAll[s.flat.id] ?? 0} events</span>
+                <span class="typed-arrow" aria-hidden="true">→</span>
+                <span class="typed-label">{s.label}</span>
+              </div>
+              <button type="button" class="btn btn-sm btn-primary" onclick={() => mergeIntoTyped(s)}>
+                Merge
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
     {/if}
 
     {#if !loading && allCandidates.length > 0}
@@ -388,7 +477,7 @@
       <button type="button" class="btn" onclick={onclose}>Close</button>
     </div>
   </div>
-</Modal>
+</PanelShell>
 
 <style>
   .merge-picker { display: flex; flex-direction: column; gap: 12px; }
@@ -430,6 +519,33 @@
   }
   .group-actions { display: flex; justify-content: flex-end; gap: 6px; }
 
+  .typed-section {
+    border-top: 1px solid var(--border-color, #ddd);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .typed-section h4 { margin: 0; font-size: 0.9rem; }
+  .typed-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color, #eee);
+  }
+  .typed-row:last-child { border-bottom: none; }
+  .typed-names {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .typed-arrow { color: var(--text-muted, #888); }
+  .typed-label { font-size: 0.85rem; color: var(--text, #333); font-weight: 500; }
+
   .flat-section {
     border-top: 1px solid var(--border-color, #ddd);
     padding-top: 12px;
@@ -439,7 +555,7 @@
   }
   .flat-section h4 { margin: 0; font-size: 0.9rem; }
   .flat-controls { display: flex; gap: 6px; align-items: center; }
-  .filter-input { flex: 1; padding: 4px 8px; }
+  .flat-controls :global(.clearable-input) { flex: 1; }
   .flat-list {
     list-style: none;
     padding: 0;

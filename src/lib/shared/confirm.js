@@ -13,16 +13,18 @@ import ConfirmModal from '../components/ConfirmModal.svelte';
  * @param {string} opts.title          - Dialog title
  * @param {string} opts.message        - Body text (newlines rendered)
  * @param {string} [opts.confirm]      - Confirm button label (default "Confirm")
+ * @param {string} [opts.cancel]       - Cancel button label (default "Cancel")
  * @param {boolean} [opts.danger]      - Red confirm button
  * @returns {Promise<boolean>}
  */
-export function showConfirm({ title, message, confirm = 'Confirm', danger = false }) {
+export function showConfirm({ title, message, confirm = 'Confirm', cancel = 'Cancel', danger = false }) {
   let resolved = false;
   return new Promise((resolve) => {
     pushModal(ConfirmModal, {
       title,
       message,
       confirmLabel: confirm,
+      cancelLabel: cancel,
       danger,
       onresult(result) {
         if (resolved) return;

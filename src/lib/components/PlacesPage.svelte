@@ -2,11 +2,11 @@
   import { places, events, placeTypes } from '../../db/db.js';
   import { emit, PERSON_SELECTED, DATA_CHANGED } from '../../state.js';
   import { showToast, updateToast, dismissToast } from '../shared/toast-store.js';
-  import { batchGeocode } from '../../util/geocode.js';
+  import { batchGeocode, normalizeResult } from '../../util/geocode.js';
   import { GeocodeQueue } from '../../util/geocode-queue.js';
   import { decomposeAddress } from '../../util/decompose.js';
   import { ulid } from '../../util/ulid.js';
-  import { getCollabState } from '../../config.js';
+  import { getTreeId } from '../../config.js';
   import { openPlaceForm } from '../shared/open.js';
   import { openOrganizeWizard } from '../../ui/places-organize.js';
   import { focusPerson } from '../../ui/tree.js';
@@ -17,7 +17,6 @@
   import GeocodeBatchPicker from './GeocodeBatchPicker.svelte';
   import MergePlacesPicker from './MergePlacesPicker.svelte';
   import PlacesHelp from './PlacesHelp.svelte';
-  import { pushModal } from '../shared/modal-stack.svelte.js';
   import ClearableInput from '../shared/ClearableInput.svelte';
 
   let { onclose, openReview = false } = $props();
@@ -29,11 +28,32 @@
   let geocoding = $state(false);
   let abortController = null;
   let geocodeQueue = $state(null);
-  let queueCount = $state(0);
-  let showReview = $state(false);
-  let showTypeSettings = $state(false);
-  let openMenu = $state(null);          // 'process' | 'edit' | 'backup'
+  let queueCounts = $state({ pending: 0, ready: 0, correction: 0 });
+  // Which tool owns the main pane. 'tree' = the place list (home).
+  let activeView = $state('tree');      // 'tree'|'geocode'|'review'|'merge'|'manual'|'types'|'help'
+  let openMenu = $state(null);          // 'tools' | null (mobile dropdown)
   let expandedActionsId = $state(null); // place id whose actions are open
+  let manualContainer = $state(null);   // host element for the vanilla wizard
+  let manualHandle = $state(null);      // wizard teardown handle
+
+  function setView(v) {
+    activeView = activeView === v ? 'tree' : v;
+    openMenu = null;
+  }
+
+  const VIEW_TITLES = {
+    geocode: 'Batch geocode',
+    review: 'Review & correct',
+    merge: 'Merge duplicates',
+    manual: 'Manual structure',
+    types: 'Place types',
+    help: 'Places guide',
+  };
+  let activeTitle = $derived(VIEW_TITLES[activeView] || '');
+
+  function refreshQueueCounts() {
+    queueCounts = geocodeQueue ? geocodeQueue.countByStatus() : { pending: 0, ready: 0, correction: 0 };
+  }
 
   $effect(() => {
     function onDocClick(e) {
@@ -58,20 +78,61 @@
     action?.();
   }
 
-  function getTreeId() {
-    const collab = getCollabState();
-    return collab?.treeId || 'local';
-  }
-
   $effect(() => {
     if (!geocodeQueue) {
       geocodeQueue = new GeocodeQueue(getTreeId());
-      queueCount = geocodeQueue.count();
-      if (openReview && queueCount > 0) {
-        showReview = true;
+      refreshQueueCounts();
+      if (openReview && queueCounts.ready + queueCounts.correction > 0) {
+        activeView = 'review';
       }
     }
   });
+
+  // Mount / tear down the vanilla Manual-structure wizard as the pane opens/closes.
+  $effect(() => {
+    const wantManual = activeView === 'manual';
+    if (wantManual && manualContainer && !manualHandle) {
+      let cancelled = false;
+      openOrganizeWizard(() => { activeView = 'tree'; loadData(); }, { container: manualContainer })
+        .then((h) => {
+          if (cancelled || activeView !== 'manual') h.destroy();
+          else manualHandle = h;
+        });
+      return () => { cancelled = true; };
+    }
+    if (!wantManual && manualHandle) {
+      manualHandle.destroy();
+      manualHandle = null;
+    }
+  });
+
+  // Tool list — rendered identically in the desktop sidebar and the mobile
+  // dropdown. `kind: 'view'` items own the main pane (highlighted when active);
+  // `kind: 'action'` items fire and return.
+  let toolItems = $derived.by(() => {
+    const items = [
+      { key: 'geocode', label: geocoding ? 'Stop geocoding' : 'Geocode', hint: 'Fetch matches for places without coordinates', kind: 'view', view: 'geocode', badge: queueCounts.pending || null, run: handleGeocode },
+    ];
+    if (queueCounts.ready > 0) items.push({ key: 'review', label: 'Review', hint: 'Check candidate matches', kind: 'view', view: 'review', badge: queueCounts.ready, run: () => setView('review') });
+    if (queueCounts.correction > 0) items.push({ key: 'correct', label: 'Correct', hint: 'Fix places with no match', kind: 'view', view: 'review', badge: queueCounts.correction, warn: true, run: () => setView('review') });
+    items.push(
+      { key: 'merge', label: 'Merge duplicates', hint: 'Combine duplicate place records', kind: 'view', view: 'merge', run: () => setView('merge') },
+      { key: 'manual', label: 'Manual structure', hint: 'For historic / non-standard addresses', kind: 'view', view: 'manual', run: () => setView('manual') },
+      { key: 'types', label: 'Place types', hint: 'Manage place type labels', kind: 'view', view: 'types', run: () => setView('types') },
+      { key: 'help', label: 'Help', hint: 'Step-by-step guide for the places workflow', kind: 'view', view: 'help', run: () => setView('help') },
+      { key: 'export', label: 'Export places JSON', hint: 'Download places as JSON', kind: 'action', run: handleExport },
+      { key: 'import', label: 'Import places JSON', hint: 'Restore from a JSON file', kind: 'action', run: handleImport },
+    );
+    if (queueCounts.pending + queueCounts.ready + queueCounts.correction > 0)
+      items.push({ key: 'reset', label: 'Reset queue', hint: 'Discard all queued geocode work', kind: 'action', subtle: true, run: resetQueue });
+    return items;
+  });
+  let navViews = $derived(toolItems.filter((i) => i.kind === 'view'));
+  let navActions = $derived(toolItems.filter((i) => i.kind === 'action'));
+
+  function isViewActive(item) {
+    return item.kind === 'view' && item.view === activeView;
+  }
 
   const decompositionHandlers = {
     findPlaceByNameTypeParent: (name, type, parentId) => places.findByNameTypeParent(name, type, parentId),
@@ -142,8 +203,14 @@
   }
 
   async function deletePlace(place) {
-    if (!await showConfirm({ title: `Delete "${place.name}"?`, message: 'Children will become root places.', confirm: 'Delete', danger: true })) return;
+    const linked = await places.events(place.id);
+    const eventLine = linked.length > 0
+      ? `${linked.length} event${linked.length === 1 ? '' : 's'} reference this place — they will keep the place name as text.\n`
+      : '';
+    if (!await showConfirm({ title: `Delete "${place.name}"?`, message: `${eventLine}Children will become root places.`, confirm: 'Delete', danger: true })) return;
     await places.delete(place.id);
+    geocodeQueue?.removeItem(place.id);
+    refreshQueueCounts();
     emit(DATA_CHANGED);
     showToast(`Deleted ${place.name}`);
     await loadData();
@@ -203,28 +270,31 @@
     input.click();
   }
 
+  // A place is blocked from fetching only if it's queued PAST the pending stage
+  // (already has candidates awaiting review, or sits in correction).
+  function isQueueBlocked(id) {
+    const status = geocodeQueue?.getStatus(id);
+    return status != null && status !== 'pending';
+  }
+
   function handleGeocode() {
+    openMenu = null;
     if (geocoding) {
       abortController?.abort();
       return;
     }
-    pushModal(GeocodeBatchPicker, {
-      treeId: getTreeId(),
-      hasQueueEntry: (id) => geocodeQueue?.hasPlace(id),
-      onstart: startBatch,
-    });
+    setView('geocode');
   }
 
-  async function startBatch({ selectedIds, bias, mode }) {
+  async function startBatch({ selectedIds, bias }) {
     const selectedSet = new Set(selectedIds);
-    const autoAccept = mode === 'auto';
     geocoding = true;
     abortController = new AbortController();
     const toastId = showToast('Starting geocode…', 0);
 
     try {
-      const allPlaces = await places.list();
-      const targetPlaces = allPlaces.filter((p) => selectedSet.has(p.id));
+      const allPlacesList = await places.list();
+      const targetPlaces = allPlacesList.filter((p) => selectedSet.has(p.id));
 
       // Inject bias into query by shallow-copying the place objects with modified .name.
       // We don't mutate the DB — we mutate a shallow copy.
@@ -233,13 +303,22 @@
         return contains ? p : { ...p, name: `${p.name}, ${bias}` };
       }) : targetPlaces;
 
+      // Funnel routing: each place goes to exactly one of
+      //   1 match  → auto-apply (organized)
+      //   2+       → review pile
+      //   0        → correction pile
+      let autoApplied = 0;
+      let toReview = 0;
+      let toCorrect = 0;
+
       const result = await batchGeocode({
         places: biased,
-        hasQueueEntry: (id) => geocodeQueue.hasPlace(id),
-        onResult: async (place, results) => {
+        hasQueueEntry: isQueueBlocked,
+        onResult: async (place, rawResults) => {
           // `place` here is the biased version; recover the original DB record
-          const original = allPlaces.find((p) => p.id === place.id);
-          if (autoAccept && results.length > 0) {
+          const original = allPlacesList.find((p) => p.id === place.id);
+          const results = rawResults.map(normalizeResult);
+          if (results.length === 1) {
             const evts = await places.events(place.id);
             await decomposeAddress({
               nominatimResult: results[0],
@@ -248,26 +327,21 @@
               handlers: decompositionHandlers,
               generateId: ulid,
             });
+            geocodeQueue.removeItem(place.id);
+            autoApplied++;
           } else {
-            geocodeQueue.addItem({
+            const status = results.length > 0 ? 'ready' : 'correction';
+            if (status === 'ready') toReview++;
+            else toCorrect++;
+            geocodeQueue.upsertItem({
               place_id: place.id,
               place_name: original?.name ?? place.name,
               query: place.name,  // the biased query
-              status: results.length > 0 ? 'ready' : 'no_results',
-              results: results.map((r) => ({
-                lat: parseFloat(r.lat),
-                lon: parseFloat(r.lon),
-                display_name: r.display_name,
-                address: r.address,
-                importance: r.importance,
-                addresstype: r.addresstype,
-                name: r.name,
-                class: r.class,
-                type: r.type,
-              })),
+              status,
+              results,
             });
-            queueCount = geocodeQueue.count();
           }
+          refreshQueueCounts();
         },
         onProgress: (current, total) => {
           updateToast(toastId, `Geocoding ${current}/${total}…`);
@@ -279,15 +353,12 @@
 
       if (result.total === 0) {
         showToast('No places to geocode');
-      } else if (autoAccept) {
-        const parts = [`Auto-geocoded ${result.fetched}/${result.total} places`];
-        if (result.noResults > 0) parts.push(`${result.noResults} not found`);
-        showToast(parts.join(', '));
       } else {
-        const parts = [`Fetched results for ${result.fetched} places`];
-        if (result.noResults > 0) parts.push(`${result.noResults} not found`);
-        parts.push('— click Review to triage');
-        showToast(parts.join(' '));
+        const parts = [];
+        if (autoApplied > 0) parts.push(`${autoApplied} matched automatically`);
+        if (toReview > 0) parts.push(`${toReview} need review`);
+        if (toCorrect > 0) parts.push(`${toCorrect} need correction`);
+        showToast(parts.join(', ') || 'Geocoding finished');
       }
 
       await loadData();
@@ -305,7 +376,7 @@
   function resetQueue() {
     if (!geocodeQueue) return;
     geocodeQueue.clear();
-    queueCount = 0;
+    refreshQueueCounts();
     showToast('Queue cleared');
   }
 
@@ -316,112 +387,109 @@
   }
 </script>
 
-<Modal title="Places" wide={true} onclose={onclose}>
-  <div class="places-page">
-    <div class="places-toolbar">
-      <div class="toolbar-menu" class:open={openMenu === 'process'}>
+<Modal title="Places" xwide={true} onclose={onclose}>
+  <div class="places-shell">
+    <!-- Desktop sidebar — collapses to the mobile toolbar dropdown < 768px -->
+    <aside class="places-sidebar">
+      <button class="btn btn-sm btn-primary sidebar-add" onclick={() => openPlaceForm(null, () => loadData())}>
+        + Add place
+      </button>
+      <nav class="sidebar-nav" aria-label="Places tools">
         <button
-          class="btn btn-sm menu-trigger"
-          aria-haspopup="menu"
-          aria-expanded={openMenu === 'process'}
-          onclick={(e) => { e.stopPropagation(); openMenu = openMenu === 'process' ? null : 'process'; }}
+          class="sidebar-item"
+          class:active={activeView === 'tree'}
+          aria-current={activeView === 'tree' ? 'page' : undefined}
+          onclick={() => setView('tree')}
         >
-          Process{queueCount > 0 ? ` (${queueCount})` : ''}{geocoding ? ' …' : ''} <span class="caret" aria-hidden="true">▾</span>
+          <span class="sidebar-label">All places</span>
         </button>
-        {#if openMenu === 'process'}
-          <div class="menu-panel" role="menu">
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => pushModal(MergePlacesPicker, { oncomplete: () => loadData() }))}>
-              <span class="menu-item-label">Merge duplicates</span>
-              <span class="menu-item-hint">Find and combine duplicate place names</span>
-            </button>
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(handleGeocode)}>
-              <span class="menu-item-label">{geocoding ? 'Stop geocoding' : 'Geocode'}</span>
-              <span class="menu-item-hint">Look up coordinates &amp; build hierarchy from Nominatim</span>
-            </button>
-            {#if queueCount > 0}
-              <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => { showReview = !showReview; })}>
-                <span class="menu-item-label">{showReview ? 'Hide review' : `Review (${queueCount})`}</span>
-                <span class="menu-item-hint">Triage geocoded results</span>
-              </button>
-              <button class="menu-item subtle" role="menuitem" onclick={() => runFromMenu(resetQueue)}>
-                <span class="menu-item-label">Reset queue</span>
-                <span class="menu-item-hint">Discard pending review items</span>
-              </button>
-            {/if}
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => openOrganizeWizard(() => loadData()))}>
-              <span class="menu-item-label">Manual structure</span>
-              <span class="menu-item-hint">For historic / non-standard addresses</span>
-            </button>
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => pushModal(PlacesHelp, {}))}>
-              <span class="menu-item-label">Help</span>
-              <span class="menu-item-hint">Step-by-step guide for the places workflow</span>
-            </button>
-          </div>
-        {/if}
+        <div class="sidebar-divider"></div>
+        {#each navViews as item (item.key)}
+          <button
+            class="sidebar-item"
+            class:active={isViewActive(item)}
+            class:warn={item.warn}
+            aria-current={isViewActive(item) ? 'page' : undefined}
+            onclick={item.run}
+          >
+            <span class="sidebar-label">{item.label}</span>
+            {#if item.badge}<span class="sidebar-badge" class:warn={item.warn}>{item.badge}</span>{/if}
+          </button>
+        {/each}
+        <div class="sidebar-divider"></div>
+        {#each navActions as item (item.key)}
+          <button class="sidebar-item" class:subtle={item.subtle} onclick={item.run}>
+            <span class="sidebar-label">{item.label}</span>
+          </button>
+        {/each}
+      </nav>
+    </aside>
+
+    <!-- Main pane -->
+    <section class="places-main">
+      <!-- Mobile toolbar (sidebar hidden < 768px): Add place + Tools dropdown -->
+      <div class="places-mobile-toolbar">
+        <button class="btn btn-sm btn-primary" onclick={() => openPlaceForm(null, () => loadData())}>
+          + Add place
+        </button>
+        <div class="toolbar-menu toolbar-right" class:open={openMenu === 'tools'}>
+          <button
+            class="btn btn-sm menu-trigger"
+            aria-haspopup="menu"
+            aria-expanded={openMenu === 'tools'}
+            onclick={(e) => { e.stopPropagation(); openMenu = openMenu === 'tools' ? null : 'tools'; }}
+          >
+            Tools <span class="caret" aria-hidden="true">▾</span>
+          </button>
+          {#if openMenu === 'tools'}
+            <div class="menu-panel menu-panel-right" role="menu">
+              {#each toolItems as item (item.key)}
+                <button class="menu-item" class:subtle={item.subtle} role="menuitem" onclick={() => runFromMenu(item.run)}>
+                  <span class="menu-item-label">{item.label}{#if item.badge} ({item.badge}){/if}</span>
+                  <span class="menu-item-hint">{item.hint}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
       </div>
 
-      <div class="toolbar-menu" class:open={openMenu === 'edit'}>
-        <button
-          class="btn btn-sm menu-trigger"
-          aria-haspopup="menu"
-          aria-expanded={openMenu === 'edit'}
-          onclick={(e) => { e.stopPropagation(); openMenu = openMenu === 'edit' ? null : 'edit'; }}
-        >
-          Edit <span class="caret" aria-hidden="true">▾</span>
-        </button>
-        {#if openMenu === 'edit'}
-          <div class="menu-panel" role="menu">
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => openPlaceForm(null, () => loadData()))}>
-              <span class="menu-item-label">Add place</span>
-              <span class="menu-item-hint">Create a new place record</span>
-            </button>
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(() => { showTypeSettings = !showTypeSettings; })}>
-              <span class="menu-item-label">{showTypeSettings ? 'Hide types' : 'Types'}</span>
-              <span class="menu-item-hint">Manage place type labels</span>
-            </button>
-          </div>
+      {#if activeView !== 'tree'}
+        <div class="pane-header">
+          <button class="btn-link pane-back" onclick={() => setView('tree')}>← Places</button>
+          <h3 class="pane-title">{activeTitle}</h3>
+        </div>
+      {/if}
+
+      {#if activeView === 'geocode'}
+        <GeocodeBatchPicker
+          embedded
+          treeId={getTreeId()}
+          {isQueueBlocked}
+          onstart={startBatch}
+          onclose={() => setView('tree')}
+        />
+      {:else if activeView === 'review'}
+        {#if geocodeQueue}
+          <GeocodeReview
+            queue={geocodeQueue}
+            onUpdate={() => { refreshQueueCounts(); loadData(); }}
+            onClose={() => setView('tree')}
+          />
         {/if}
-      </div>
-
-      <div class="toolbar-menu" class:open={openMenu === 'backup'}>
-        <button
-          class="btn btn-sm menu-trigger"
-          aria-haspopup="menu"
-          aria-expanded={openMenu === 'backup'}
-          onclick={(e) => { e.stopPropagation(); openMenu = openMenu === 'backup' ? null : 'backup'; }}
-        >
-          Backup <span class="caret" aria-hidden="true">▾</span>
-        </button>
-        {#if openMenu === 'backup'}
-          <div class="menu-panel" role="menu">
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(handleExport)}>
-              <span class="menu-item-label">Export</span>
-              <span class="menu-item-hint">Download places as JSON</span>
-            </button>
-            <button class="menu-item" role="menuitem" onclick={() => runFromMenu(handleImport)}>
-              <span class="menu-item-label">Import</span>
-              <span class="menu-item-hint">Restore from a JSON file</span>
-            </button>
-          </div>
-        {/if}
-      </div>
-    </div>
-
-    {#if showReview && geocodeQueue}
-      <GeocodeReview
-        queue={geocodeQueue}
-        onUpdate={() => {
-          queueCount = geocodeQueue.count();
-          loadData();
-        }}
-        onClose={() => { showReview = false; }}
-      />
-    {/if}
-
-    {#if showTypeSettings}
-      <PlaceTypeSettings onClose={() => { showTypeSettings = false; }} />
-    {/if}
-
+      {:else if activeView === 'merge'}
+        <MergePlacesPicker
+          embedded
+          oncomplete={() => { refreshQueueCounts(); loadData(); }}
+          onclose={() => setView('tree')}
+        />
+      {:else if activeView === 'types'}
+        <PlaceTypeSettings onClose={() => setView('tree')} />
+      {:else if activeView === 'help'}
+        <PlacesHelp embedded onclose={() => setView('tree')} />
+      {:else if activeView === 'manual'}
+        <div class="manual-mount" bind:this={manualContainer}></div>
+      {:else}
     <div class="form-group" style="margin-bottom:12px">
       <ClearableInput placeholder="Filter places…" bind:value={filterText} />
     </div>
@@ -443,7 +511,11 @@
                     <span class="place-toggle-spacer"></span>
                   {/if}
                   <span class="place-tree-name">{place.name}</span>
-                  {#if place.type}<span class="place-type-badge">{place.type}</span>{/if}
+                  {#if place.type}
+                    <span class="place-type-badge">{place.type}</span>
+                  {:else}
+                    <span class="place-needs-badge" title="Not searchable until geocoded or given a type">unorganized</span>
+                  {/if}
                   {#if place.latitude != null}<span class="place-geocoded" title="Geocoded">&#x1F4CD;</span>{/if}
                 </div>
                 <button
@@ -486,20 +558,173 @@
       {/snippet}
 
       {@render placeTree('__root__')}
-    {/if}
+
+      <div class="places-legend">
+        <span>📍 geocoded</span>
+        <span><span class="place-needs-badge">unorganized</span> not searchable until geocoded or given a type</span>
+      </div>
+        {/if}
+      {/if}
+    </section>
   </div>
 </Modal>
 
 <style>
-  .places-toolbar {
+  /* ── Two-pane shell (desktop) ─────────────────────────────────────────── */
+  .places-shell {
     display: flex;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .places-sidebar {
+    flex: 0 0 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    padding-right: 16px;
+    border-right: 1px solid var(--border, #eee);
+  }
+  .sidebar-add {
+    width: 100%;
+    justify-content: center;
+  }
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 10px;
+    cursor: pointer;
+    color: var(--text, #333);
+    font-size: 0.88rem;
+  }
+  .sidebar-item:hover,
+  .sidebar-item:focus-visible {
+    background: var(--bg-hover, #f3f6fa);
+    outline: none;
+  }
+  .sidebar-item.active {
+    background: var(--accent-color, #3498db);
+    color: #fff;
+    font-weight: 500;
+  }
+  .sidebar-item.subtle .sidebar-label {
+    color: var(--text-muted, #888);
+  }
+  .sidebar-label {
+    flex: 1;
+    min-width: 0;
+  }
+  .sidebar-badge {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    min-width: 18px;
+    text-align: center;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--bg-hover, #eef2f6);
+    color: var(--text-muted, #666);
+  }
+  .sidebar-badge.warn {
+    color: var(--warning-text, #92400e);
+    background: var(--warning-bg, #fef3e2);
+  }
+  .sidebar-item.active .sidebar-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+  }
+  .sidebar-divider {
+    height: 1px;
+    background: var(--border, #eee);
+    margin: 6px 4px;
+  }
+  .places-main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Main-pane header for an active tool view */
+  .pane-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border, #eee);
+  }
+  .pane-back {
+    flex-shrink: 0;
+  }
+  .pane-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  /* Mobile toolbar — hidden on desktop, shown when the sidebar collapses */
+  .places-mobile-toolbar {
+    display: none;
     gap: 8px;
     margin-bottom: 12px;
-    flex-wrap: wrap;
     align-items: center;
   }
+
+  @media (max-width: 768px) {
+    .places-shell {
+      display: block;
+    }
+    .places-sidebar {
+      display: none;
+    }
+    .places-mobile-toolbar {
+      display: flex;
+    }
+  }
+
   .toolbar-menu {
     position: relative;
+  }
+  .toolbar-right {
+    margin-left: auto;
+  }
+  /* Compound selector: must outrank .menu-panel's `left: 0`, which is declared
+     later in this block. Right-anchored so the panel stays inside the modal. */
+  .menu-panel.menu-panel-right {
+    left: auto;
+    right: 0;
+  }
+  .place-needs-badge {
+    font-size: 0.7rem;
+    padding: 1px 8px;
+    border-radius: 10px;
+    color: var(--warning-text, #92400e);
+    border: 1px solid var(--warning-border, #f5d9a8);
+    background: var(--warning-bg, #fef3e2);
+    white-space: nowrap;
+  }
+  .places-legend {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color, #eee);
+    font-size: 0.75rem;
+    color: var(--text-muted, #888);
   }
   .menu-trigger {
     white-space: nowrap;

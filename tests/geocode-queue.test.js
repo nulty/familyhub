@@ -35,10 +35,10 @@ describe('GeocodeQueue', () => {
     expect(queue.getItems()[0].place_id).toBe('p1');
   });
 
-  it('adds a no_results item', () => {
+  it('normalizes a legacy no_results item to correction', () => {
     queue.addItem({ place_id: 'p2', place_name: 'Nowhere', query: 'Nowhere', status: 'no_results', results: [] });
     const items = queue.getItems();
-    expect(items[0].status).toBe('no_results');
+    expect(items[0].status).toBe('correction');
   });
 
   it('removes an item', () => {
@@ -79,5 +79,57 @@ describe('GeocodeQueue', () => {
     queue.addItem({ place_id: 'p1', place_name: 'A', query: 'A', status: 'ready', results: [] });
     const otherQueue = new GeocodeQueue('tree_456', mockStorage);
     expect(otherQueue.count()).toBe(0);
+  });
+
+  it('addPendingPlaces enqueues coordinate-less places as pending', () => {
+    const added = queue.addPendingPlaces([
+      { id: 'p1', name: 'Dublin, Ireland' },
+      { id: 'p2', name: 'Cork', latitude: 51.9, longitude: -8.47 }, // has coords — skipped
+    ]);
+    expect(added).toBe(1);
+    const items = queue.getItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ place_id: 'p1', place_name: 'Dublin, Ireland', query: 'Dublin, Ireland', status: 'pending' });
+  });
+
+  it('addPendingPlaces skips places already in the queue', () => {
+    queue.addItem({ place_id: 'p1', place_name: 'A', query: 'A', status: 'ready', results: [] });
+    const added = queue.addPendingPlaces([{ id: 'p1', name: 'A' }, { id: 'p2', name: 'B' }]);
+    expect(added).toBe(1);
+    expect(queue.count()).toBe(2);
+    expect(queue.getStatus('p1')).toBe('ready'); // untouched
+  });
+
+  it('getStatus returns the item status or null', () => {
+    queue.addItem({ place_id: 'p1', place_name: 'A', query: 'A', status: 'correction', results: [] });
+    expect(queue.getStatus('p1')).toBe('correction');
+    expect(queue.getStatus('missing')).toBeNull();
+  });
+
+  it('upsertItem replaces an existing entry instead of duplicating', () => {
+    queue.addPendingPlaces([{ id: 'p1', name: 'Dublin' }]);
+    queue.upsertItem({ place_id: 'p1', status: 'ready', results: [{ lat: 1, lon: 2 }] });
+    expect(queue.count()).toBe(1);
+    const item = queue.getItems()[0];
+    expect(item.status).toBe('ready');
+    expect(item.place_name).toBe('Dublin'); // merged, not replaced wholesale
+    queue.upsertItem({ place_id: 'p2', place_name: 'New', status: 'pending', results: [] });
+    expect(queue.count()).toBe(2);
+  });
+
+  it('countByStatus buckets items by funnel stage', () => {
+    queue.addPendingPlaces([{ id: 'p1', name: 'A' }, { id: 'p2', name: 'B' }]);
+    queue.upsertItem({ place_id: 'p2', status: 'ready' });
+    queue.addItem({ place_id: 'p3', place_name: 'C', query: 'C', status: 'correction', results: [] });
+    expect(queue.countByStatus()).toEqual({ pending: 1, ready: 1, correction: 1 });
+  });
+
+  it('migrates legacy no_results status to correction on load', () => {
+    store['geocode_queue_tree_123'] = JSON.stringify({
+      version: 1,
+      items: [{ place_id: 'p1', place_name: 'A', query: 'A', status: 'no_results', results: [] }],
+    });
+    expect(queue.getStatus('p1')).toBe('correction');
+    expect(queue.countByStatus().correction).toBe(1);
   });
 });

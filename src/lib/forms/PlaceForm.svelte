@@ -6,7 +6,9 @@
   import PlacePicker from '../pickers/PlacePicker.svelte';
   import { openPlaceForm } from '../shared/open.js';
   import { groupTypes } from '../../util/place-type-seeds.js';
-  import { geocodeSearch } from '../../util/geocode.js';
+  import { geocodeSearch, reverseGeocode } from '../../util/geocode.js';
+  import { GeocodeQueue } from '../../util/geocode-queue.js';
+  import { getTreeId } from '../../config.js';
   import { decomposeAddress, getResultChain } from '../../util/decompose.js';
   import { ulid } from '../../util/ulid.js';
 
@@ -26,10 +28,12 @@
   let pickerRef;
   let original = null;
 
-  // Manual section is open straight away when editing, or when we're returning
-  // from a "pick on map" round-trip (prefill carries field values). For a fresh
-  // create it stays collapsed behind the disclosure.
-  let manualOpen = $state(!!placeId || !!(prefill && (prefill.name || prefill.latitude != null)));
+  // Manual section is open straight away when editing, when we're returning
+  // from a "pick on map" round-trip (prefill carries field values), or for
+  // "Add child" (prefill.parent_id) — the search/decompose path builds its own
+  // hierarchy and would silently discard a preset parent. For a fresh create it
+  // stays collapsed behind the disclosure.
+  let manualOpen = $state(!!placeId || !!(prefill && (prefill.name || prefill.latitude != null || prefill.parent_id != null)));
 
   // ─── Search (Nominatim lookup) ───────────────────────────────────────────────
   let query = $state(prefill?.name || '');
@@ -95,6 +99,30 @@
         };
       });
     }
+  });
+
+  // Map-pick return (new place with coords): reverse-geocode the picked point
+  // and offer its hierarchy as a one-click candidate. The picked coordinates
+  // are kept — Nominatim's centroid may differ from where the user pointed.
+  // Failure is silent: manual entry (with the coords prefilled) still works.
+  let reverseTried = false;
+  $effect(() => {
+    if (reverseTried || placeId || !prefill || prefill.latitude == null) return;
+    reverseTried = true;
+    (async () => {
+      searching = true;
+      try {
+        const lat = parseFloat(prefill.latitude);
+        const lon = parseFloat(prefill.longitude);
+        const result = await reverseGeocode(lat, lon);
+        if (result) {
+          searchResults = [{ ...result, lat, lon }];
+          searched = true;
+          selectResult(0);
+        }
+      } catch { /* offline or Nominatim down */ }
+      finally { searching = false; }
+    })();
   });
 
   function focusOnMount(node) {
@@ -163,6 +191,9 @@
       showToast('That result has no address detail — try another or enter it manually');
       return;
     }
+    // Decompose may have replaced (deleted) the original flat record — drop
+    // any geocode-queue entry it left behind.
+    if (isEdit) new GeocodeQueue(getTreeId()).removeItem(placeId);
     const place = await places.get(lastId);
     onclose?.();
     emit(DATA_CHANGED);
@@ -192,15 +223,25 @@
         || data.longitude !== original.longitude
         || data.notes !== original.notes;
       const updated = dirty ? await places.update(placeId, data) : { id: placeId, ...data };
+      // Assigning a type resolves the place — it leaves the geocode funnel.
+      if (data.type) new GeocodeQueue(getTreeId()).removeItem(placeId);
       onclose?.();
       emit(DATA_CHANGED);
       showToast('Place updated');
       oncomplete?.(updated);
     } else {
       const created = await places.create(data);
+      // Untyped places are invisible to search until organized — feed
+      // coordinate-less ones into the geocode funnel so they can't be forgotten.
+      let queued = false;
+      if (!data.type && data.latitude == null) {
+        queued = new GeocodeQueue(getTreeId()).addPendingPlaces([created]) > 0;
+      }
       onclose?.();
       emit(DATA_CHANGED);
-      showToast(`Created ${data.name}`);
+      showToast(queued
+        ? `Created ${data.name} — queued for geocoding so it becomes searchable`
+        : `Created ${data.name}`);
       oncomplete?.(created);
     }
   }

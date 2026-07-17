@@ -611,6 +611,29 @@ describe('Places', () => {
     expect(ev[0].place).toBe('Dublin'); // text preserved
   });
 
+  it('deletePlace backfills resolved place text onto events with empty place', async () => {
+    await h.createPlace({ id: 'PL1', name: 'Ireland', type: 'country' });
+    await h.createPlace({ id: 'PL2', name: 'Leinster', type: 'region', parent_id: 'PL1' });
+    await h.createPlace({ id: 'PL3', name: 'Dublin', type: 'city', parent_id: 'PL2' });
+    await h.createPerson({ id: 'P1', given_name: 'John' });
+    await h.createEvent({ id: 'E1', person_id: 'P1', place: '', place_id: 'PL3' });
+    await h.deletePlace('PL3');
+    const ev = await h.getEvent('E1'); // raw row, no display resolution
+    expect(ev.place_id).toBeNull();
+    expect(ev.place).toBe('Dublin, Leinster, Ireland');
+  });
+
+  it('deletePlace does not touch events linked to other places', async () => {
+    await h.createPlace({ id: 'PL1', name: 'Dublin', type: 'city' });
+    await h.createPlace({ id: 'PL2', name: 'Cork', type: 'city' });
+    await h.createPerson({ id: 'P1', given_name: 'John' });
+    await h.createEvent({ id: 'E1', person_id: 'P1', place: '', place_id: 'PL2' });
+    await h.deletePlace('PL1');
+    const ev = await h.getEvent('E1'); // raw row, no display resolution
+    expect(ev.place_id).toBe('PL2');
+    expect(ev.place).toBe('');
+  });
+
   it('listPlaces returns all sorted by name', async () => {
     await h.createPlace({ id: 'PL1', name: 'Dublin' });
     await h.createPlace({ id: 'PL2', name: 'Cork' });

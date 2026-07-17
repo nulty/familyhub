@@ -41,3 +41,11 @@ export function getMode() {
   const collab = getCollabState();
   return collab?.mode || 'local';
 }
+
+/**
+ * Identifier for per-tree local storage (geocode queue, region bias, …).
+ * 'local' when not in collab mode.
+ */
+export function getTreeId() {
+  return getCollabState()?.treeId || 'local';
+}

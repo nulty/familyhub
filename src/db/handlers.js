@@ -732,6 +732,18 @@ export function createHandlers(h, opts = {}) {
     },
 
     async deletePlace(id) {
+      // Deleting a place nulls events.place_id (FK ON DELETE SET NULL). Events that
+      // relied on the link for display (empty free-text place) would silently lose
+      // their place, so write the resolved name into events.place first.
+      const chain = await handlers.getPlaceHierarchy(id);
+      if (chain.length > 0) {
+        const text = chain.map(p => p.name).reverse().join(', ');
+        const now = Date.now();
+        await run(
+          `UPDATE events SET place = ?, updated_at = ? WHERE place_id = ? AND (place IS NULL OR place = '')`,
+          [text, now, id]
+        );
+      }
       await run('DELETE FROM places WHERE id = ?', [id]);
       return { ok: true };
     },

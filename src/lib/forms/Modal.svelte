@@ -1,5 +1,5 @@
 <script>
-  let { title = '', wide = false, onclose, children } = $props();
+  let { title = '', wide = false, xwide = false, onclose, children } = $props();
 
   function handleBackdropClick(e) {
     if (e.target === e.currentTarget) onclose?.();
@@ -14,7 +14,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="modal-backdrop" onclick={handleBackdropClick}>
-  <div class="modal" class:modal-wide={wide}>
+  <div class="modal" class:modal-wide={wide} class:modal-xwide={xwide}>
     <div class="modal-header">
       <h2>{title}</h2>
       <button class="modal-close" aria-label="Close" onclick={() => onclose?.()}>&times;</button>
@@ -52,6 +52,19 @@
     max-width: 720px;
   }
 
+  .modal.modal-xwide {
+    max-width: 940px;
+  }
+
+  /* Management pages (xwide) hold a fixed height on desktop so swapping their
+     inner views never collapses/regrows the whole modal around its centre.
+     Inner content scrolls via .modal-body. Mobile keeps the full-screen rule. */
+  @media (min-width: 769px) {
+    .modal.modal-xwide {
+      height: 85vh;
+    }
+  }
+
   .modal-header {
     display: flex;
     align-items: center;
@@ -79,6 +92,9 @@
   .modal-body {
     padding: 18px;
     overflow-y: auto;
+    /* Reserve the scrollbar gutter so swapping between tall (scrolling) and
+       short (non-scrolling) content doesn't shift the layout horizontally. */
+    scrollbar-gutter: stable;
     flex: 1;
   }
 

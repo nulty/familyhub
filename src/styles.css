@@ -1625,6 +1625,169 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 
+/* Chain builder — build the "inside" hierarchy inline, no nested forms */
+.organize-chain-hint {
+  margin: 0 0 6px;
+}
+
+.organize-chain-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.organize-chain-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.organize-chain-row select {
+  flex: 0 1 160px;
+  min-width: 0;
+}
+
+.organize-chain-ancestry {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.organize-chain-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.organize-chain-remove:hover {
+  background: var(--bg-elevated, #f4f6f9);
+  color: var(--danger, #c0392b);
+}
+
+.organize-chain-hidden {
+  display: none !important;
+}
+
+/* Leaf row mirrors the chain rows; the spacer keeps its inputs aligned with
+   rows that carry a remove button. */
+.organize-chain-spacer {
+  width: 28px;
+  flex-shrink: 0;
+}
+
+/* Coordinates block mirrors PlaceForm: pick-on-map up front, manual entry
+   tucked behind a disclosure. */
+.organize-coord-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.organize-coord-head label {
+  margin-bottom: 0;
+}
+
+.organize-geo-search {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.organize-geo-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+.organize-geo-search .btn {
+  flex-shrink: 0;
+}
+
+.organize-geo-results {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.organize-geo-results:empty {
+  display: none;
+}
+
+.organize-geo-result {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.organize-geo-result:last-child {
+  border-bottom: none;
+}
+
+.organize-geo-result:hover {
+  background: var(--bg-elevated, #f4f6f9);
+}
+
+.organize-coord-advanced {
+  margin-top: 6px;
+}
+
+.organize-coord-advanced summary {
+  font-size: 12.5px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.organize-coords {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.organize-coords input {
+  flex: 1;
+  min-width: 0;
+}
+
+.organize-merge-section {
+  margin-top: 14px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated, #f4f6f9);
+  border-radius: var(--radius);
+}
+
+.organize-merge-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.organize-merge-section .form-hint {
+  margin: 0 0 8px;
+}
+
+.organize-merge-section .organize-select-row .btn {
+  flex-shrink: 0;
+}
+
 .organize-card {
   padding: 16px;
   border: 1px solid var(--border);

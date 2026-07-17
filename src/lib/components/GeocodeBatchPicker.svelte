@@ -1,24 +1,25 @@
 <script>
-  import Modal from '../forms/Modal.svelte';
+  import PanelShell from '../forms/PanelShell.svelte';
   import { places } from '../../db/db.js';
   import { getConfig, setConfig } from '../../config.js';
   import ClearableInput from '../shared/ClearableInput.svelte';
 
-  let { treeId, hasQueueEntry, onstart, onclose } = $props();
-  // onstart({ selectedIds: string[], bias: string, mode: 'auto' | 'review' })
+  let { treeId, isQueueBlocked, onstart, onclose, embedded = false } = $props();
+  // onstart({ selectedIds: string[], bias: string })
 
   let allEligible = $state([]);
   let selected = $state(new Set());
   let filterText = $state('');
   let bias = $state(getConfig(`geocode_bias_${treeId}`, '') || '');
-  let mode = $state('review');
   let loading = $state(true);
   let anchorId = $state(null);
 
   $effect(() => {
     places.list().then((all) => {
+      // Eligible: no coordinates, and not already fetched (pending queue entries
+      // ARE eligible — this run is what resolves them).
       allEligible = all.filter(
-        (p) => p.latitude == null && p.longitude == null && !hasQueueEntry(p.id)
+        (p) => p.latitude == null && p.longitude == null && !isQueueBlocked(p.id)
       );
       // Pre-select everything
       selected = new Set(allEligible.map((p) => p.id));
@@ -92,13 +93,12 @@
     onstart?.({
       selectedIds: Array.from(selected),
       bias: trimmed,
-      mode,
     });
     onclose?.();
   }
 </script>
 
-<Modal title="Batch geocode" onclose={onclose}>
+<PanelShell title="Batch geocode" {embedded} onclose={onclose}>
   <div class="batch-picker">
     {#if loading}
       <p class="empty">Loading places…</p>
@@ -162,21 +162,10 @@
         <p class="form-hint">Appended to each query unless the place name already contains it. Leave blank to skip.</p>
       </div>
 
-      <div class="form-group">
-        <label>Mode</label>
-        <div class="mode-choices">
-          <label class="mode-choice">
-            <input type="radio" bind:group={mode} value="review" />
-            <span>Queue for review</span>
-            <small>Pick from top 3 matches per place</small>
-          </label>
-          <label class="mode-choice">
-            <input type="radio" bind:group={mode} value="auto" />
-            <span>Auto-accept top</span>
-            <small>Trust Nominatim's best match (fast)</small>
-          </label>
-        </div>
-      </div>
+      <p class="form-hint">
+        Places with a single unambiguous match are applied automatically; multiple
+        matches go to Review, and no-match places go to Correct.
+      </p>
 
       <div class="form-actions">
         <button type="button" class="btn" onclick={onclose}>Cancel</button>
@@ -186,13 +175,13 @@
       </div>
     {/if}
   </div>
-</Modal>
+</PanelShell>
 
 <style>
   .batch-picker { display: flex; flex-direction: column; gap: 12px; }
   .empty { color: var(--text-muted, #888); text-align: center; padding: 16px; }
   .picker-controls { display: flex; gap: 8px; align-items: center; }
-  .filter-input { flex: 1; padding: 4px 8px; }
+  .picker-controls :global(.clearable-input) { flex: 1; }
   .picker-actions { display: flex; gap: 4px; }
   .picker-list {
     list-style: none;
@@ -240,14 +229,4 @@
     border: 0;
   }
   .picker-summary { color: var(--text-muted, #888); font-size: 0.85rem; }
-  .mode-choices { display: flex; flex-direction: column; gap: 6px; }
-  .mode-choice {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    align-items: baseline;
-    gap: 6px 10px;
-    cursor: pointer;
-    padding: 4px 0;
-  }
-  .mode-choice small { color: var(--text-muted, #888); }
 </style>

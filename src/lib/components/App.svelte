@@ -6,6 +6,7 @@
   import { initMap, invalidateSize, clearAllMarkers, startPicking, stopPicking } from '../../ui/map.js';
   import MapPanel from './MapPanel.svelte';
   import { getConfig, setConfig, getMode, getCollabState } from '../../config.js';
+  import { GeocodeQueue } from '../../util/geocode-queue.js';
   import { getTreeConfig, applyTreeColors, applyCardDisplay, openTreeConfig } from '../../ui/tree-config.js';
   import { openPersonForm, openPlaceForm, openPlacesPage, openSourcesPage, openImportModal, openExportModal } from '../shared/open.js';
   import { handleAuthCallback, isAuthenticated, getCurrentUser, startGoogleSignIn, signOut } from '../../auth.js';
@@ -116,7 +117,7 @@
       await initTree();
     });
 
-    on(PICK_LOCATION, ({ placeId, formState, oncomplete }) => {
+    on(PICK_LOCATION, ({ placeId, formState, oncomplete, onpick }) => {
       const prevMode = viewMode;
       // Hide all modals while picking
       const modalRoot = document.getElementById('modal-root');
@@ -126,6 +127,11 @@
         startPicking(({ lat, lng }) => {
           setViewMode(prevMode);
           if (modalRoot) modalRoot.style.display = '';
+          // onpick: caller keeps its own (hidden) UI alive and just wants coords
+          if (onpick) {
+            onpick({ lat, lng });
+            return;
+          }
           const prefill = {
             ...formState,
             latitude: String(lat.toFixed(6)),
@@ -264,6 +270,7 @@
       if (!await showConfirm({ title: 'Delete all data?', message: 'This cannot be undone.', confirm: 'Delete', danger: true })) return;
       uploadStatus = 'Deleting all data\u2026';
       await nukeDatabase();
+      new GeocodeQueue('local').clear();
       window.location.reload();
     }
   }

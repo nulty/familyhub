@@ -1,7 +1,9 @@
 <script>
   import { places, placeTypes, events } from '../../db/db.js';
   import { decomposeAddress, getResultChain } from '../../util/decompose.js';
+  import { geocodeSearch } from '../../util/geocode.js';
   import { showToast } from '../shared/toast-store.js';
+  import { openPlaceForm } from '../shared/open.js';
   import { ulid } from '../../util/ulid.js';
 
   let { queue, onUpdate, onClose } = $props();
@@ -21,7 +23,7 @@
   $effect(() => { refresh(); });
 
   let readyItems = $derived(items.filter(i => i.status === 'ready'));
-  let noResultItems = $derived(items.filter(i => i.status === 'no_results'));
+  let correctionItems = $derived(items.filter(i => i.status === 'correction'));
 
   const decompositionHandlers = {
     findPlaceByNameTypeParent: (name, type, parentId) => places.findByNameTypeParent(name, type, parentId),
@@ -70,10 +72,22 @@
     }
   }
 
-  function skip(item) {
-    queue.removeItem(item.place_id);
+  // Rejecting a match doesn't drop the place from the funnel — it moves to
+  // the correction pile, where the name can be fixed or resolved manually.
+  function reject(item) {
+    queue.updateItem(item.place_id, { status: 'correction' });
     refresh();
     onUpdate?.();
+  }
+
+  // Manual exit for places Nominatim can't resolve: assign type + parent by
+  // hand in PlaceForm. Saving with a type removes the queue entry (PlaceForm
+  // handles that), so the funnel count drops on completion.
+  function resolveManually(item) {
+    openPlaceForm(item.place_id, () => {
+      refresh();
+      onUpdate?.();
+    });
   }
 
   async function retry(item) {
@@ -83,24 +97,21 @@
       return;
     }
     try {
-      const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({
-        q: newQuery, format: 'json', limit: '3', addressdetails: '1',
-      })}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'Sinsear/0.2.0' } });
-      if (!res.ok) { showToast('Geocode request failed'); return; }
-      const data = await res.json();
+      const results = await geocodeSearch(newQuery, { limit: 3 });
+      if (results.length === 1) {
+        // Single unambiguous match — apply straight away (same routing as a batch run)
+        queue.updateItem(item.place_id, { query: newQuery, status: 'ready', results });
+        await accept({ ...item, results }, 0);
+        return;
+      }
       queue.updateItem(item.place_id, {
         query: newQuery,
-        status: data.length > 0 ? 'ready' : 'no_results',
-        results: data.map(r => ({
-          lat: parseFloat(r.lat), lon: parseFloat(r.lon),
-          display_name: r.display_name, address: r.address,
-          importance: r.importance, addresstype: r.addresstype,
-          name: r.name, class: r.class, type: r.type,
-        })),
+        status: results.length > 0 ? 'ready' : 'correction',
+        results,
       });
       refresh();
       onUpdate?.();
+      if (results.length === 0) showToast('Still no match — try reformatting the name');
     } catch (err) {
       showToast('Geocode error: ' + err.message);
     }
@@ -130,7 +141,7 @@
       <div class="review-item">
         <div class="review-item-header">
           <strong>{item.place_name}</strong>
-          <button class="btn-link btn-sm" onclick={() => skip(item)}>Skip</button>
+          <button class="btn-link btn-sm" onclick={() => reject(item)}>None of these</button>
         </div>
         <ul class="review-results">
           {#each item.results as result, idx}
@@ -175,13 +186,17 @@
     {/each}
   {/if}
 
-  {#if noResultItems.length > 0}
-    <h4>No results ({noResultItems.length})</h4>
-    {#each noResultItems as item (item.place_id)}
+  {#if correctionItems.length > 0}
+    <h4>Needs correction ({correctionItems.length})</h4>
+    <p class="correction-hint">
+      No match found. Reformat the name and retry, or resolve by hand (assign a type and
+      parent — coordinates optional).
+    </p>
+    {#each correctionItems as item (item.place_id)}
       <div class="review-item review-item-empty">
         <div class="review-item-header">
           <strong>{item.place_name}</strong>
-          <button class="btn-link btn-sm" onclick={() => skip(item)}>Skip</button>
+          <button class="btn-link btn-sm" onclick={() => resolveManually(item)}>Resolve manually</button>
         </div>
         <div class="retry-row">
           <input
@@ -315,5 +330,10 @@
     color: var(--text-muted, #888);
     text-align: center;
     padding: 16px;
+  }
+  .correction-hint {
+    color: var(--text-muted, #666);
+    font-size: 0.8rem;
+    margin: 0 0 6px;
   }
 </style>

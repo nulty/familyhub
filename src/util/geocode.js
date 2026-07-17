@@ -10,7 +10,7 @@ function delay(ms) {
  * Normalize a raw Nominatim result into the shape the rest of the app expects
  * (numeric lat/lon, plus the fields decomposition reads: address/name/class/addresstype).
  */
-function normalizeResult(r) {
+export function normalizeResult(r) {
   return {
     lat: parseFloat(r.lat),
     lon: parseFloat(r.lon),
@@ -46,6 +46,32 @@ export async function geocodeSearch(query, { limit = 5, signal } = {}) {
   if (!res.ok) return [];
   const data = await res.json();
   return data.map(normalizeResult);
+}
+
+/**
+ * Reverse-geocode a coordinate pair into a single normalized result, or null.
+ *
+ * Used by the map-pick flow: the user pointed at an exact spot, so the caller
+ * should keep the picked coordinates and use this result only for the address
+ * hierarchy. Nominatim's /reverse (jsonv2) uses `category` where /search uses
+ * `class` — mapped here so decomposition sees a uniform shape.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ * @param {Object} [opts]
+ * @param {AbortSignal} [opts.signal]
+ * @returns {Promise<Object|null>} normalized result
+ */
+export async function reverseGeocode(lat, lon, { signal } = {}) {
+  if (lat == null || lon == null || Number.isNaN(lat) || Number.isNaN(lon)) return null;
+  const url = `https://nominatim.openstreetmap.org/reverse?${new URLSearchParams({
+    lat: String(lat), lon: String(lon), format: 'jsonv2', addressdetails: '1',
+  })}`;
+  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data || data.error || !data.address) return null;
+  return normalizeResult({ ...data, class: data.category ?? data.class });
 }
 
 /**

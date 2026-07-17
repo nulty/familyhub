@@ -48,10 +48,21 @@
     flex: 1;
     min-width: 0;
   }
+  /* Match the standard form input so ClearableInput looks right outside a
+     .form-group too (Merge/geocode filters, etc.). */
   .clearable-input input {
     flex: 1;
     min-width: 0;
+    padding: 7px 10px;
     padding-right: 26px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+  }
+  .clearable-input input:focus {
+    border-color: var(--accent);
   }
   .clear-btn {
     position: absolute;
