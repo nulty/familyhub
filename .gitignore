@@ -1,7 +1,14 @@
 node_modules/
 dist/
+dev-dist/
 *.local
 backups/
+
+# Local data files — these hold real genealogy records and must never be
+# committed to this public repo.
 *.ged
+*.db
+*.sqlite
+
 .env
 .env.local
