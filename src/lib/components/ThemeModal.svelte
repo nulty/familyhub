@@ -12,8 +12,8 @@
   }
 </script>
 
-<Modal title="Appearance" onclose={onclose}>
-  <p class="appearance-intro">Choose how Sinsear looks. Your choice is saved on this device.</p>
+<Modal title="Theme" onclose={onclose}>
+  <p class="theme-intro">Choose how Sinsear looks. Your choice is saved on this device.</p>
   <div class="theme-options" role="radiogroup" aria-label="Theme">
     {#each THEMES as theme (theme.id)}
       <label class="theme-option" class:selected={current === theme.id}>
@@ -37,7 +37,7 @@
 </Modal>
 
 <style>
-  .appearance-intro {
+  .theme-intro {
     font-size: var(--text-base);
     color: var(--text-muted);
     margin-bottom: 12px;
