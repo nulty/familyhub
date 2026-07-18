@@ -2,6 +2,7 @@
   import { places, placeTypes, events } from '../../db/db.js';
   import { decomposeAddress, getResultChain } from '../../util/decompose.js';
   import { geocodeSearch } from '../../util/geocode.js';
+  import GeocodeAttribution from '../shared/GeocodeAttribution.svelte';
   import { showToast } from '../shared/toast-store.js';
   import { openPlaceForm } from '../shared/open.js';
   import { ulid } from '../../util/ulid.js';
@@ -209,6 +210,10 @@
         </div>
       </div>
     {/each}
+  {/if}
+
+  {#if items.length > 0}
+    <GeocodeAttribution />
   {/if}
 </div>
 

@@ -21,6 +21,7 @@
   import Wizard from './Wizard.svelte';
   import Toast from '../shared/Toast.svelte';
   import PlacesHelp from './PlacesHelp.svelte';
+  import About from './About.svelte';
 
   let hasData = $state(false);
   let hasAnyData = $state(false);
@@ -408,6 +409,9 @@
             {#if hasAnyData}
               <button class="menu-item" onclick={() => menuAction(openExportModal)}>Export</button>
             {/if}
+            <hr class="menu-divider" />
+            <button class="menu-item" onclick={() => menuAction(() => pushModal(PlacesHelp, {}))}>Help</button>
+            <button class="menu-item" onclick={() => menuAction(() => pushModal(About, {}))}>About</button>
             {#if hasAnyData}
               <hr class="menu-divider" />
               <button class="menu-item menu-item-danger" onclick={() => menuAction(nukeDB)}>
@@ -464,6 +468,9 @@
           <p class="welcome-help">
             New to the app?
             <button type="button" class="welcome-help-link" onclick={() => pushModal(PlacesHelp, {})}>Read the places guide first →</button>
+          </p>
+          <p class="welcome-help">
+            <button type="button" class="welcome-help-link" onclick={() => pushModal(About, {})}>About Sinsear</button>
           </p>
         </div>
       </div>

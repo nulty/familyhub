@@ -1,5 +1,7 @@
+import { APP_VERSION } from '../version.js';
+
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
-const USER_AGENT = 'Sinsear/0.2.0';
+const USER_AGENT = `Sinsear/${APP_VERSION}`;
 const DELAY_MS = 1100;
 
 function delay(ms) {

@@ -2,6 +2,10 @@
   "name": "familyhub",
   "version": "0.2.0",
   "description": "Browser-based family tree with SQLite/OPFS storage",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nulty/familyhub"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --host",

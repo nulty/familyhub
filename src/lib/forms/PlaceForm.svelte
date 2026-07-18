@@ -7,6 +7,7 @@
   import { openPlaceForm } from '../shared/open.js';
   import { groupTypes } from '../../util/place-type-seeds.js';
   import { geocodeSearch, reverseGeocode } from '../../util/geocode.js';
+  import GeocodeAttribution from '../shared/GeocodeAttribution.svelte';
   import { GeocodeQueue } from '../../util/geocode-queue.js';
   import { getTreeId } from '../../config.js';
   import { decomposeAddress, getResultChain } from '../../util/decompose.js';
@@ -315,6 +316,7 @@
             </li>
           {/each}
         </ul>
+        <GeocodeAttribution />
       {:else if searched && !searching}
         <p class="no-results">No matches. Refine the search above, or enter it manually below.</p>
       {/if}
