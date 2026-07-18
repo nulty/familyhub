@@ -22,6 +22,8 @@
   import Toast from '../shared/Toast.svelte';
   import PlacesHelp from './PlacesHelp.svelte';
   import About from './About.svelte';
+  import FeedbackForm from './FeedbackForm.svelte';
+  import { initFeedbackRetry } from '../../util/feedback.js';
 
   let hasData = $state(false);
   let hasAnyData = $state(false);
@@ -51,6 +53,9 @@
   const modalStack = getStack;
 
   onMount(async () => {
+    // Deliver any feedback that was queued while offline, and retry on reconnect.
+    initFeedbackRetry();
+
     // Handle OAuth callback
     const url = new URL(window.location.href);
     const authCode = url.searchParams.get('code');
@@ -411,6 +416,7 @@
             {/if}
             <hr class="menu-divider" />
             <button class="menu-item" onclick={() => menuAction(() => pushModal(PlacesHelp, {}))}>Help</button>
+            <button class="menu-item" onclick={() => menuAction(() => pushModal(FeedbackForm, {}))}>Send Feedback</button>
             <button class="menu-item" onclick={() => menuAction(() => pushModal(About, {}))}>About</button>
             {#if hasAnyData}
               <hr class="menu-divider" />
@@ -471,6 +477,8 @@
           </p>
           <p class="welcome-help">
             <button type="button" class="welcome-help-link" onclick={() => pushModal(About, {})}>About Sinsear</button>
+            <span class="welcome-help-sep">·</span>
+            <button type="button" class="welcome-help-link" onclick={() => pushModal(FeedbackForm, {})}>Send feedback</button>
           </p>
         </div>
       </div>

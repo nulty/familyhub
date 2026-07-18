@@ -487,6 +487,10 @@ a:hover { text-decoration: underline; }
   text-underline-offset: 2px;
 }
 .welcome-help-link:hover { filter: brightness(1.1); }
+.welcome-help-sep {
+  margin-left: 6px;
+  color: var(--text-muted, #666);
+}
 
 .btn-lg {
   padding: 12px 28px;
