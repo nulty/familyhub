@@ -4,6 +4,7 @@
  */
 import { mount } from 'svelte';
 import App from './lib/components/App.svelte';
+import { applyTheme } from './theme.js';
 
 const LOCK_NAME = 'familyhub-single-tab';
 
@@ -29,6 +30,9 @@ async function start() {
 
   // Acquire the lock for the lifetime of this tab
   navigator.locks.request(LOCK_NAME, () => new Promise(() => {}));
+
+  // Belt-and-braces: the index.html pre-paint script normally did this already
+  applyTheme();
 
   mount(App, { target: document.body });
 }

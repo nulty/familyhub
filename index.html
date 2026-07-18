@@ -7,6 +7,14 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <!-- Pre-paint theme stamp: mirrors src/theme.js (storage key + default).
+       Runs before the stylesheet so there is no flash of the wrong theme. -->
+  <script>
+    try {
+      var t = JSON.parse(localStorage.getItem('familyhub:theme'));
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) { /* default (classic) applies */ }
+  </script>
   <link rel="stylesheet" href="/src/styles.css">
   <!-- COOP/COEP headers set via _headers file on Cloudflare Pages -->
 </head>

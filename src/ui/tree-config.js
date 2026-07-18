@@ -5,13 +5,16 @@
 import { mount, unmount } from 'svelte';
 import TreeConfig from '../lib/components/TreeConfig.svelte';
 import { getConfig, setConfig } from '../config.js';
+import { migrateColors, applyChartColors } from './chart-colors.js';
 
 const DEFAULTS = {
-  maleColor: '#93c5fd',
-  femaleColor: '#f9a8d4',
-  otherColor: '#e5e7eb',
-  bgColor: '#fafafa',
-  lineColor: '#555555',
+  // Chart colors are nullable: null = follow the active theme (stylesheet
+  // defaults from semantic tokens); a hex string is a user override.
+  maleColor: null,
+  femaleColor: null,
+  otherColor: null,
+  bgColor: null,
+  lineColor: null,
   orientation: 'vertical',
   ancestryDepth: 3,
   progenyDepth: 3,
@@ -27,7 +30,12 @@ const DEFAULTS = {
 };
 
 export function getTreeConfig() {
-  return { ...DEFAULTS, ...getConfig('treeConfig', {}) };
+  const stored = getConfig('treeConfig', {});
+  // Lazy migration: colors equal to the pre-token hard defaults were never a
+  // deliberate choice — rewrite them to null (follow theme) once.
+  const { config, changed } = migrateColors(stored);
+  if (changed) setConfig('treeConfig', config);
+  return { ...DEFAULTS, ...config };
 }
 
 export function applyCardDisplay(cfg) {
@@ -41,16 +49,7 @@ export function applyCardDisplay(cfg) {
 }
 
 export function applyTreeColors(cfg) {
-  const f3 = document.querySelector('.f3');
-  if (!f3) return;
-  f3.style.setProperty('--male-color', cfg.maleColor);
-  f3.style.setProperty('--female-color', cfg.femaleColor);
-  f3.style.setProperty('--genderless-color', cfg.otherColor);
-  f3.style.setProperty('--background-color', cfg.bgColor);
-  document.querySelector('.f3 .main_svg')?.style.setProperty('background', cfg.bgColor);
-  for (const l of document.querySelectorAll('.f3 .link')) {
-    l.style.stroke = cfg.lineColor;
-  }
+  applyChartColors(cfg);
 }
 
 let component = null;

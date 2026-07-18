@@ -1,13 +1,16 @@
 <script>
-  import { getConfig, setConfig } from '../../config.js';
+  import { setConfig } from '../../config.js';
   import { rebuildTree } from '../../ui/tree.js';
+  import { getTreeConfig } from '../../ui/tree-config.js';
+  import { applyChartColors, themeDefaultColor } from '../../ui/chart-colors.js';
 
   const DEFAULTS = {
-    maleColor: '#93c5fd',
-    femaleColor: '#f9a8d4',
-    otherColor: '#e5e7eb',
-    bgColor: '#fafafa',
-    lineColor: '#555555',
+    // null = follow the active theme (see src/ui/chart-colors.js)
+    maleColor: null,
+    femaleColor: null,
+    otherColor: null,
+    bgColor: null,
+    lineColor: null,
     orientation: 'vertical',
     ancestryDepth: 3,
     progenyDepth: 3,
@@ -22,27 +25,31 @@
     showDeathPlace: false,
   };
 
+  const COLOR_ROWS = [
+    { key: 'maleColor', label: 'Male' },
+    { key: 'femaleColor', label: 'Female' },
+    { key: 'otherColor', label: 'Other' },
+    { key: 'bgColor', label: 'Background' },
+    { key: 'lineColor', label: 'Lines' },
+  ];
+
   const DEPTH_OPTIONS = [1, 2, 3, 4, 5, 10];
 
   let { onclose } = $props();
 
-  let cfg = $state({ ...DEFAULTS, ...getConfig('treeConfig', {}) });
+  let cfg = $state({ ...DEFAULTS, ...getTreeConfig() });
 
   function save() {
     setConfig('treeConfig', cfg);
   }
 
   function applyColors() {
-    const f3 = document.querySelector('.f3');
-    if (!f3) return;
-    f3.style.setProperty('--male-color', cfg.maleColor);
-    f3.style.setProperty('--female-color', cfg.femaleColor);
-    f3.style.setProperty('--genderless-color', cfg.otherColor);
-    f3.style.setProperty('--background-color', cfg.bgColor);
-    document.querySelector('.f3 .main_svg')?.style.setProperty('background', cfg.bgColor);
-    for (const l of document.querySelectorAll('.f3 .link')) {
-      l.style.stroke = cfg.lineColor;
-    }
+    applyChartColors(cfg);
+  }
+
+  /** Value shown in the color input: user override, else the theme default. */
+  function displayColor(key) {
+    return cfg[key] ?? themeDefaultColor(key);
   }
 
   function applyDisplay() {
@@ -80,7 +87,7 @@
   }
 
   function resetColor(key) {
-    cfg[key] = DEFAULTS[key];
+    cfg[key] = null;   // back to following the theme
     save();
     applyColors();
   }
@@ -99,31 +106,17 @@
   <button class="panel-close" onclick={() => onclose?.()}>&times;</button>
 </div>
 <div class="tree-config-body">
-  <div class="cfg-row">
-    <label>Male</label>
-    <input type="color" value={cfg.maleColor} oninput={(e) => handleColor('maleColor', e.target.value)}>
-    <button class="btn-link btn-sm" onclick={() => resetColor('maleColor')}>reset</button>
-  </div>
-  <div class="cfg-row">
-    <label>Female</label>
-    <input type="color" value={cfg.femaleColor} oninput={(e) => handleColor('femaleColor', e.target.value)}>
-    <button class="btn-link btn-sm" onclick={() => resetColor('femaleColor')}>reset</button>
-  </div>
-  <div class="cfg-row">
-    <label>Other</label>
-    <input type="color" value={cfg.otherColor} oninput={(e) => handleColor('otherColor', e.target.value)}>
-    <button class="btn-link btn-sm" onclick={() => resetColor('otherColor')}>reset</button>
-  </div>
-  <div class="cfg-row">
-    <label>Background</label>
-    <input type="color" value={cfg.bgColor} oninput={(e) => handleColor('bgColor', e.target.value)}>
-    <button class="btn-link btn-sm" onclick={() => resetColor('bgColor')}>reset</button>
-  </div>
-  <div class="cfg-row">
-    <label>Lines</label>
-    <input type="color" value={cfg.lineColor} oninput={(e) => handleColor('lineColor', e.target.value)}>
-    <button class="btn-link btn-sm" onclick={() => resetColor('lineColor')}>reset</button>
-  </div>
+  {#each COLOR_ROWS as row (row.key)}
+    <div class="cfg-row">
+      <label>{row.label}</label>
+      <input type="color" value={displayColor(row.key)} oninput={(e) => handleColor(row.key, e.target.value)}>
+      {#if cfg[row.key] !== null}
+        <button class="btn-link btn-sm" title="Back to theme default" onclick={() => resetColor(row.key)}>reset</button>
+      {:else}
+        <span class="cfg-value" title="Following the theme">theme</span>
+      {/if}
+    </div>
+  {/each}
 
   <div class="cfg-section-label">Layout</div>
   <div class="cfg-row">

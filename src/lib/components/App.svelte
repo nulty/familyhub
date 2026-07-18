@@ -22,6 +22,7 @@
   import Toast from '../shared/Toast.svelte';
   import PlacesHelp from './PlacesHelp.svelte';
   import About from './About.svelte';
+  import AppearanceModal from './AppearanceModal.svelte';
   import FeedbackForm from './FeedbackForm.svelte';
   import { initFeedbackRetry } from '../../util/feedback.js';
 
@@ -415,6 +416,7 @@
               <button class="menu-item" onclick={() => menuAction(openExportModal)}>Export</button>
             {/if}
             <hr class="menu-divider" />
+            <button class="menu-item" onclick={() => menuAction(() => pushModal(AppearanceModal, {}))}>Appearance</button>
             <button class="menu-item" onclick={() => menuAction(() => pushModal(PlacesHelp, {}))}>Help</button>
             <button class="menu-item" onclick={() => menuAction(() => pushModal(FeedbackForm, {}))}>Send Feedback</button>
             <button class="menu-item" onclick={() => menuAction(() => pushModal(About, {}))}>About</button>
