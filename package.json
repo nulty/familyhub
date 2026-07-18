@@ -1,6 +1,6 @@
 {
   "name": "familyhub",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Browser-based family tree with SQLite/OPFS storage",
   "repository": {
     "type": "git",
