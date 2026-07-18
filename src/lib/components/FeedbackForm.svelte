@@ -141,7 +141,7 @@
   .label {
     display: block;
     margin-bottom: 6px;
-    font-weight: 500;
+    font-weight: var(--weight-medium);
   }
 
   .kind-toggle {
@@ -155,26 +155,26 @@
     padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    background: var(--bg);
+    background: var(--surface);
     cursor: pointer;
   }
 
   .kind strong {
     display: block;
-    font-size: 13px;
+    font-size: var(--text-base);
     margin-bottom: 2px;
   }
 
   .kind span {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-muted);
     line-height: 1.3;
   }
 
   .kind.selected {
-    border-color: var(--accent, #3b82f6);
-    background: var(--bg-panel);
-    box-shadow: inset 0 0 0 1px var(--accent, #3b82f6);
+    border-color: var(--accent);
+    background: var(--surface-raised);
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
 
   textarea {
@@ -199,17 +199,17 @@
   }
 
   .counter {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-muted);
     white-space: nowrap;
   }
 
   .counter.low {
-    color: #d94c4c;
+    color: var(--danger);
   }
 
   .optional {
-    font-weight: 400;
+    font-weight: var(--weight-normal);
     color: var(--text-muted);
   }
 
@@ -229,21 +229,21 @@
     background: none;
     border: none;
     padding: 0;
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--text-muted);
     cursor: pointer;
   }
 
   .disclosure-toggle:hover {
-    color: var(--text);
+    color: var(--text-primary);
   }
 
   .disclosure-body pre {
     margin: 6px 0 0;
     padding: 8px 10px;
-    background: var(--bg);
+    background: var(--surface);
     border-radius: 4px;
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-all;
@@ -251,8 +251,8 @@
   }
 
   .error {
-    color: #d94c4c;
-    font-size: 13px;
+    color: var(--danger);
+    font-size: var(--text-base);
     margin: 0 0 10px;
   }
 

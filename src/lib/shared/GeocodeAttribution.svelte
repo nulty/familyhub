@@ -13,7 +13,7 @@
 <style>
   .geocode-attribution {
     margin: 6px 0 0;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-muted);
   }
 

@@ -405,7 +405,7 @@
     margin: 0.5rem 0 0;
     padding: 0;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-ctl);
     overflow: hidden;
   }
   .search-results li { border-bottom: 1px solid var(--border); }
@@ -422,30 +422,30 @@
     cursor: pointer;
     font: inherit;
   }
-  .result:hover { background: #f7f9ff; }
-  .result.selected { background: #eef3ff; box-shadow: inset 3px 0 0 var(--accent); }
+  .result:hover { background: var(--surface-selected); }
+  .result.selected { background: var(--selected-surface); box-shadow: inset 3px 0 0 var(--accent); }
   .result-main { flex: 1; min-width: 0; }
-  .result-name { display: block; font-size: 14px; }
+  .result-name { display: block; font-size: var(--text-md); }
   .result-sub {
     display: block;
-    font-size: 12px;
-    color: var(--text-muted, #666);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .chip {
     flex: 0 0 auto;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--accent);
-    background: #eef2fb;
+    background: var(--surface-selected);
     padding: 2px 8px;
     border-radius: 999px;
   }
   .no-results {
     margin: 0.5rem 0 0;
-    font-size: 13px;
-    color: var(--text-muted, #666);
+    font-size: var(--text-base);
+    color: var(--text-muted);
   }
   .will-create {
     display: flex;
@@ -453,13 +453,13 @@
     gap: 8px;
     margin-top: 0.5rem;
     padding: 8px 10px;
-    background: #edf7ee;
-    border: 1px solid #cbe7cd;
-    border-radius: var(--radius);
-    font-size: 13px;
+    background: var(--success-surface);
+    border: 1px solid var(--success-border);
+    border-radius: var(--radius-ctl);
+    font-size: var(--text-base);
   }
-  .will-create .tick { color: #3f7a44; }
-  .will-create .sep { color: #3f7a44; }
+  .will-create .tick { color: var(--success-text); }
+  .will-create .sep { color: var(--success-text); }
 
   .disclosure { margin-top: 1rem; }
   .disclosure-toggle {
@@ -468,7 +468,7 @@
     color: var(--accent);
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--text-base);
     padding: 0;
   }
   .disclosure-toggle:hover { text-decoration: underline; }
@@ -483,7 +483,7 @@
   }
   .coord-advanced { margin-top: 0.5rem; }
   .coord-advanced summary {
-    font-size: 12.5px;
+    font-size: var(--text-base);
     color: var(--accent);
     cursor: pointer;
   }

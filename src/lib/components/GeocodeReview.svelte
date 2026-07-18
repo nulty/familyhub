@@ -219,11 +219,11 @@
 
 <style>
   .geocode-review {
-    border: 1px solid var(--border-color, #ddd);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 12px;
     margin-top: 12px;
-    background: var(--bg-elevated, #fafafa);
+    background: var(--surface);
   }
   .review-header {
     display: flex;
@@ -231,21 +231,21 @@
     align-items: center;
     margin-bottom: 12px;
   }
-  .review-header h3 { margin: 0; font-size: 1rem; }
+  .review-header h3 { margin: 0; font-size: var(--text-md); }
   .review-actions { display: flex; gap: 6px; }
   .geocode-review h4 {
     margin: 12px 0 6px;
-    font-size: 0.9rem;
-    color: var(--text-muted, #666);
+    font-size: var(--text-base);
+    color: var(--text-muted);
   }
   .review-item {
-    border: 1px solid var(--border-color, #ddd);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 8px 10px;
     margin-bottom: 6px;
-    background: var(--bg, #fff);
+    background: var(--surface);
   }
-  .review-item-empty { background: var(--bg-warning, #fff8e6); }
+  .review-item-empty { background: var(--warning-surface); }
   .review-item-header {
     display: flex;
     justify-content: space-between;
@@ -262,7 +262,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 6px 0;
-    border-bottom: 1px dashed var(--border-color, #eee);
+    border-bottom: 1px dashed var(--border-soft);
   }
   .result-row:last-child { border-bottom: none; }
   .result-meta {
@@ -272,8 +272,8 @@
   }
   .result-display {
     flex: 1;
-    font-size: 0.8rem;
-    color: var(--text-muted, #666);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -286,42 +286,42 @@
   }
   .level-chip {
     background: none;
-    border: 1px solid var(--accent-color, #3498db);
+    border: 1px solid var(--accent);
     border-radius: 3px;
     padding: 2px 8px;
     cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--text, #333);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
   }
   .level-chip:hover {
-    background: var(--accent-color, #3498db);
-    color: #fff;
+    background: var(--accent);
+    color: var(--on-accent);
   }
   .level-chip.full {
     border-style: solid;
   }
   .chip-sep {
-    color: var(--text-muted, #888);
-    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
   .btn-accept {
     background: none;
-    border: 1px solid var(--accent-color, #3498db);
+    border: 1px solid var(--accent);
     border-radius: 3px;
     padding: 3px 8px;
     cursor: pointer;
     text-align: left;
     flex: 1;
-    font-size: 0.85rem;
-    color: var(--text, #333);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
   }
   .btn-accept:hover {
-    background: var(--accent-color, #3498db);
-    color: #fff;
+    background: var(--accent);
+    color: var(--on-accent);
   }
   .importance {
-    color: var(--text-muted, #888);
-    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
     min-width: 36px;
     text-align: right;
   }
@@ -330,15 +330,15 @@
     gap: 6px;
     margin-top: 4px;
   }
-  .retry-row input { flex: 1; padding: 3px 6px; font-size: 0.85rem; }
+  .retry-row input { flex: 1; padding: 3px 6px; font-size: var(--text-sm); }
   .review-empty {
-    color: var(--text-muted, #888);
+    color: var(--text-muted);
     text-align: center;
     padding: 16px;
   }
   .correction-hint {
-    color: var(--text-muted, #666);
-    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
     margin: 0 0 6px;
   }
 </style>

@@ -106,8 +106,8 @@
   }
 
   .about h3 {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--text-base);
+    font-weight: var(--weight-semibold);
     text-transform: uppercase;
     letter-spacing: .04em;
     color: var(--text-muted);
@@ -125,19 +125,19 @@
   }
 
   .about-name {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
     margin-bottom: 2px;
   }
 
   .about-phonetic {
-    font-size: 13px;
-    font-weight: 400;
+    font-size: var(--text-base);
+    font-weight: var(--weight-normal);
     color: var(--text-muted);
   }
 
   .about-meaning {
-    font-size: 13px;
+    font-size: var(--text-base);
     color: var(--text-muted);
   }
 
@@ -150,7 +150,7 @@
     grid-template-columns: auto 1fr;
     gap: 4px 16px;
     margin: 16px 0 0;
-    font-size: 13px;
+    font-size: var(--text-base);
   }
 
   .about-meta dt {
@@ -162,8 +162,8 @@
   }
 
   .about code {
-    font-size: 12px;
-    background: var(--bg);
+    font-size: var(--text-sm);
+    background: var(--surface);
     padding: 1px 4px;
     border-radius: 3px;
   }
@@ -173,7 +173,7 @@
     border: none;
     padding: 0;
     font: inherit;
-    color: var(--accent-color, #1a6dba);
+    color: var(--accent);
     cursor: pointer;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -183,7 +183,7 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    font-size: 13px;
+    font-size: var(--text-base);
   }
 
   .about-licenses li {
@@ -200,7 +200,7 @@
   }
 
   .license-tag {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-muted);
     white-space: nowrap;
   }

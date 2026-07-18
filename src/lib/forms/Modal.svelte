@@ -29,7 +29,7 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.35);
+    background: var(--backdrop);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -37,9 +37,9 @@
   }
 
   .modal {
-    background: var(--bg-panel);
+    background: var(--surface-raised);
     border-radius: 10px;
-    box-shadow: 0 8px 30px rgba(0,0,0,.15);
+    box-shadow: var(--shadow-modal);
     width: 90%;
     max-width: 480px;
     max-height: 85vh;
@@ -74,20 +74,20 @@
 
   .modal-header h2 {
     flex: 1;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
   }
 
   .modal-close {
     background: none;
     border: none;
-    font-size: 22px;
+    font-size: var(--text-4xl);
     cursor: pointer;
     color: var(--text-muted);
     padding: 0 4px;
   }
 
-  .modal-close:hover { color: var(--text); }
+  .modal-close:hover { color: var(--text-primary); }
 
   .modal-body {
     padding: 18px;

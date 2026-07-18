@@ -585,7 +585,7 @@
     top: 0;
     align-self: flex-start;
     padding-right: 16px;
-    border-right: 1px solid var(--border, #eee);
+    border-right: 1px solid var(--border);
   }
   .sidebar-add {
     width: 100%;
@@ -607,21 +607,20 @@
     border-radius: 6px;
     padding: 7px 10px;
     cursor: pointer;
-    color: var(--text, #333);
-    font-size: 0.88rem;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
   }
   .sidebar-item:hover,
   .sidebar-item:focus-visible {
-    background: var(--bg-hover, #f3f6fa);
-    outline: none;
+    background: var(--surface-selected);
   }
   .sidebar-item.active {
-    background: var(--accent-color, #3498db);
-    color: #fff;
-    font-weight: 500;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: var(--weight-medium);
   }
   .sidebar-item.subtle .sidebar-label {
-    color: var(--text-muted, #888);
+    color: var(--text-muted);
   }
   .sidebar-label {
     flex: 1;
@@ -629,26 +628,26 @@
   }
   .sidebar-badge {
     flex-shrink: 0;
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
     min-width: 18px;
     text-align: center;
     padding: 1px 6px;
     border-radius: 10px;
-    background: var(--bg-hover, #eef2f6);
-    color: var(--text-muted, #666);
+    background: var(--surface-inset);
+    color: var(--text-muted);
   }
   .sidebar-badge.warn {
-    color: var(--warning-text, #92400e);
-    background: var(--warning-bg, #fef3e2);
+    color: var(--warning-text);
+    background: var(--warning-surface);
   }
   .sidebar-item.active .sidebar-badge {
-    background: rgba(255, 255, 255, 0.25);
-    color: #fff;
+    background: var(--on-accent-soft);
+    color: var(--on-accent);
   }
   .sidebar-divider {
     height: 1px;
-    background: var(--border, #eee);
+    background: var(--border);
     margin: 6px 4px;
   }
   .places-main {
@@ -663,14 +662,14 @@
     gap: 12px;
     margin-bottom: 12px;
     padding-bottom: 8px;
-    border-bottom: 1px solid var(--border, #eee);
+    border-bottom: 1px solid var(--border);
   }
   .pane-back {
     flex-shrink: 0;
   }
   .pane-title {
-    font-size: 0.95rem;
-    font-weight: 600;
+    font-size: var(--text-base);
+    font-weight: var(--weight-semibold);
     margin: 0;
   }
 
@@ -707,12 +706,12 @@
     right: 0;
   }
   .place-needs-badge {
-    font-size: 0.7rem;
+    font-size: var(--text-2xs);
     padding: 1px 8px;
     border-radius: 10px;
-    color: var(--warning-text, #92400e);
-    border: 1px solid var(--warning-border, #f5d9a8);
-    background: var(--warning-bg, #fef3e2);
+    color: var(--warning-text);
+    border: 1px solid var(--warning-border);
+    background: var(--warning-surface);
     white-space: nowrap;
   }
   .places-legend {
@@ -722,9 +721,9 @@
     flex-wrap: wrap;
     margin-top: 12px;
     padding-top: 10px;
-    border-top: 1px solid var(--border-color, #eee);
-    font-size: 0.75rem;
-    color: var(--text-muted, #888);
+    border-top: 1px solid var(--border-soft);
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
   }
   .menu-trigger {
     white-space: nowrap;
@@ -733,12 +732,12 @@
     gap: 4px;
   }
   .toolbar-menu.open .menu-trigger {
-    background: var(--accent-color, #3498db);
-    color: #fff;
-    border-color: var(--accent-color, #3498db);
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
   }
   .caret {
-    font-size: 0.7rem;
+    font-size: var(--text-2xs);
     opacity: 0.7;
   }
   .menu-panel {
@@ -748,10 +747,10 @@
     z-index: 50;
     min-width: 240px;
     max-width: 320px;
-    background: var(--bg, #fff);
-    border: 1px solid var(--border-color, #ddd);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-pop);
     padding: 4px;
     display: flex;
     flex-direction: column;
@@ -767,24 +766,23 @@
     border-radius: 4px;
     cursor: pointer;
     text-align: left;
-    color: var(--text, #333);
+    color: var(--text-primary);
     width: 100%;
   }
   .menu-item:hover,
   .menu-item:focus-visible {
-    background: var(--bg-hover, #f3f6fa);
-    outline: none;
+    background: var(--surface-selected);
   }
   .menu-item.subtle .menu-item-label {
-    color: var(--text-muted, #888);
+    color: var(--text-muted);
   }
   .menu-item-label {
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: var(--text-base);
+    font-weight: var(--weight-medium);
   }
   .menu-item-hint {
-    font-size: 0.75rem;
-    color: var(--text-muted, #888);
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
   }
 
   .row-kebab {
@@ -794,48 +792,47 @@
     width: 28px;
     height: 28px;
     cursor: pointer;
-    color: var(--text-muted, #888);
-    font-size: 18px;
+    color: var(--text-muted);
+    font-size: var(--text-2xl);
     line-height: 1;
     flex-shrink: 0;
     user-select: none;
   }
   .row-kebab:hover,
   .row-kebab.open {
-    background: var(--bg-hover, #eef2f6);
-    color: var(--text, #333);
-    border-color: var(--border-color, #ddd);
+    background: var(--surface-inset);
+    color: var(--text-primary);
+    border-color: var(--border);
   }
   .row-actions-panel {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     padding: 6px 10px 8px 32px;
-    background: var(--bg-elevated, #fafbfd);
+    background: var(--surface-sunken);
     border-radius: 0 0 4px 4px;
     margin: -2px 0 4px;
   }
   .row-action {
-    background: var(--bg, #fff);
-    border: 1px solid var(--border-color, #ddd);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--text, #333);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
     min-height: 32px;
   }
   .row-action:hover,
   .row-action:focus-visible {
-    background: var(--bg-hover, #f0f4f8);
-    outline: none;
+    background: var(--surface-selected);
   }
   .row-action.danger {
-    color: var(--danger, #c0392b);
-    border-color: var(--danger, #c0392b);
+    color: var(--danger);
+    border-color: var(--danger);
   }
   .row-action.danger:hover {
-    background: var(--danger, #c0392b);
-    color: #fff;
+    background: var(--danger);
+    color: var(--on-accent);
   }
 </style>

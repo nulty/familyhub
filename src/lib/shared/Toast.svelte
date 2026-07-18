@@ -8,11 +8,11 @@
 
 <style>
   .toast {
-    background: var(--text);
-    color: #fff;
+    background: var(--text-primary);
+    color: var(--text-inverse);
     padding: 8px 20px;
     border-radius: 999px;
-    font-size: 13px;
+    font-size: var(--text-base);
     opacity: 0;
     transform: translateY(8px);
     transition: opacity .2s, transform .2s;

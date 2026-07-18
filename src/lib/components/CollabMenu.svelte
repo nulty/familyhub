@@ -255,34 +255,34 @@
 </Modal>
 
 <style>
-  .offline-msg { color: var(--text-muted); font-size: 14px; padding: 1rem 0; }
-  .own-role { font-size: 13px; color: var(--text-muted); margin-bottom: 1rem; }
+  .offline-msg { color: var(--text-muted); font-size: var(--text-md); padding: 1rem 0; }
+  .own-role { font-size: var(--text-base); color: var(--text-muted); margin-bottom: 1rem; }
   section { margin-bottom: 1.5rem; }
   .section-danger { border-top: 1px solid var(--border); padding-top: 1rem; }
-  h3 { font-size: 14px; font-weight: 600; margin-bottom: 0.5rem; }
+  h3 { font-size: var(--text-md); font-weight: var(--weight-semibold); margin-bottom: 0.5rem; }
   .member-list { list-style: none; padding: 0; margin: 0; }
   .member-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
-  .member-name { font-size: 14px; flex: 1; }
-  .member-you { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
+  .member-name { font-size: var(--text-md); flex: 1; }
+  .member-you { font-size: var(--text-sm); color: var(--text-muted); margin-left: 4px; }
   .role-badge {
-    font-size: 11px; padding: 2px 6px; border-radius: 4px;
-    background: var(--bg-alt, #f0f0f0); color: var(--text-muted);
+    font-size: var(--text-xs); padding: 2px 6px; border-radius: 4px;
+    background: var(--surface-hover); color: var(--text-muted);
     text-transform: capitalize;
   }
-  .btn-small { font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px; background: transparent; cursor: pointer; }
+  .btn-small { font-size: var(--text-sm); padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px; background: transparent; cursor: pointer; }
   .btn-remove { color: var(--text-muted); }
   .btn-remove:hover { color: var(--danger); border-color: var(--danger); }
   .btn-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: inherit; padding: 0; text-decoration: underline; }
-  .invite-code { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
-  .invite-code code { font-size: 14px; word-break: break-all; flex: 1; }
-  .invite-role-picker { display: flex; gap: 1rem; margin-bottom: 0.5rem; font-size: 14px; }
+  .invite-code { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+  .invite-code code { font-size: var(--text-md); word-break: break-all; flex: 1; }
+  .invite-role-picker { display: flex; gap: 1rem; margin-bottom: 0.5rem; font-size: var(--text-md); }
   .transfer-row { display: flex; gap: 8px; align-items: center; }
   .transfer-row select { flex: 1; padding: 4px 6px; }
   .activity-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
-  .activity-item { font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; gap: 4px; align-items: baseline; }
-  .activity-user { font-weight: 500; white-space: nowrap; }
+  .activity-item { font-size: var(--text-base); padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; gap: 4px; align-items: baseline; }
+  .activity-user { font-weight: var(--weight-medium); white-space: nowrap; }
   .activity-summary { color: var(--text-muted); flex: 1; }
-  .activity-time { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .activity-time { color: var(--text-muted); font-size: var(--text-xs); white-space: nowrap; }
   .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
   .btn-danger:hover { background: var(--danger-hover); border-color: var(--danger-hover); }
 </style>

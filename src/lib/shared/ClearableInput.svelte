@@ -56,10 +56,9 @@
     padding: 7px 10px;
     padding-right: 26px;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 14px;
+    border-radius: var(--radius-ctl);
+    font-size: var(--text-md);
     font-family: inherit;
-    outline: none;
   }
   .clearable-input input:focus {
     border-color: var(--accent);
@@ -72,14 +71,14 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: var(--text-muted, #888);
-    font-size: 18px;
+    color: var(--text-muted);
+    font-size: var(--text-2xl);
     line-height: 1;
     padding: 2px 6px;
     border-radius: 50%;
   }
   .clear-btn:hover {
-    color: var(--text, #333);
-    background: var(--bg-hover, #eee);
+    color: var(--text-primary);
+    background: var(--surface-hover);
   }
 </style>

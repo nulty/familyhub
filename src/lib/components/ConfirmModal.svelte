@@ -31,7 +31,7 @@
     white-space: pre-line;
     line-height: 1.5;
     margin-bottom: 18px;
-    font-size: 14px;
+    font-size: var(--text-md);
   }
   .btn-danger {
     background: var(--danger);

@@ -101,11 +101,11 @@
 
 <style>
   .type-settings {
-    border: 1px solid var(--border-color, #ddd);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 12px;
     margin-top: 12px;
-    background: var(--bg-elevated, #fafafa);
+    background: var(--surface);
   }
   .settings-header {
     display: flex;
@@ -113,21 +113,21 @@
     align-items: center;
     margin-bottom: 12px;
   }
-  .settings-header h3 { margin: 0; font-size: 1rem; }
-  .type-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .settings-header h3 { margin: 0; font-size: var(--text-md); }
+  .type-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
   .type-table th,
   .type-table td {
     padding: 4px 6px;
     text-align: left;
-    border-bottom: 1px solid var(--border-color, #eee);
+    border-bottom: 1px solid var(--border-soft);
   }
-  .type-table th { font-weight: 500; color: var(--text-muted, #666); }
+  .type-table th { font-weight: var(--weight-medium); color: var(--text-muted); }
   .type-table .group-header th {
-    background: var(--bg-elevated, #f0f3f7);
-    font-size: 0.75rem;
+    background: var(--surface-inset);
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     padding: 6px 8px;
   }
   .type-table input {
@@ -135,22 +135,21 @@
     border: 1px solid transparent;
     padding: 2px 6px;
     background: transparent;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
   }
   .type-table input:focus {
-    border-color: var(--accent-color, #3498db);
-    background: #fff;
-    outline: none;
+    border-color: var(--accent);
+    background: var(--surface-raised);
   }
   .source-badge {
     display: inline-block;
     padding: 1px 6px;
     border-radius: 10px;
-    font-size: 0.7rem;
-    background: var(--bg, #eee);
-    color: var(--text-muted, #666);
+    font-size: var(--text-2xs);
+    background: var(--surface);
+    color: var(--text-muted);
   }
-  .source-custom { background: #e8f4ff; color: #1a6dba; }
+  .source-custom { background: var(--selected-surface); color: var(--accent); }
   .add-type {
     display: flex;
     gap: 6px;
@@ -159,13 +158,13 @@
   .add-type input {
     flex: 1;
     padding: 4px 8px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
   }
-  .danger { color: var(--danger, #e74c3c); }
+  .danger { color: var(--danger); }
   .hint {
     margin-top: 12px;
-    font-size: 0.8rem;
-    color: var(--text-muted, #666);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
     line-height: 1.4;
   }
 </style>

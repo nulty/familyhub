@@ -59,8 +59,8 @@
     gap: 4px;
     padding: 14px 16px;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
+    border-radius: var(--radius-ctl);
+    background: var(--surface);
     cursor: pointer;
     text-align: left;
     transition: border-color 0.15s;
@@ -69,10 +69,10 @@
     border-color: var(--accent);
   }
   .export-option strong {
-    font-size: 14px;
+    font-size: var(--text-md);
   }
   .export-desc {
-    font-size: 13px;
+    font-size: var(--text-base);
     color: var(--text-muted);
     line-height: 1.4;
   }

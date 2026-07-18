@@ -71,13 +71,13 @@
     max-height: calc(85vh - 80px);
     overflow-y: auto;
     padding-right: 4px;
-    border-right: 1px solid var(--border-color, #eee);
+    border-right: 1px solid var(--border-soft);
   }
   .help-toc h4 {
-    font-size: 0.7rem;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-muted, #888);
+    color: var(--text-muted);
     margin: 0 0 6px;
   }
   .help-toc ul { list-style: none; padding: 0; margin: 0; }
@@ -90,13 +90,13 @@
     border: none;
     padding: 4px 0;
     cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--text, #333);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
     line-height: 1.3;
   }
-  .help-toc-link:hover { color: var(--accent-color, #3498db); }
+  .help-toc-link:hover { color: var(--accent); }
 
-  .help-loading { color: var(--text-muted, #888); }
+  .help-loading { color: var(--text-muted); }
 
   @media (max-width: 640px) {
     .help-layout { grid-template-columns: 1fr; }
@@ -104,7 +104,7 @@
       position: static;
       max-height: none;
       border-right: none;
-      border-bottom: 1px solid var(--border-color, #eee);
+      border-bottom: 1px solid var(--border-soft);
       padding-bottom: 8px;
       margin-bottom: 8px;
     }

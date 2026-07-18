@@ -85,9 +85,8 @@
     width: 100%;
     padding: 7px 10px;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 14px;
-    outline: none;
+    border-radius: var(--radius-ctl);
+    font-size: var(--text-md);
   }
 
   .person-picker input:focus { border-color: var(--accent); }
@@ -97,36 +96,36 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--bg-panel);
+    background: var(--surface-raised);
     border: 1px solid var(--border);
     border-top: none;
-    border-radius: 0 0 var(--radius) var(--radius);
+    border-radius: 0 0 var(--radius-ctl) var(--radius-ctl);
     max-height: 200px;
     overflow-y: auto;
     z-index: 10;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-card);
   }
 
   .picker-result {
     padding: 7px 10px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-base);
   }
 
-  .picker-result:hover { background: #f0f4ff; }
+  .picker-result:hover { background: var(--surface-selected); }
 
   .picker-create {
     padding: 7px 10px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-base);
     color: var(--accent);
     border-top: 1px solid var(--border);
   }
 
-  .picker-create:hover { background: #f0f4ff; }
+  .picker-create:hover { background: var(--surface-selected); }
 
   @media (max-width: 768px) {
     .picker-result, .picker-create { padding: 10px 12px; }
-    .person-picker input { padding: 10px 12px; font-size: 16px; }
+    .person-picker input { padding: 10px 12px; font-size: var(--text-xl); }
   }
 </style>

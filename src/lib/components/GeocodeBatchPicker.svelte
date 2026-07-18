@@ -179,7 +179,7 @@
 
 <style>
   .batch-picker { display: flex; flex-direction: column; gap: 12px; }
-  .empty { color: var(--text-muted, #888); text-align: center; padding: 16px; }
+  .empty { color: var(--text-muted); text-align: center; padding: 16px; }
   .picker-controls { display: flex; gap: 8px; align-items: center; }
   .picker-controls :global(.clearable-input) { flex: 1; }
   .picker-actions { display: flex; gap: 4px; }
@@ -189,7 +189,7 @@
     margin: 0;
     max-height: 320px;
     overflow-y: auto;
-    border: 1px solid var(--border-color, #ddd);
+    border: 1px solid var(--border);
     border-radius: 4px;
   }
   .picker-row {
@@ -198,22 +198,22 @@
     gap: 8px;
     padding: 6px 10px;
     cursor: pointer;
-    border-bottom: 1px solid var(--border-color, #eee);
+    border-bottom: 1px solid var(--border-soft);
     transition: background 60ms ease;
     user-select: none;
   }
   .picker-row:last-child { border-bottom: none; }
-  .picker-row:hover { background: var(--bg-hover, #f5f5f5); }
+  .picker-row:hover { background: var(--surface-hover); }
   .picker-row.selected {
-    background: var(--bg-selected, #e8f4ff);
-    color: var(--text-selected, #0c3c66);
+    background: var(--selected-surface);
+    color: var(--selected-text);
   }
-  .picker-row.selected:hover { background: var(--bg-selected-hover, #d5ebff); }
-  .picker-row:focus { outline: 2px solid var(--accent-color, #3498db); outline-offset: -2px; }
-  .picker-name { flex: 1; font-size: 0.9rem; }
+  .picker-row.selected:hover { background: var(--selected-surface-hover); }
+  .picker-row:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .picker-name { flex: 1; font-size: var(--text-base); }
   .picker-type {
-    font-size: 0.75rem;
-    color: var(--text-muted, #888);
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
     text-transform: uppercase;
   }
   .picker-row.selected .picker-type { color: inherit; opacity: 0.8; }
@@ -228,5 +228,5 @@
     white-space: nowrap;
     border: 0;
   }
-  .picker-summary { color: var(--text-muted, #888); font-size: 0.85rem; }
+  .picker-summary { color: var(--text-muted); font-size: var(--text-sm); }
 </style>

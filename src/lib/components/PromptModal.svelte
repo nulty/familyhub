@@ -55,16 +55,15 @@
     color: var(--text-muted);
     line-height: 1.5;
     margin-bottom: 12px;
-    font-size: 14px;
+    font-size: var(--text-md);
   }
   .prompt-input {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 14px;
+    border-radius: var(--radius-ctl);
+    font-size: var(--text-md);
     margin-bottom: 16px;
-    outline: none;
     transition: border-color 0.15s;
   }
   .prompt-input:focus {
