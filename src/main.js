@@ -6,6 +6,17 @@ import { mount } from 'svelte';
 import App from './lib/components/App.svelte';
 import { applyTheme } from './theme.js';
 
+// Register-theme faces (latin subset only — covers Irish fadas á é í ó ú).
+// Declared unconditionally; browsers fetch a face only when the active
+// theme's CSS actually uses it, and the SW precache keeps them offline-safe.
+import '@fontsource/newsreader/latin-400.css';
+import '@fontsource/newsreader/latin-500.css';
+import '@fontsource/newsreader/latin-400-italic.css';
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+
 const LOCK_NAME = 'familyhub-single-tab';
 
 async function start() {

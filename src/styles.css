@@ -70,6 +70,29 @@
   --cyan-500: #06b6d4;
   --sky-500: #0ea5e9;
   --stone-500: #78716c;
+
+  /* Register palette — ledger stock, iron-gall ink, oxblood ruling */
+  --paper-50: #FCFCFA;
+  --paper-100: #F3F3EF;
+  --paper-150: #EDEEE8;
+  --sage-100: #E8EAE1;
+  --sage-200: #DDE0D8;
+  --sage-300: #C9CEC4;
+  --olive-300: #949A90;
+  --olive-500: #6B7168;
+  --olive-700: #3A4038;
+  --ink-900: #1E211D;
+  --clay-600: #8C2F26;
+  --clay-700: #752620;
+  --brick-600: #A93226;
+  --brick-700: #8E2A20;
+  --slate-blue-100: #D9E2E7;
+  --slate-blue-300: #8FA6B0;
+  --tan-50: #F0EBE1;
+  --tan-75: #EAE3D4;
+  --tan-100: #E9DFD2;
+  --tan-200: #E0D5BE;
+  --tan-300: #C0A480;
 }
 
 /* ═══ Tier 2: semantics — Classic theme (default) ═══ */
@@ -208,6 +231,124 @@
   --s6: 32px;
   --s7: 48px;
 
+}
+
+/* ═══ Tier 2: semantics — Register theme ═══
+   Ledger-inspired: serif names, tabular-mono dates, oxblood accent used
+   sparingly, zero radius, rules instead of shadows.
+   Reference: demo/visual-direction/direction-a-restrained.html */
+[data-theme="register"] {
+  /* surfaces */
+  --surface: var(--paper-100);
+  --surface-raised: var(--paper-50);
+  --surface-sunken: var(--paper-150);
+  --surface-inset: var(--sage-100);
+  --surface-hover: var(--sage-100);
+  --surface-selected: var(--tan-50);
+  --selected-surface: var(--tan-75);
+  --selected-surface-hover: var(--tan-200);
+  --selected-text: var(--ink-900);
+  --surface-warm: var(--tan-50);
+  --backdrop: rgba(30, 33, 29, .4);
+  --backdrop-strong: rgba(30, 33, 29, .55);
+  --backdrop-soft: rgba(30, 33, 29, .3);
+
+  /* text */
+  --text-primary: var(--ink-900);
+  --text-strong: var(--olive-700);
+  --text-muted: var(--olive-500);
+  --text-faint: var(--olive-300);
+  --text-inverse: var(--paper-50);
+  --text-link: var(--clay-600);
+  --on-accent: var(--paper-50);
+  --on-accent-soft: rgba(252, 252, 250, .3);
+
+  /* borders */
+  --border: var(--sage-200);
+  --border-soft: var(--sage-100);
+  --border-hover: var(--olive-300);
+  --focus-ring: var(--clay-600);
+
+  /* accent — oxblood, used sparingly */
+  --accent: var(--clay-600);
+  --accent-hover: var(--clay-700);
+
+  /* status — danger is brick, deliberately distinct from the oxblood accent */
+  --danger: var(--brick-600);
+  --danger-hover: var(--brick-700);
+  --danger-surface: var(--tan-50);
+  --success: var(--green-600);
+  --success-surface: var(--green-75);
+  --success-border: var(--green-200);
+  --success-text: var(--green-700);
+  --warning: var(--orange-500);
+  --warning-surface: var(--tan-50);
+  --warning-border: var(--tan-200);
+  --warning-text: var(--olive-700);
+  --status-online: var(--green-600);
+  --status-syncing: var(--yellow-500);
+  --status-offline: var(--brick-600);
+
+  /* sex — desaturated pair, differing in lightness as well as hue */
+  --sex-m: var(--slate-blue-300);
+  --sex-f: var(--tan-300);
+  --sex-u: var(--sage-300);
+  --sex-m-fill: var(--slate-blue-100);
+  --sex-f-fill: var(--tan-100);
+  --sex-u-fill: var(--sage-100);
+
+  /* chart */
+  --chart-bg: var(--paper-100);
+  --chart-line: var(--sage-300);
+  --chart-line-active: var(--accent);
+  --connector: var(--sage-200);
+
+  /* event types — neutralized; the type is already written as text */
+  --event-default: var(--sage-200);
+  --event-birth: var(--olive-500);
+  --event-birth-soft: var(--sage-100);
+  --event-death: var(--olive-500);
+  --event-death-soft: var(--sage-100);
+  --event-marriage: var(--olive-500);
+  --event-marriage-soft: var(--sage-100);
+  --event-census: var(--olive-500);
+  --event-census-soft: var(--sage-100);
+  --event-occupation: var(--olive-500);
+  --event-occupation-soft: var(--sage-100);
+  --event-residence: var(--olive-500);
+  --event-residence-soft: var(--sage-100);
+  --event-migration: var(--olive-500);
+  --event-burial: var(--olive-500);
+  --event-naturalisation: var(--olive-500);
+  --event-divorce: var(--olive-500);
+
+  /* type — the theme's main move */
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-4xl: 26px;   /* panel name — serif carries larger sizes well */
+  --text-5xl: 30px;   /* welcome title */
+
+  /* radius — archival material is square */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-ctl: 0;
+  --radius-card: 0;
+  --radius-modal: 0;
+  --radius-card-lg: 0;
+  --radius-drawer: 0;
+  --radius-pill: 0;
+
+  /* shadow — rules instead of floating, except the modal */
+  --shadow-card: none;
+  --shadow-hover: none;
+  --shadow-pop: none;
+  --shadow-modal: 0 12px 34px rgba(30, 33, 29, .13);
+  --shadow-bar: none;
+  --shadow-sheet: none;
+  --shadow-drawer: none;
+  --shadow-accent-glow: none;
 }
 /* tokens:end */
 
@@ -2640,6 +2781,85 @@ a:hover { text-decoration: underline; }
   .welcome-features { grid-template-columns: 1fr; }
   .welcome-actions { flex-direction: column; }
   .welcome-actions .btn { width: 100%; text-align: center; }
+}
+
+/* ── Type roles ────────────────────────────────────────────────────────────────
+   Theme-neutral assignment of the display face (person names) and data face
+   (dates). Classic maps both tokens to the UI face, so it is unaffected;
+   Register maps them to Newsreader / IBM Plex Mono. */
+
+.panel-name,
+.card-name,
+.fam-name,
+.search-result-name,
+.welcome-title {
+  font-family: var(--font-display);
+}
+
+.panel-life-dates,
+.fam-date,
+.card-life-years,
+.card-birth-date,
+.card-death-date,
+.ev-card-date,
+.ev-card-age,
+.search-result-year {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Third-party: tom-select (map-panel person picker) — re-skin its neutral
+   greys with tokens so it follows the theme. */
+.ts-wrapper .ts-control,
+.ts-dropdown {
+  border-color: var(--border);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border-radius: var(--radius-ctl);
+  font-size: var(--text-base);
+}
+
+.ts-dropdown .option.active {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+/* ── Register theme overrides ──────────────────────────────────────────────────
+   The short list of rules token remapping can't express. Keep this list ≤ 12
+   rules — growth here means the theme is drifting into a second UI
+   (see docs/theming.md and the plan's decision gate). */
+
+[data-theme="register"] .fam-avatar { display: none; }
+
+[data-theme="register"] .alt-name-pill {
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+[data-theme="register"] .panel-name,
+[data-theme="register"] .card-name,
+[data-theme="register"] .fam-name {
+  font-weight: var(--weight-normal);
+  letter-spacing: -.01em;
+}
+
+[data-theme="register"] .f3 .link { stroke-width: 1.5px; }
+
+[data-theme="register"] #search-input {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-theme="register"] .panel-section-title {
+  letter-spacing: .12em;
+  color: var(--text-muted);
+}
+
+[data-theme="register"] .leaflet-bar a,
+[data-theme="register"] .leaflet-popup-content-wrapper,
+[data-theme="register"] .leaflet-popup-tip {
+  border-radius: 0;
 }
 
 /* ── Collab UI ──────────────────────────────────────────────────────────────── */
