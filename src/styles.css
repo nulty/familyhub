@@ -86,9 +86,11 @@
   --clay-700: #752620;
   --brick-600: #A93226;
   --brick-700: #8E2A20;
+  --slate-blue-50: #EBF1F4;
   --slate-blue-100: #D9E2E7;
   --slate-blue-300: #8FA6B0;
   --tan-50: #F0EBE1;
+  --wheat-50: #F5F1DC;
   --tan-75: #EAE3D4;
   --tan-100: #E9DFD2;
   --tan-200: #E0D5BE;
@@ -180,6 +182,18 @@
   --event-burial: var(--stone-500);
   --event-naturalisation: var(--sky-500);
   --event-divorce: var(--red-500);
+  /* -wash = whole-card background tint; Classic keeps cards uniform */
+  --event-default-wash: var(--gray-75);
+  --event-birth-wash: var(--gray-75);
+  --event-death-wash: var(--gray-75);
+  --event-marriage-wash: var(--gray-75);
+  --event-census-wash: var(--gray-75);
+  --event-occupation-wash: var(--gray-75);
+  --event-residence-wash: var(--gray-75);
+  --event-migration-wash: var(--gray-75);
+  --event-burial-wash: var(--gray-75);
+  --event-naturalisation-wash: var(--gray-75);
+  --event-divorce-wash: var(--gray-75);
 
   /* type */
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -303,24 +317,41 @@
   --chart-line-active: var(--accent);
   --connector: var(--sage-200);
 
-  /* event types — neutralized; the type is already written as text */
+  /* event types — differentiated by whole-card WASH, grouped by meaning:
+     vital=moss, death=sage, union=warm tan, records=slate, work=deeper tan.
+     Trims and chips stay neutral (chips melt into the wash); the field
+     carries the type, the way a ledger washes an entry rather than
+     coloring its ruling. (All-neutral was tried and failed with real
+     data — 11 identical cards; colored trims were tried and read as
+     accent noise.) */
   --event-default: var(--sage-200);
-  --event-birth: var(--olive-500);
-  --event-birth-soft: var(--sage-100);
-  --event-death: var(--olive-500);
+  --event-birth: var(--sage-200);
+  --event-birth-soft: var(--green-75);
+  --event-death: var(--sage-200);
   --event-death-soft: var(--sage-100);
-  --event-marriage: var(--olive-500);
-  --event-marriage-soft: var(--sage-100);
-  --event-census: var(--olive-500);
-  --event-census-soft: var(--sage-100);
-  --event-occupation: var(--olive-500);
-  --event-occupation-soft: var(--sage-100);
-  --event-residence: var(--olive-500);
-  --event-residence-soft: var(--sage-100);
-  --event-migration: var(--olive-500);
-  --event-burial: var(--olive-500);
-  --event-naturalisation: var(--olive-500);
-  --event-divorce: var(--olive-500);
+  --event-marriage: var(--sage-200);
+  --event-marriage-soft: var(--tan-50);
+  --event-census: var(--sage-200);
+  --event-census-soft: var(--slate-blue-50);
+  --event-occupation: var(--sage-200);
+  --event-occupation-soft: var(--wheat-50);
+  --event-residence: var(--sage-200);
+  --event-residence-soft: var(--slate-blue-50);
+  --event-migration: var(--sage-200);
+  --event-burial: var(--sage-200);
+  --event-naturalisation: var(--sage-200);
+  --event-divorce: var(--sage-200);
+  --event-default-wash: var(--paper-150);
+  --event-birth-wash: var(--green-75);
+  --event-death-wash: var(--sage-100);
+  --event-marriage-wash: var(--tan-50);
+  --event-census-wash: var(--slate-blue-50);
+  --event-occupation-wash: var(--wheat-50);
+  --event-residence-wash: var(--slate-blue-50);
+  --event-migration-wash: var(--slate-blue-50);
+  --event-burial-wash: var(--sage-100);
+  --event-naturalisation-wash: var(--slate-blue-50);
+  --event-divorce-wash: var(--tan-50);
 
   /* type — the theme's main move */
   --font-display: 'Newsreader', Georgia, serif;
@@ -1139,21 +1170,21 @@ a:hover { text-decoration: underline; }
   display: flex;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--surface-sunken);
+  background: var(--event-default-wash);
   border-radius: var(--radius-card);
   border-left: 3px solid var(--event-default);
 }
-.ev-card.birth { border-left-color: var(--event-birth); }
-.ev-card.death { border-left-color: var(--event-death); }
-.ev-card.marriage { border-left-color: var(--event-marriage); }
-.ev-card.census { border-left-color: var(--event-census); }
-.ev-card.occupation { border-left-color: var(--event-occupation); }
-.ev-card.residence { border-left-color: var(--event-residence); }
-.ev-card.immigration { border-left-color: var(--event-migration); }
-.ev-card.emigration { border-left-color: var(--event-migration); }
-.ev-card.burial { border-left-color: var(--event-burial); }
-.ev-card.naturalisation { border-left-color: var(--event-naturalisation); }
-.ev-card.divorce { border-left-color: var(--event-divorce); }
+.ev-card.birth { border-left-color: var(--event-birth); background: var(--event-birth-wash); }
+.ev-card.death { border-left-color: var(--event-death); background: var(--event-death-wash); }
+.ev-card.marriage { border-left-color: var(--event-marriage); background: var(--event-marriage-wash); }
+.ev-card.census { border-left-color: var(--event-census); background: var(--event-census-wash); }
+.ev-card.occupation { border-left-color: var(--event-occupation); background: var(--event-occupation-wash); }
+.ev-card.residence { border-left-color: var(--event-residence); background: var(--event-residence-wash); }
+.ev-card.immigration { border-left-color: var(--event-migration); background: var(--event-migration-wash); }
+.ev-card.emigration { border-left-color: var(--event-migration); background: var(--event-migration-wash); }
+.ev-card.burial { border-left-color: var(--event-burial); background: var(--event-burial-wash); }
+.ev-card.naturalisation { border-left-color: var(--event-naturalisation); background: var(--event-naturalisation-wash); }
+.ev-card.divorce { border-left-color: var(--event-divorce); background: var(--event-divorce-wash); }
 
 .ev-card-icon {
   width: 28px;

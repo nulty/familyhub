@@ -239,7 +239,7 @@
           {#if ev.place}<div class="ev-card-place">{ev.place} {#if ev.place_id && !ev.place_geocoded}<span class="ev-no-geocode" title="Not geocoded">&#9679;</span>{/if}</div>{/if}
           {#if ev._shared && ev.participants?.length > 0}
             <div class="ev-card-participants">
-              with {#each ev.participants.filter(p => p.person_id !== person.id) as p, i}{#if i > 0}, {/if}<span onclick={() => navigate(p.person_id)}>{p.name?.trim() || 'Unnamed'}</span>{/each}
+              with {#each ev.participants.filter(p => p.person_id !== person.id) as p, i}{#if i > 0}{', '}{/if}<span onclick={() => navigate(p.person_id)}>{p.name?.trim() || 'Unnamed'}</span>{/each}
             </div>
           {/if}
           {#if ev.type !== 'occupation' && ev.notes}
