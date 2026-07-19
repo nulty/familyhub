@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { initDB, getStats, nukeDatabase, clearDatabase, bulk, runMigrations, syncDown, switchDatabase } from '../../db/db.js';
   import { on, emit, state as appState, PERSON_SELECTED, PERSON_DESELECTED, DATA_CHANGED, DB_POPULATED, PICK_LOCATION, SHOW_ON_MAP, COLLAB_MODE_CHANGED, COLLAB_SYNC_STATUS, canWrite, setCurrentRole } from '../../state.js';
-  import { initTree, refreshTree } from '../../ui/tree.js';
+  import { initTree, refreshTree, getTreeDim } from '../../ui/tree.js';
+  import { beginTreePrint, endTreePrint } from '../../ui/print.js';
   import { initMap, invalidateSize, clearAllMarkers, startPicking, stopPicking } from '../../ui/map.js';
   import MapPanel from './MapPanel.svelte';
   import { getConfig, setConfig, getMode, getCollabState } from '../../config.js';
@@ -342,7 +343,15 @@
       setTimeout(() => invalidateSize(), 0);
     }
   }
+
+  function handleBeforePrint() {
+    if (viewMode !== 'tree' || !hasData) return;
+    const dim = getTreeDim();
+    if (dim) beginTreePrint(dim, getTreeConfig().printPageSize ?? 'auto');
+  }
 </script>
+
+<svelte:window onbeforeprint={handleBeforePrint} onafterprint={endTreePrint} />
 
 <div id="app">
   <header id="header">

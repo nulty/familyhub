@@ -23,6 +23,7 @@
     showBirthPlace: false,
     showDeathDate: false,
     showDeathPlace: false,
+    printPageSize: 'auto',
   };
 
   const COLOR_ROWS = [
@@ -84,6 +85,12 @@
     cfg[key] = isNaN(parseInt(value)) ? value : parseInt(value, 10);
     save();
     rebuildTree();
+  }
+
+  // Print settings only affect the next Ctrl-P — no chart rebuild needed.
+  function handlePrintSize(value) {
+    cfg.printPageSize = value;
+    save();
   }
 
   function resetColor(key) {
@@ -187,6 +194,17 @@
     <label>Vertical</label>
     <input type="range" min="80" max="300" step="10" value={cfg.ySpacing} oninput={(e) => handleRange('ySpacing', e.target.value)}>
     <span class="cfg-value">{cfg.ySpacing}</span>
+  </div>
+
+  <div class="cfg-section-label">Printing</div>
+  <div class="cfg-row">
+    <label>Page size</label>
+    <select value={cfg.printPageSize} onchange={(e) => handlePrintSize(e.target.value)}>
+      <option value="auto">Actual size</option>
+      <option value="a4">Fit to A4</option>
+      <option value="a3">Fit to A3</option>
+      <option value="a2">Fit to A2</option>
+    </select>
   </div>
 
   <div class="cfg-actions">

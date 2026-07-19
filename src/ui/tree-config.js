@@ -27,6 +27,7 @@ const DEFAULTS = {
   showBirthPlace: false,
   showDeathDate: false,
   showDeathPlace: false,
+  printPageSize: 'auto',
 };
 
 export function getTreeConfig() {

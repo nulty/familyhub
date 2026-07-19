@@ -208,6 +208,14 @@ export function rebuildTree() {
   applyCardDisplay(cfg);
 }
 
+/**
+ * Bounding box of the currently laid-out tree ({width, height, x_off, y_off}
+ * in tree units), or null if no chart. Used by print.js to fit the tree to a page.
+ */
+export function getTreeDim() {
+  return chart?.store?.getTree()?.dim ?? null;
+}
+
 export function focusPerson(id) {
   if (!chart) return;
   currentMainId = id;

@@ -2933,3 +2933,63 @@ a:hover { text-decoration: underline; }
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ── Print (visible tree) ─────────────────────────────────────────────────────
+   Active only while print.js has applied `body.printing-tree` (beforeprint).
+   The chart canvas is sized and transformed inline by print.js to fit one
+   A4 page; these rules strip the app chrome so the printout matches the
+   on-screen tree. */
+
+@media print {
+  body.printing-tree #header,
+  body.printing-tree #panel,
+  body.printing-tree #map-container,
+  body.printing-tree #tree-config,
+  body.printing-tree .fab-settings,
+  body.printing-tree .drawer-backdrop,
+  body.printing-tree #modal-root,
+  body.printing-tree #toast-root {
+    display: none !important;
+  }
+
+  body.printing-tree #app {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  body.printing-tree #main {
+    display: block;
+    overflow: visible;
+  }
+
+  body.printing-tree #chart-container {
+    overflow: visible;
+  }
+
+  body.printing-tree #chart-container .f3 {
+    width: auto;
+    height: auto;
+  }
+
+  body.printing-tree #f3Canvas {
+    overflow: visible !important;
+    margin: 0 auto;
+    flex: none; /* .f3 is a flex container — don't let it shrink the sized canvas */
+  }
+
+  body.printing-tree .f3 .main_svg { background: none; }
+  body.printing-tree .f3 .main_svg > rect { display: none; }
+
+  /* Cards keep their on-screen colours; print-color-adjust forces the
+     background fills onto paper regardless of the browser's
+     "print backgrounds" setting. */
+  body.printing-tree .f3 .card-inner {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    box-shadow: none;
+  }
+
+  /* Interactive "more relatives hidden" indicators have no place on paper */
+  body.printing-tree .f3 .mini-tree { display: none; }
+}
